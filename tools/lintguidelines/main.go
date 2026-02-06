@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -53,17 +54,20 @@ func main() {
 }
 
 func outputViolations(format string, violations []violation) error {
+	out := bufio.NewWriter(os.Stdout)
+	defer out.Flush()
+
 	switch format {
 	case "json":
-		enc := json.NewEncoder(os.Stdout)
+		enc := json.NewEncoder(out)
 		enc.SetIndent("", "  ")
 		return enc.Encode(violations)
 	case "text":
 		for _, v := range violations {
-			fmt.Printf("%s:%d:%d [%s] %s\n", v.File, v.Line, v.Column, v.Rule, v.Message)
+			fmt.Fprintf(out, "%s:%d:%d [%s] %s\n", v.File, v.Line, v.Column, v.Rule, v.Message)
 		}
 		if len(violations) == 0 {
-			fmt.Println("ok")
+			fmt.Fprintln(out, "ok")
 		}
 		return nil
 	default:

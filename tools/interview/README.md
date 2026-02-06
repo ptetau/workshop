@@ -4,10 +4,10 @@ Interactive tool to turn PRDs and feature requests into a scaffold graph, then i
 
 ## Usage
 
-Read from stdin:
+Interactively:
 
 ```powershell
-Get-Content C:\path\PRD.md | go run ./tools/interview --root C:\temp\app --module workshop
+go run ./tools/interview --root C:\temp\app --module workshop
 ```
 
 Outputs:

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"text/template"
 	"time"
+	"unicode"
 )
 
 const (
@@ -878,16 +879,25 @@ func {{ .HandlerName }}(w http.ResponseWriter, r *http.Request) {
 
 func handlerName(method, path, target string) string {
 	segments := strings.FieldsFunc(path, func(r rune) bool {
-		return r == '/' || r == '-' || r == '_'
+		return r == '/' || r == '-' || r == '_' || r == '{' || r == '}'
 	})
 	var parts []string
 	for _, s := range segments {
 		if s == "" {
 			continue
 		}
-		parts = append(parts, strings.Title(s))
+		parts = append(parts, titleCase(s))
 	}
-	return fmt.Sprintf("handle%s%s%s", strings.Title(strings.ToLower(method)), strings.Join(parts, ""), target)
+	return fmt.Sprintf("handle%s%s%s", titleCase(strings.ToLower(method)), strings.Join(parts, ""), target)
+}
+
+func titleCase(s string) string {
+	if len(s) == 0 {
+		return s
+	}
+	runes := []rune(s)
+	runes[0] = unicode.ToUpper(runes[0])
+	return string(runes)
 }
 
 func executeTemplate(tmpl string, data any) string {

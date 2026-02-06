@@ -25,7 +25,7 @@ func TestPairwiseInterviewCombinations(t *testing.T) {
 		var out bytes.Buffer
 		iv := newInterviewer(reader, &out, 0.8)
 
-		g, err := iv.run("prd")
+		g, err := iv.run()
 		if err != nil {
 			t.Fatalf("combo %d run failed: %v", idx, err)
 		}
@@ -51,7 +51,7 @@ func TestDisambiguationYesMergesConcepts(t *testing.T) {
 	var out bytes.Buffer
 	iv := newInterviewer(reader, &out, 0.8)
 
-	g, err := iv.run("prd")
+	g, err := iv.run()
 	if err != nil {
 		t.Fatalf("run failed: %v", err)
 	}
@@ -77,7 +77,7 @@ func TestDisambiguationNoAddsConcept(t *testing.T) {
 	var out bytes.Buffer
 	iv := newInterviewer(reader, &out, 0.8)
 
-	g, err := iv.run("prd")
+	g, err := iv.run()
 	if err != nil {
 		t.Fatalf("run failed: %v", err)
 	}

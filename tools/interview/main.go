@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -13,6 +12,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 )
 
 const (
@@ -50,13 +50,13 @@ type route struct {
 }
 
 type graph struct {
-	GeneratedAt  time.Time     `json:"generatedAt"`
-	Source       string        `json:"source"`
-	Concepts     []concept     `json:"concepts"`
+	GeneratedAt   time.Time      `json:"generatedAt"`
+	Source        string         `json:"source"`
+	Concepts      []concept      `json:"concepts"`
 	Orchestrators []orchestrator `json:"orchestrators"`
-	Projections  []projection  `json:"projections"`
-	Routes       []route       `json:"routes"`
-	ScaffoldArgs []string      `json:"scaffoldArgs"`
+	Projections   []projection   `json:"projections"`
+	Routes        []route        `json:"routes"`
+	ScaffoldArgs  []string       `json:"scaffoldArgs"`
 }
 
 func main() {
@@ -73,14 +73,8 @@ func main() {
 	flag.Float64Var(&threshold, "threshold", 0.8, "similarity threshold for disambiguation")
 	flag.Parse()
 
-	source, err := readSource()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "interview:", err)
-		os.Exit(1)
-	}
-
 	interviewer := newInterviewer(os.Stdin, os.Stdout, threshold)
-	g, err := interviewer.run(source)
+	g, err := interviewer.run()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "interview:", err)
 		os.Exit(1)
@@ -116,14 +110,13 @@ func newInterviewer(in io.Reader, out io.Writer, threshold float64) *interviewer
 	}
 }
 
-func (i *interviewer) run(source string) (graph, error) {
+func (i *interviewer) run() (graph, error) {
 	g := graph{
 		GeneratedAt: time.Now(),
-		Source:      source,
+		Source:      "Interactive",
 	}
 
 	i.say("Starting interview. Type 'done' to finish a section.")
-	i.say("Source length: %d characters.", len(source))
 
 	concepts := i.askConcepts()
 	orchestrators := i.askOrchestrators()
@@ -228,7 +221,7 @@ func (i *interviewer) askCommandRoute(owner string) *route {
 	if !ok || strings.EqualFold(method, "skip") {
 		return nil
 	}
-	path := i.askLine("Route path for "+owner+" (e.g. /orders)")
+	path := i.askLine("Route path for " + owner + " (e.g. /orders)")
 	if path == "" {
 		return nil
 	}
@@ -236,7 +229,7 @@ func (i *interviewer) askCommandRoute(owner string) *route {
 }
 
 func (i *interviewer) askQueryRoute(owner string) *route {
-	path := i.askLine("Route path for "+owner+" (GET) or 'skip'")
+	path := i.askLine("Route path for " + owner + " (GET) or 'skip'")
 	if strings.EqualFold(strings.TrimSpace(path), "skip") || path == "" {
 		return nil
 	}
@@ -313,29 +306,6 @@ func (i *interviewer) askLine(prompt string) string {
 func (i *interviewer) say(format string, args ...any) {
 	fmt.Fprintf(i.out, format+"\n", args...)
 	i.out.Flush()
-}
-
-func readSource() (string, error) {
-	stat, err := os.Stdin.Stat()
-	if err != nil {
-		return "", err
-	}
-	if stat.Mode()&os.ModeCharDevice != 0 {
-		return "", nil
-	}
-	reader := bufio.NewReader(os.Stdin)
-	var b strings.Builder
-	for {
-		line, err := reader.ReadString('\n')
-		b.WriteString(line)
-		if errors.Is(err, io.EOF) {
-			break
-		}
-		if err != nil {
-			return "", err
-		}
-	}
-	return b.String(), nil
 }
 
 func writeGraph(outBase string, g graph) error {
@@ -458,7 +428,11 @@ func runScaffold(root, module string, args []string) error {
 func symbolify(value string) string {
 	parts := splitWords(value)
 	for i, part := range parts {
-		parts[i] = strings.Title(strings.ToLower(part))
+		if len(part) > 0 {
+			runes := []rune(strings.ToLower(part))
+			runes[0] = unicode.ToUpper(runes[0])
+			parts[i] = string(runes)
+		}
 	}
 	return strings.Join(parts, "")
 }
@@ -524,21 +498,11 @@ func levenshtein(a, b string) int {
 			del := prev[j] + 1
 			ins := curr[j-1] + 1
 			sub := prev[j-1] + cost
-			curr[j] = minInt(del, ins, sub)
+			curr[j] = min(del, ins, sub)
 		}
 		copy(prev, curr)
 	}
 	return prev[len(b)]
-}
-
-func minInt(values ...int) int {
-	min := values[0]
-	for _, v := range values[1:] {
-		if v < min {
-			min = v
-		}
-	}
-	return min
 }
 
 func conceptNames(concepts []concept) []string {
