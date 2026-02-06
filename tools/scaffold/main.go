@@ -1014,20 +1014,49 @@ func splitPair(value string) (string, string, error) {
 }
 
 func toSnakeCase(value string) string {
+	if value == "" {
+		return ""
+	}
+
 	var out []rune
-	for i, r := range value {
-		if i > 0 && r >= 'A' && r <= 'Z' {
-			prev := rune(value[i-1])
-			if prev != '_' && prev != '-' {
-				out = append(out, '_')
-			}
-		}
+	runes := []rune(value)
+
+	for i := 0; i < len(runes); i++ {
+		r := runes[i]
+
+		// Handle special characters
 		if r == '-' || r == ' ' {
 			out = append(out, '_')
 			continue
 		}
+
+		// Check if this is an uppercase letter
+		if r >= 'A' && r <= 'Z' {
+			// Add underscore before uppercase if:
+			// 1. Not at start (i > 0)
+			// 2. Previous char wasn't underscore/dash
+			// 3. Not part of all-caps acronym (next char is lowercase OR this is last char after lowercase)
+			if i > 0 {
+				prev := runes[i-1]
+				if prev != '_' && prev != '-' {
+					// Check if we're starting a new word (not in middle of acronym)
+					// Acronym detection: if previous was uppercase and next is uppercase, we're in acronym
+					prevIsUpper := prev >= 'A' && prev <= 'Z'
+					nextIsLower := i+1 < len(runes) && runes[i+1] >= 'a' && runes[i+1] <= 'z'
+
+					// Add underscore if:
+					// - Previous was lowercase (normal camelCase boundary)
+					// - OR we're at end of acronym (prev was upper, next is lower)
+					if !prevIsUpper || nextIsLower {
+						out = append(out, '_')
+					}
+				}
+			}
+		}
+
 		out = append(out, rune(strings.ToLower(string(r))[0]))
 	}
+
 	return string(out)
 }
 
