@@ -2,7 +2,7 @@
 
 Generate the initial shape of the application without adding business logic. The CLI creates concepts, orchestrators, projections, routes, and per-concept storage plus SQL migrations. All method bodies are empty except for TODO comments.
 
-Run the CLI from the repository root.
+Run the CLI from the repository root. Use `--root` to scaffold into another directory. Use `--module` to set the module path.
 
 ## Quick Start
 
@@ -10,6 +10,8 @@ Create a concept, an orchestrator, a projection, and wire routes:
 
 ```powershell
 go run ./tools/scaffold init ^
+  --root C:\temp\workshop ^
+  --module workshop ^
   --concept Order ^
   --field Order:Status:string ^
   --field Order:TotalCents:int ^

@@ -83,6 +83,8 @@ func main() {
 func printUsage() {
 	fmt.Println("usage: scaffold init [flags]")
 	fmt.Println("flags:")
+	fmt.Println("  --root Path (output directory)")
+	fmt.Println("  --module Path (module path)")
 	fmt.Println("  --concept Name")
 	fmt.Println("  --field Concept:Field:Type")
 	fmt.Println("  --method Concept:Method")
@@ -97,6 +99,8 @@ func printUsage() {
 
 func runInit(args []string) error {
 	var (
+		root              string
+		module            string
 		conceptFlags      multiFlag
 		fieldFlags        multiFlag
 		methodFlags       multiFlag
@@ -111,6 +115,8 @@ func runInit(args []string) error {
 
 	fs := flag.NewFlagSet("init", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
+	fs.StringVar(&root, "root", ".", "output directory")
+	fs.StringVar(&module, "module", "", "module path")
 	fs.Var(&conceptFlags, "concept", "concept name")
 	fs.Var(&fieldFlags, "field", "concept field: Concept:Field:Type")
 	fs.Var(&methodFlags, "method", "concept method: Concept:Method")
@@ -125,17 +131,32 @@ func runInit(args []string) error {
 		return err
 	}
 
+	if root == "" {
+		root = "."
+	}
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		return err
+	}
+	if err := os.Chdir(root); err != nil {
+		return err
+	}
+
+	moduleName, err := resolveModuleName(module)
+	if err != nil {
+		return err
+	}
+
 	current, err := loadState()
 	if err != nil {
 		return err
 	}
 
-	if err := ensureBaseLayout(force); err != nil {
+	if err := ensureBaseLayout(moduleName, force); err != nil {
 		return err
 	}
 
 	desired := buildDesiredState(conceptFlags, fieldFlags, methodFlags, orchestratorFlags, paramFlags, projectionFlags, queryFlags, resultFlags, routeFlags)
-	updated, err := applyState(current, desired, force)
+	updated, err := applyState(moduleName, current, desired, force)
 	if err != nil {
 		return err
 	}
@@ -147,7 +168,7 @@ func runInit(args []string) error {
 	return nil
 }
 
-func ensureBaseLayout(force bool) error {
+func ensureBaseLayout(moduleName string, force bool) error {
 	dirs := []string{
 		"internal/domain",
 		"internal/application",
@@ -157,6 +178,7 @@ func ensureBaseLayout(force bool) error {
 		"internal/adapters/storage",
 		"internal/adapters/storage/migrations",
 		"cmd/server",
+		"static",
 	}
 	for _, dir := range dirs {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -164,13 +186,22 @@ func ensureBaseLayout(force bool) error {
 		}
 	}
 
+	if err := writeFileIfMissing("go.mod", goModTemplate(moduleName), force); err != nil {
+		return err
+	}
+	if err := writeFileIfMissing("cmd/server/main.go", serverMainTemplate(moduleName), force); err != nil {
+		return err
+	}
+	if err := writeFileIfMissing("internal/adapters/http/web.go", webTemplate(moduleName), force); err != nil {
+		return err
+	}
 	if err := writeFileIfMissing("internal/domain/README.md", "# Domain (Concepts)\n\nPlace concept state and methods here.\n", force); err != nil {
 		return err
 	}
 	if err := writeFileIfMissing("internal/application/README.md", "# Application (Orchestrators + Projections)\n\nPlace orchestrators and projections here.\n", force); err != nil {
 		return err
 	}
-	if err := writeGeneratedFile("internal/adapters/http/routes.go", routesTemplate(nil), force); err != nil {
+	if err := writeGeneratedFile("internal/adapters/http/routes.go", routesTemplate(moduleName, nil), force); err != nil {
 		return err
 	}
 
@@ -270,7 +301,7 @@ func buildDesiredState(
 	return desired
 }
 
-func applyState(current state, desired state, force bool) (state, error) {
+func applyState(moduleName string, current state, desired state, force bool) (state, error) {
 	if current.Version == 0 {
 		current = state{
 			Version:       1,
@@ -286,7 +317,7 @@ func applyState(current state, desired state, force bool) (state, error) {
 		merged := mergeConcept(currentConcept, c)
 		current.Concepts[name] = merged
 
-		if err := scaffoldConcept(merged, currentConcept, force); err != nil {
+		if err := scaffoldConcept(moduleName, merged, currentConcept, force); err != nil {
 			return current, err
 		}
 	}
@@ -313,7 +344,7 @@ func applyState(current state, desired state, force bool) (state, error) {
 
 	if len(desired.Routes) > 0 {
 		current.Routes = mergeRoutes(current.Routes, desired.Routes)
-		if err := scaffoldRoutes(current.Routes, force); err != nil {
+		if err := scaffoldRoutes(moduleName, current.Routes, force); err != nil {
 			return current, err
 		}
 	}
@@ -321,7 +352,7 @@ func applyState(current state, desired state, force bool) (state, error) {
 	return current, nil
 }
 
-func scaffoldConcept(c concept, previous concept, force bool) error {
+func scaffoldConcept(moduleName string, c concept, previous concept, force bool) error {
 	normalizeConcept(&c)
 
 	conceptDir := filepath.Join("internal/domain", toSnakeCase(c.Name))
@@ -339,7 +370,7 @@ func scaffoldConcept(c concept, previous concept, force bool) error {
 		return err
 	}
 	storePath := filepath.Join(storeDir, "store.go")
-	if err := writeFileIfMissing(storePath, storageTemplate(c), force); err != nil {
+	if err := writeFileIfMissing(storePath, storageTemplate(moduleName, c), force); err != nil {
 		return err
 	}
 
@@ -363,14 +394,14 @@ func scaffoldProjection(p projection, force bool) error {
 	return writeFileIfMissing(path, projectionTemplate(p), force)
 }
 
-func scaffoldRoutes(routes []route, force bool) error {
+func scaffoldRoutes(moduleName string, routes []route, force bool) error {
 	sort.Slice(routes, func(i, j int) bool {
 		if routes[i].Path == routes[j].Path {
 			return routes[i].Method < routes[j].Method
 		}
 		return routes[i].Path < routes[j].Path
 	})
-	content := routesTemplate(routes)
+	content := routesTemplate(moduleName, routes)
 	return writeGeneratedFile("internal/adapters/http/routes.go", content, force)
 }
 
@@ -688,8 +719,9 @@ func (c *{{ $.Concept.Name }}) {{ . }}() {
 `, data{Package: toSnakeCase(c.Name), Concept: c})
 }
 
-func storageTemplate(c concept) string {
+func storageTemplate(moduleName string, c concept) string {
 	type data struct {
+		Module  string
 		Package string
 		Concept concept
 	}
@@ -698,7 +730,7 @@ func storageTemplate(c concept) string {
 import (
 	"context"
 
-	domain "workshop/internal/domain/{{ .Package }}"
+	domain "{{ .Module }}/internal/domain/{{ .Package }}"
 )
 
 // Store persists {{ .Concept.Name }} state.
@@ -706,7 +738,7 @@ type Store interface {
 	GetByID(ctx context.Context, id string) (domain.{{ .Concept.Name }}, error)
 	Save(ctx context.Context, value domain.{{ .Concept.Name }}) error
 }
-`, data{Package: toSnakeCase(c.Name), Concept: c})
+`, data{Module: moduleName, Package: toSnakeCase(c.Name), Concept: c})
 }
 
 func orchestratorTemplate(o orchestrator) string {
@@ -762,7 +794,7 @@ func Query{{ .Projection.Name }}(ctx context.Context, query {{ .Projection.Name 
 `, data{Projection: p})
 }
 
-func routesTemplate(routes []route) string {
+func routesTemplate(moduleName string, routes []route) string {
 	type routeData struct {
 		Method      string
 		Path        string
@@ -770,11 +802,11 @@ func routesTemplate(routes []route) string {
 		Target      string
 		IsQuery     bool
 	}
-	var data []routeData
+	var routeList []routeData
 	for _, r := range routes {
 		handler := handlerName(r.Method, r.Path, r.Target)
 		isQuery := r.Method == "GET"
-		data = append(data, routeData{
+		routeList = append(routeList, routeData{
 			Method:      r.Method,
 			Path:        r.Path,
 			HandlerName: handler,
@@ -789,24 +821,24 @@ func routesTemplate(routes []route) string {
 
 import "net/http"
 
-{{ if . }}
+{{ if .Routes }}
 import (
 	"encoding/json"
 
-	"workshop/internal/application/orchestrators"
-	"workshop/internal/application/projections"
+	"{{ .Module }}/internal/application/orchestrators"
+	"{{ .Module }}/internal/application/projections"
 )
 {{ end }}
 
 func registerRoutes(mux *http.ServeMux) {
-{{- if . }}
-{{- range . }}
+{{- if .Routes }}
+{{- range .Routes }}
 	mux.HandleFunc("{{ .Path }}", {{ .HandlerName }})
 {{- end }}
 {{- end }}
 }
 
-{{ range . -}}
+{{ range .Routes -}}
 func {{ .HandlerName }}(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "{{ .Method }}" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -838,7 +870,10 @@ func {{ .HandlerName }}(w http.ResponseWriter, r *http.Request) {
 }
 
 {{ end -}}
-`, data)
+`, struct {
+		Module string
+		Routes []routeData
+	}{Module: moduleName, Routes: routeList})
 }
 
 func handlerName(method, path, target string) string {
@@ -862,4 +897,82 @@ func executeTemplate(tmpl string, data any) string {
 		panic(err)
 	}
 	return b.String()
+}
+
+func resolveModuleName(flagValue string) (string, error) {
+	existing, err := readModuleName()
+	if err != nil {
+		return "", err
+	}
+	if flagValue != "" {
+		if existing != "" && existing != flagValue {
+			return "", fmt.Errorf("module flag %q does not match go.mod module %q", flagValue, existing)
+		}
+		return flagValue, nil
+	}
+	if existing != "" {
+		return existing, nil
+	}
+	return "workshop", nil
+}
+
+func readModuleName() (string, error) {
+	data, err := os.ReadFile("go.mod")
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", err
+	}
+	lines := strings.Split(string(data), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "module ") {
+			return strings.TrimSpace(strings.TrimPrefix(line, "module ")), nil
+		}
+	}
+	return "", nil
+}
+
+func goModTemplate(moduleName string) string {
+	return fmt.Sprintf("module %s\n\ngo 1.21\n", moduleName)
+}
+
+func serverMainTemplate(moduleName string) string {
+	return executeTemplate(`package main
+
+import (
+	"log"
+	"net/http"
+
+	web "{{ .Module }}/internal/adapters/http"
+)
+
+func main() {
+	mux := web.NewMux("./static")
+
+	addr := ":8080"
+	server := &http.Server{Addr: addr, Handler: mux}
+
+	log.Printf("listening on %s", addr)
+	if err := server.ListenAndServe(); err != nil {
+		log.Fatal(err)
+	}
+}
+`, struct{ Module string }{Module: moduleName})
+}
+
+func webTemplate(moduleName string) string {
+	return executeTemplate(`package web
+
+import "net/http"
+
+// NewMux wires HTTP handlers for the app.
+func NewMux(staticDir string) *http.ServeMux {
+	mux := http.NewServeMux()
+	mux.Handle("/", http.FileServer(http.Dir(staticDir)))
+	registerRoutes(mux)
+	return mux
+}
+`, struct{ Module string }{Module: moduleName})
 }

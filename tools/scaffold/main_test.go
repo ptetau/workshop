@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -79,6 +80,23 @@ func TestRoutesRegenerateWhenGenerated(t *testing.T) {
 	content := readFile(t, "internal/adapters/http/routes.go")
 	if !strings.Contains(content, "handleGetViewsOrderDetailOrderDetail") {
 		t.Fatalf("expected second route to be present")
+	}
+}
+
+func TestScaffoldedAppCompiles(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+
+	if err := runInit([]string{"--concept", "Order", "--field", "Order:Status:string"}); err != nil {
+		t.Fatalf("runInit failed: %v", err)
+	}
+
+	cmd := exec.Command("go", "test", "./...")
+	cmd.Env = append(os.Environ(), "GOWORK=off")
+	cmd.Dir = dir
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("go test failed: %v\n%s", err, string(output))
 	}
 }
 
