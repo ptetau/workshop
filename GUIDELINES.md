@@ -1,35 +1,364 @@
 # Application Guidelines
 
-1) All symbols must be explicit and readable; they communicate what the data is or what the function does.
-   Don't use abbreviations like `usr` or `amt`; do use names like `userID` and `paymentAmountCents`.
-2) All concepts are independent and have their own storage. Each concept type owns its own persistence schema/table/collection. They may reference each other by id in the weakest way possible.
-   Don't share tables or embed another concept's schema; do store only foreign IDs.
-3) If we wish to view multiple concepts together we can create a separate projection. We must not couple the core concepts. Projections may be computed on the fly or materialized for performance, but they remain separate from concept storage.
-   Don't denormalize another concept into a core concept; do build a projection or materialized view.
-4) Concepts can have methods that change their own state. Those methods cannot have strong coupling to any other concept. Strong coupling includes direct method calls or references to other concept types, shared persistence models/schemas, or tight synchronous dependencies where one concept must call another to function.
-   Don't call another concept or share its schema in a concept method; do keep the method self-contained and use IDs only.
-5) The system is altered by orchestrators (commands), which are functions that only ever marshall traffic to concepts. Orchestrators can plumb between multiple concepts, coordinating workflows and performing mapping/aggregation as needed.
-   Don't embed workflow logic inside concepts; do coordinate steps in an orchestrator.
-6) The default view (coupled to a route) is a projection that marshalls query params and reads state (either concepts, or projections on concepts) but must not change state (query only). All GET routes are projections; POST, PUT, and DELETE routes may call orchestrators to change state.
-   Don't mutate state in GET handlers; do handle reads only and move state changes to POST/PUT/DELETE via orchestrators.
+Build software by separating **what data is** (Concepts), **how it changes** (Orchestrators), and **how it's viewed** (Projections).
 
-7) Cross-cutting concerns: orchestrators validate inputs, concepts enforce their own invariants, and projections validate query params.
-   Don't put input validation in concept methods; do validate input in orchestrators and enforce invariants in concepts.
-8) Consistency across multiple concepts is eventual. Orchestrators use compensating actions (sagas) to resolve partial failures.
-   Don't use cross-concept transactions; do design compensating actions for each step.
-9) Concepts own their migrations. Projections can be rebuilt from concept state when needed.
-   Don't migrate projection storage by hand; do rebuild or regenerate projections from concept data.
-10) Orchestrators handle partial failures with compensating actions.
-   Don't ignore partial failures or leave half-complete workflows; do define compensation per step.
+---
 
-Corollaries
-- A concept must never call another concept directly; only orchestrators coordinate cross-concept workflows.
-  Don't call `Order.AdjustInventory()` from `Order`; do call an orchestrator that coordinates `Order` and `Inventory`.
-- Projections are read-only and can be rebuilt or discarded without affecting concept correctness.
-  Don't treat projections as sources of truth; do rebuild projections from concept state.
-- Cross-concept identifiers are plain IDs only; no shared schema objects or embedded concept types.
-  Don't store full `User` objects inside `Order`; do store `UserID`.
-- Route handlers for GET perform queries only; state changes are confined to POST/PUT/DELETE through orchestrators.
-  Don't update records in GET routes; do expose mutations via command routes.
-- Validation is layered: orchestrators validate inputs, concepts enforce invariants, projections validate query params.
-  Don't validate query params inside concepts; do validate them at the projection boundary.
+## Quick Start
+
+```powershell
+# 1. Design interactively
+go run ./tools/interview --root ./myapp --module myapp
+
+# 2. Generate code
+go run ./tools/scaffold init --root ./myapp --module myapp \
+  --concept Order --field Order:UserID:string --method Order:Cancel \
+  --orchestrator CancelOrder --param CancelOrder:OrderID:string \
+  --projection OrderSummary --query OrderSummary:OrderID:string \
+  --route "GET:/orders/{id}:OrderSummary" --route "POST:/orders/{id}/cancel:CancelOrder"
+
+# 3. Verify compliance
+go run ./tools/lintguidelines --root ./myapp --strict
+```
+
+**Generated structure:**
+```
+internal/
+├── domain/order/model.go           ← Concept: state + methods
+├── application/
+│   ├── orchestrators/cancel_order.go   ← Coordinates workflows
+│   └── projections/order_summary.go    ← Read-only views
+└── adapters/
+    ├── http/routes.go              ← GET→projection, POST→orchestrator
+    └── storage/order/store.go      ← CRUD + List interface
+```
+
+---
+
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Routes                                                         │
+│  GET → Projections (read-only)                                  │
+│  POST/PUT/DELETE → Orchestrators (state changes)                │
+└─────────────────────────────────────────────────────────────────┘
+                            │
+        ┌───────────────────┴───────────────────┐
+        ▼                                       ▼
+┌───────────────────┐                 ┌───────────────────┐
+│   Orchestrators   │                 │   Projections     │
+│   (Commands)      │                 │   (Queries)       │
+│                   │                 │                   │
+│ Coordinate across │                 │ Combine data from │
+│ multiple concepts │                 │ multiple concepts │
+└───────────────────┘                 └───────────────────┘
+        │                                       │
+        └───────────────────┬───────────────────┘
+                            ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                         Concepts                                │
+│  Independent state + methods. Each owns its storage.            │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Key Terms
+
+| Term | What It Is | Example |
+|------|------------|---------|
+| **Concept** | Self-contained domain entity with state, methods, and storage. Never calls other concepts. | `Order`, `Inventory`, `User` |
+| **Orchestrator** | Command function coordinating changes across concepts. The only place cross-concept logic lives. | `CancelOrder`, `PlaceOrder` |
+| **Projection** | Read-only query combining data from concepts. Rebuildable from concept state. | `OrderSummary`, `UserDashboard` |
+| **Route** | HTTP endpoint. GET → projection; POST/PUT/DELETE → orchestrator. | `GET /orders/{id}`, `POST /orders` |
+
+### Data Flow
+
+| Path | Example |
+|------|---------|
+| **Read** | `GET /orders/{id}` → `QueryOrderSummary()` → reads Order + User → returns view |
+| **Write** | `POST /orders/{id}/cancel` → `ExecuteCancelOrder()` → Order.Cancel() + Inventory.Release() → persists |
+
+---
+
+## Building Blocks
+
+### Concepts
+
+Concepts are independent domain entities. Each owns its state, methods, and storage.
+
+```go
+// internal/domain/order/model.go
+type Order struct {
+    ID          string
+    UserID      string    // Reference by ID only, never embed User
+    Status      string
+    CancelledAt time.Time
+}
+
+var ErrAlreadyCancelled = errors.New("order already cancelled")
+
+func (o *Order) Cancel() error {
+    if o.Status == "cancelled" {
+        return ErrAlreadyCancelled
+    }
+    o.Status = "cancelled"
+    o.CancelledAt = time.Now()
+    return nil
+}
+```
+
+| Don't | Do |
+|-------|------|
+| Call another concept from a concept method | Keep methods self-contained |
+| Store full `User` object in `Order` | Store `UserID` string |
+| Share tables between concepts | Each concept owns its storage |
+
+**When to create a concept:** Must have both (1) independent lifecycle AND (2) be referenceable by ID.
+
+| Entity | Lifecycle? | Referenced? | Decision |
+|--------|------------|-------------|----------|
+| `Order` | Yes | Yes | **Concept** |
+| `Address` | No (part of User) | No | Embed in User |
+| `LineItem` | No (part of Order) | No | Embed in Order |
+
+---
+
+### Orchestrators
+
+Orchestrators coordinate workflows across concepts. They validate inputs and handle failures.
+
+```go
+// internal/application/orchestrators/cancel_order.go
+func ExecuteCancelOrder(ctx context.Context, input CancelOrderInput) error {
+    // Validate input
+    if input.OrderID == "" {
+        return ErrMissingOrderID
+    }
+    
+    // Coordinate concepts
+    order, err := orderStore.GetByID(ctx, input.OrderID)
+    if err != nil {
+        return fmt.Errorf("order not found: %w", err)
+    }
+    
+    if err := order.Cancel(); err != nil {
+        if errors.Is(err, ErrAlreadyCancelled) {
+            return &ConflictError{Message: "order already cancelled"}
+        }
+        return err
+    }
+    orderStore.Save(ctx, order)
+    
+    // Coordinate with other concepts
+    inventory, _ := inventoryStore.GetByID(ctx, order.InventoryID)
+    inventory.Release(order.Quantity)
+    inventoryStore.Save(ctx, inventory)
+    
+    return nil
+}
+```
+
+| Don't | Do |
+|-------|------|
+| Put workflow logic in concepts | Coordinate in orchestrators |
+| Use cross-concept transactions | Design compensating actions |
+| Ignore partial failures | Define compensation per step |
+
+---
+
+### Projections
+
+Projections are read-only views combining data from concepts.
+
+```go
+// internal/application/projections/order_summary.go
+func QueryOrderSummary(ctx context.Context, query OrderSummaryQuery) (OrderSummaryResult, error) {
+    // Validate query params
+    if query.OrderID == "" {
+        return OrderSummaryResult{}, ErrMissingOrderID
+    }
+    
+    order, _ := orderStore.GetByID(ctx, query.OrderID)
+    user, _ := userStore.GetByID(ctx, order.UserID)
+    
+    return OrderSummaryResult{
+        OrderID:  order.ID,
+        UserName: user.Name,
+        Status:   order.Status,
+    }, nil
+}
+```
+
+| Don't | Do |
+|-------|------|
+| Mutate state in projections | Read and combine only |
+| Denormalize concepts into each other | Build separate projections |
+| Treat projections as source of truth | Rebuild from concept state |
+
+---
+
+### Storage Interface
+
+Each concept has a `Store` interface with CRUD + List.
+
+```go
+// internal/adapters/storage/order/store.go
+type Store interface {
+    GetByID(ctx context.Context, id string) (domain.Order, error)
+    Save(ctx context.Context, order domain.Order) error
+    Delete(ctx context.Context, id string) error
+    List(ctx context.Context, filter ListFilter) ([]domain.Order, error)
+}
+```
+
+| Operation | Used By |
+|-----------|---------|
+| `GetByID`, `Save`, `Delete` | Orchestrators |
+| `List` | Projections |
+
+| Don't | Do |
+|-------|------|
+| Share storage across concepts | One interface per concept |
+| Put business logic in storage | Keep as pure data access |
+
+---
+
+### Routes
+
+Routes enforce the read/write split.
+
+| Method | Calls | Example |
+|--------|-------|---------|
+| GET | `projections.Query*()` | `GET /orders/{id}` → `QueryOrderSummary` |
+| POST, PUT, DELETE | `orchestrators.Execute*()` | `POST /orders/{id}/cancel` → `ExecuteCancelOrder` |
+
+| Don't | Do |
+|-------|------|
+| Mutate state in GET handlers | Reads only; mutations via POST/PUT/DELETE |
+
+---
+
+## Rules
+
+### Naming
+All symbols must be explicit. No abbreviations.
+
+| Don't | Do |
+|-------|------|
+| `usr`, `amt`, `cfg` | `userID`, `paymentAmountCents`, `config` |
+
+### Validation Layers
+
+| Layer | Validates |
+|-------|-----------|
+| Orchestrators | Inputs (required fields, formats) |
+| Concepts | Invariants (business rules) |
+| Projections | Query params |
+
+### Error Handling
+
+| Layer | Error Type | HTTP |
+|-------|------------|------|
+| Concept | Domain (`ErrAlreadyCancelled`) | 409 |
+| Orchestrator | Validation (`ErrMissingOrderID`) | 400 |
+| Storage | Not found | 404 |
+| Storage | Infrastructure | 500 |
+
+### Consistency
+- Cross-concept consistency is **eventual**
+- Orchestrators use **compensating actions** for partial failures
+- Concepts own their **migrations**; projections can be rebuilt
+
+---
+
+## Testing
+
+| Layer | Test Type | Approach |
+|-------|-----------|----------|
+| Concepts | Unit | Call method, assert state |
+| Orchestrators | Unit | Mock storage, verify call sequence |
+| Orchestrators | Integration | In-memory storage, full workflow |
+| Projections | Unit | Mock storage, verify result structure |
+
+```go
+// Unit: concept invariant
+func TestOrder_Cancel(t *testing.T) {
+    order := Order{Status: "pending"}
+    err := order.Cancel()
+    assert.NoError(t, err)
+    assert.Equal(t, "cancelled", order.Status)
+}
+
+// Integration: orchestrator workflow
+func TestCancelOrder_ReleasesInventory(t *testing.T) {
+    store := NewInMemoryStore()
+    store.Save(ctx, Order{ID: "1", InventoryID: "inv1", Quantity: 5})
+    store.Save(ctx, Inventory{ID: "inv1", Reserved: 5})
+    
+    ExecuteCancelOrder(ctx, CancelOrderInput{OrderID: "1"})
+    
+    inv, _ := store.GetInventory(ctx, "inv1")
+    assert.Equal(t, 0, inv.Reserved)
+}
+```
+
+| Don't | Do |
+|-------|------|
+| Test with real databases | Mock storage for unit tests |
+| Skip multi-concept workflows | Integration test full paths |
+| Test only happy paths | Include failure + compensation |
+
+---
+
+## Tooling Reference
+
+### Commands
+
+| Tool | Purpose |
+|------|---------|
+| `interview` | Interactive design session |
+| `scaffold` | Generate code structure |
+| `lintguidelines` | Verify compliance |
+
+### Lint Rules
+
+| Rule | Checks |
+|------|--------|
+| `naming` | No abbreviations |
+| `concept-coupling` | Concepts don't import each other |
+| `route-query` | GET → projections only |
+| `route-command` | POST/PUT/DELETE → orchestrators only |
+| `storage-isolation` | One storage per concept |
+
+### Scaffold Flags
+
+```
+--concept Name              Create concept
+--field Concept:Field:Type  Add field to concept
+--method Concept:Method     Add method to concept
+--orchestrator Name         Create orchestrator
+--param Orch:Param:Type     Add param to orchestrator
+--projection Name           Create projection
+--query Proj:Param:Type     Add query param
+--result Proj:Field:Type    Add result field
+--route "METHOD:path:Target" Create route
+```
+
+---
+
+## Corollaries
+
+Quick reference for common decisions:
+
+| Question | Answer |
+|----------|--------|
+| Can Concept A call Concept B? | No. Use an orchestrator. |
+| Where does cross-concept logic go? | Orchestrators only. |
+| Can I denormalize for performance? | Build a projection instead. |
+| How do I reference another concept? | By ID only. Never embed. |
+| Where do I validate input? | Orchestrators. |
+| Where do I enforce business rules? | Concept methods. |
+| Can GET routes change state? | No. POST/PUT/DELETE only. |
+| What if an orchestrator fails mid-workflow? | Compensating actions. |
+| Is LineItem a concept? | No. No independent lifecycle. Embed. |
+| Is Inventory a concept? | Yes. Independent lifecycle + referenced by ID. |
