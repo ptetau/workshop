@@ -695,12 +695,16 @@ func storageTemplate(c concept) string {
 	}
 	return executeTemplate(`package {{ .Package }}
 
-import "context"
+import (
+	"context"
+
+	domain "workshop/internal/domain/{{ .Package }}"
+)
 
 // Store persists {{ .Concept.Name }} state.
 type Store interface {
-	GetByID(ctx context.Context, id string) ({{ .Concept.Name }}, error)
-	Save(ctx context.Context, value {{ .Concept.Name }}) error
+	GetByID(ctx context.Context, id string) (domain.{{ .Concept.Name }}, error)
+	Save(ctx context.Context, value domain.{{ .Concept.Name }}) error
 }
 `, data{Package: toSnakeCase(c.Name), Concept: c})
 }
