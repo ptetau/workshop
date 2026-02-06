@@ -117,6 +117,7 @@ func lint(root string) ([]violation, error) {
 	}
 
 	violations = append(violations, lintStoragePackages(root, conceptSet)...)
+	violations = append(violations, lintWeb(root)...)
 
 	sort.Slice(violations, func(i, j int) bool {
 		if violations[i].File == violations[j].File {
@@ -144,6 +145,7 @@ func lintGoFile(root, file string, concepts map[string]struct{}) ([]violation, e
 	}
 	if isNamingCheckedFile(root, file) {
 		violations = append(violations, lintIdentifiers(file, parsed, fset)...)
+		violations = append(violations, lintDocumentation(file, parsed, fset)...)
 	}
 
 	return violations, nil
@@ -176,6 +178,62 @@ func lintIdentifiers(file string, parsed *ast.File, fset *token.FileSet) []viola
 		}
 		if bad := bannedWord(ident.Name); bad != "" {
 			violations = append(violations, newViolation(fset, ident.Pos(), file, "naming", fmt.Sprintf("avoid abbreviation %q in identifier %q", bad, ident.Name)))
+		}
+		return true
+	})
+	return violations
+}
+
+func lintDocumentation(file string, parsed *ast.File, fset *token.FileSet) []violation {
+	var violations []violation
+	ast.Inspect(parsed, func(node ast.Node) bool {
+		if gen, ok := node.(*ast.GenDecl); ok {
+			if gen.Tok == token.TYPE {
+				for _, spec := range gen.Specs {
+					ts, ok := spec.(*ast.TypeSpec)
+					if !ok {
+						continue
+					}
+					if ast.IsExported(ts.Name.Name) {
+						if gen.Doc == nil {
+							violations = append(violations, newViolation(fset, ts.Pos(), file, "documentation", "exported type "+ts.Name.Name+" must have comment"))
+						}
+					}
+				}
+			}
+		}
+		if fn, ok := node.(*ast.FuncDecl); ok {
+			if ast.IsExported(fn.Name.Name) {
+				if fn.Doc == nil {
+					violations = append(violations, newViolation(fset, fn.Pos(), file, "documentation", "exported function "+fn.Name.Name+" must have comment"))
+				} else if fn.Recv != nil && len(fn.Recv.List) > 0 {
+					// Check methods for PRE/POST/INVARIANT tags in doc OR body
+					hasTag := false
+
+					// Check header doc
+					comment := fn.Doc.Text()
+					if strings.Contains(comment, "PRE:") || strings.Contains(comment, "POST:") || strings.Contains(comment, "INVARIANT:") {
+						hasTag = true
+					}
+
+					// Check body comments
+					if !hasTag && fn.Body != nil {
+						for _, cg := range parsed.Comments {
+							if cg.Pos() > fn.Body.Pos() && cg.End() < fn.Body.End() {
+								text := cg.Text()
+								if strings.Contains(text, "PRE:") || strings.Contains(text, "POST:") || strings.Contains(text, "INVARIANT:") {
+									hasTag = true
+									break
+								}
+							}
+						}
+					}
+
+					if !hasTag {
+						violations = append(violations, newViolation(fset, fn.Pos(), file, "documentation", "method "+fn.Name.Name+" must retain PRE/POST/INVARIANT tags"))
+					}
+				}
+			}
 		}
 		return true
 	})
@@ -308,6 +366,61 @@ func lintStoragePackages(root string, concepts map[string]struct{}) []violation 
 			if strings.Contains(path, "/internal/domain/") && !strings.HasSuffix(path, "/internal/domain/"+concept) {
 				violations = append(violations, newViolation(fset, imp.Pos(), storePath, "storage-isolation", "storage must not import other concepts"))
 			}
+		}
+	}
+	return violations
+}
+
+func lintWeb(root string) []violation {
+	webPath := filepath.Join(root, "internal", "adapters", "http", "web.go")
+	if _, err := os.Stat(webPath); err != nil {
+		return nil // Missing web.go is acceptable (maybe no UI layer)
+	}
+
+	fset := token.NewFileSet()
+	parsed, err := parser.ParseFile(fset, webPath, nil, parser.ParseComments)
+	if err != nil {
+		return []violation{{
+			File:     webPath,
+			Line:     1,
+			Column:   1,
+			Rule:     "web-security",
+			Message:  "cannot parse web.go",
+			Severity: "warning",
+		}}
+	}
+
+	var violations []violation
+	// Look for NewMux
+	for _, decl := range parsed.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok || fn.Name.Name != "NewMux" {
+			continue
+		}
+
+		// Check Body for security calls
+		hasCSRF := false
+		hasHeaders := false
+
+		ast.Inspect(fn.Body, func(node ast.Node) bool {
+			if sel, ok := node.(*ast.SelectorExpr); ok {
+				if ident, ok := sel.X.(*ast.Ident); ok && ident.Name == "middleware" {
+					if strings.Contains(sel.Sel.Name, "CSRF") {
+						hasCSRF = true
+					}
+					if strings.Contains(sel.Sel.Name, "SecurityHeaders") {
+						hasHeaders = true
+					}
+				}
+			}
+			return true
+		})
+
+		if !hasCSRF {
+			violations = append(violations, newViolation(fset, fn.Pos(), webPath, "web-security", "NewMux must apply middleware.CSRF"))
+		}
+		if !hasHeaders {
+			violations = append(violations, newViolation(fset, fn.Pos(), webPath, "web-security", "NewMux must apply middleware.SecurityHeaders"))
 		}
 	}
 	return violations

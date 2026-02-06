@@ -91,6 +91,15 @@ func TestScaffoldedAppCompiles(t *testing.T) {
 		t.Fatalf("runInit failed: %v", err)
 	}
 
+	// Fetch dependencies
+	// Ensure dependencies
+	getCmd := exec.Command("go", "mod", "tidy")
+	getCmd.Env = append(os.Environ(), "GOWORK=off")
+	getCmd.Dir = dir
+	if out, err := getCmd.CombinedOutput(); err != nil {
+		t.Fatalf("go mod tidy failed: %v\n%s", err, string(out))
+	}
+
 	cmd := exec.Command("go", "test", "./...")
 	cmd.Env = append(os.Environ(), "GOWORK=off")
 	cmd.Dir = dir

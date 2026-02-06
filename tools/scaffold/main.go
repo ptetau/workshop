@@ -20,25 +20,37 @@ const (
 )
 
 type field struct {
-	Name string `json:"name"`
-	Type string `json:"type"`
+	Name        string `json:"name"`
+	Type        string `json:"type"`
+	Description string `json:"description,omitempty"`
+}
+
+type method struct {
+	Name          string `json:"name"`
+	Description   string `json:"description,omitempty"`
+	Invariant     string `json:"invariant,omitempty"`
+	PreCondition  string `json:"pre_condition,omitempty"`
+	PostCondition string `json:"post_condition,omitempty"`
 }
 
 type concept struct {
-	Name    string  `json:"name"`
-	Fields  []field `json:"fields"`
-	Methods []string
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Fields      []field  `json:"fields"`
+	Methods     []method `json:"methods"`
 }
 
 type orchestrator struct {
-	Name   string  `json:"name"`
-	Params []field `json:"params"`
+	Name        string  `json:"name"`
+	Description string  `json:"description,omitempty"`
+	Params      []field `json:"params"`
 }
 
 type projection struct {
-	Name   string  `json:"name"`
-	Query  []field `json:"query"`
-	Result []field `json:"result"`
+	Name        string  `json:"name"`
+	Description string  `json:"description,omitempty"`
+	Query       []field `json:"query"`
+	Result      []field `json:"result"`
 }
 
 type route struct {
@@ -95,6 +107,17 @@ func printUsage() {
 	fmt.Println("  --query Projection:Field:Type")
 	fmt.Println("  --result Projection:Field:Type")
 	fmt.Println("  --route Method:Path:Target")
+	fmt.Println("  --description Concept:Description")
+	fmt.Println("  --field-doc Concept:Field:Description")
+	fmt.Println("  --method-doc Concept:Method:Description")
+	fmt.Println("  --pre Concept:Method:PreCondition")
+	fmt.Println("  --post Concept:Method:PostCondition")
+	fmt.Println("  --invariant Concept:Method:Invariant")
+	fmt.Println("  --orchestrator-doc Orchestrator:Description")
+	fmt.Println("  --param-doc Orchestrator:Param:Description")
+	fmt.Println("  --projection-doc Projection:Description")
+	fmt.Println("  --query-doc Projection:Query:Description")
+	fmt.Println("  --result-doc Projection:Result:Description")
 	fmt.Println("  --force (overwrite existing files)")
 }
 
@@ -111,6 +134,8 @@ func runInit(args []string) error {
 		queryFlags        multiFlag
 		resultFlags       multiFlag
 		routeFlags        multiFlag
+		descriptionFlags  multiFlag
+		invariantFlags    multiFlag
 		force             bool
 	)
 
@@ -127,6 +152,30 @@ func runInit(args []string) error {
 	fs.Var(&queryFlags, "query", "projection query field: Projection:Field:Type")
 	fs.Var(&resultFlags, "result", "projection result field: Projection:Field:Type")
 	fs.Var(&routeFlags, "route", "route: Method:Path:Target")
+	fs.Var(&descriptionFlags, "description", "concept description: Concept:Description")
+	fs.Var(&invariantFlags, "invariant", "method invariant: Concept:Method:Invariant")
+
+	var (
+		fieldDocFlags        multiFlag
+		methodDocFlags       multiFlag
+		preFlags             multiFlag
+		postFlags            multiFlag
+		orchestratorDocFlags multiFlag
+		paramDocFlags        multiFlag
+		projectionDocFlags   multiFlag
+		queryDocFlags        multiFlag
+		resultDocFlags       multiFlag
+	)
+
+	fs.Var(&fieldDocFlags, "field-doc", "field doc: Concept:Field:Description")
+	fs.Var(&methodDocFlags, "method-doc", "method doc: Concept:Method:Description")
+	fs.Var(&preFlags, "pre", "method pre: Concept:Method:PreCondition")
+	fs.Var(&postFlags, "post", "method post: Concept:Method:PostCondition")
+	fs.Var(&orchestratorDocFlags, "orchestrator-doc", "orchestrator doc: Orchestrator:Description")
+	fs.Var(&paramDocFlags, "param-doc", "param doc: Orchestrator:Param:Description")
+	fs.Var(&projectionDocFlags, "projection-doc", "projection doc: Projection:Description")
+	fs.Var(&queryDocFlags, "query-doc", "query doc: Projection:Query:Description")
+	fs.Var(&resultDocFlags, "result-doc", "result doc: Projection:Query:Description")
 	fs.BoolVar(&force, "force", false, "overwrite existing files")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -156,7 +205,10 @@ func runInit(args []string) error {
 		return err
 	}
 
-	desired := buildDesiredState(conceptFlags, fieldFlags, methodFlags, orchestratorFlags, paramFlags, projectionFlags, queryFlags, resultFlags, routeFlags)
+	desired := buildDesiredState(
+		conceptFlags, fieldFlags, methodFlags, orchestratorFlags, paramFlags, projectionFlags, queryFlags, resultFlags, routeFlags, descriptionFlags, invariantFlags,
+		fieldDocFlags, methodDocFlags, preFlags, postFlags, orchestratorDocFlags, paramDocFlags, projectionDocFlags, queryDocFlags, resultDocFlags,
+	)
 	updated, err := applyState(moduleName, current, desired, force)
 	if err != nil {
 		return err
@@ -205,12 +257,26 @@ func ensureBaseLayout(moduleName string, force bool) error {
 	if err := writeGeneratedFile("internal/adapters/http/routes.go", routesTemplate(moduleName, nil), force); err != nil {
 		return err
 	}
+	if err := writeFileIfMissing("internal/adapters/storage/db.go", dbTemplate(moduleName), force); err != nil {
+		return err
+	}
+
+	// Middleware
+	if err := writeFileIfMissing("internal/adapters/http/middleware/middleware.go", middlewareTemplate(moduleName), force); err != nil {
+		return err
+	}
+
+	// HTML templates
+	if err := writeFileIfMissing("internal/adapters/http/templates/layout.html", layoutHTMLTemplate(), force); err != nil {
+		return err
+	}
 
 	return nil
 }
 
 func buildDesiredState(
-	concepts, fields, methods, orchestrators, params, projections, queries, results, routes multiFlag,
+	concepts, fields, methods, orchestrators, params, projections, queries, results, routes, descriptions, invariants,
+	fieldDocs, methodDocs, pres, posts, orchDocs, paramDocs, projDocs, queryDocs, resultDocs multiFlag,
 ) state {
 	desired := state{
 		Version:       1,
@@ -230,6 +296,7 @@ func buildDesiredState(
 	for _, f := range fields {
 		conceptName, fieldName, fieldType, err := splitTriple(f)
 		if err != nil {
+			fmt.Fprintf(os.Stderr, "skipping field %q: %v\n", f, err)
 			continue
 		}
 		c := desired.Concepts[conceptName]
@@ -237,14 +304,120 @@ func buildDesiredState(
 		c.Fields = append(c.Fields, field{Name: fieldName, Type: fieldType})
 		desired.Concepts[conceptName] = c
 	}
-	for _, m := range methods {
-		conceptName, methodName, err := splitPair(m)
+	for _, fd := range fieldDocs {
+		conceptName, fieldName, desc, err := splitTriple(fd)
 		if err != nil {
+			fmt.Fprintf(os.Stderr, "skipping field-doc %q: %v\n", fd, err)
 			continue
 		}
 		c := desired.Concepts[conceptName]
 		c.Name = conceptName
-		c.Methods = append(c.Methods, methodName)
+		for i, f := range c.Fields {
+			if f.Name == fieldName {
+				c.Fields[i].Description = desc
+				break
+			}
+		}
+		desired.Concepts[conceptName] = c
+	}
+	for _, m := range methods {
+		conceptName, methodName, err := splitPair(m)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "skipping method %q: %v\n", m, err)
+			continue
+		}
+		c := desired.Concepts[conceptName]
+		c.Name = conceptName
+		found := false
+		for _, existing := range c.Methods {
+			if existing.Name == methodName {
+				found = true
+				break
+			}
+		}
+		if !found {
+			c.Methods = append(c.Methods, method{Name: methodName})
+		}
+		desired.Concepts[conceptName] = c
+	}
+	for _, d := range descriptions {
+		conceptName, desc, err := splitPair(d)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "skipping description %q: %v\n", d, err)
+			continue
+		}
+		c := desired.Concepts[conceptName]
+		c.Name = conceptName
+		c.Description = desc
+		desired.Concepts[conceptName] = c
+	}
+	for _, md := range methodDocs {
+		conceptName, methodName, desc, err := splitTriple(md)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "skipping method-doc %q: %v\n", md, err)
+			continue
+		}
+		c := desired.Concepts[conceptName]
+		c.Name = conceptName
+		found := false
+		for i, m := range c.Methods {
+			if m.Name == methodName {
+				c.Methods[i].Description = desc
+				found = true
+				break
+			}
+		}
+		if !found {
+			fmt.Fprintf(os.Stderr, "method-doc provided for unknown method %q in %q\n", methodName, conceptName)
+		}
+		desired.Concepts[conceptName] = c
+	}
+	for _, p := range pres {
+		conceptName, methodName, cond, err := splitTriple(p)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "skipping pre %q: %v\n", p, err)
+			continue
+		}
+		c := desired.Concepts[conceptName]
+		c.Name = conceptName
+		for i, m := range c.Methods {
+			if m.Name == methodName {
+				c.Methods[i].PreCondition = cond
+				break
+			}
+		}
+		desired.Concepts[conceptName] = c
+	}
+	for _, p := range posts {
+		conceptName, methodName, cond, err := splitTriple(p)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "skipping post %q: %v\n", p, err)
+			continue
+		}
+		c := desired.Concepts[conceptName]
+		c.Name = conceptName
+		for i, m := range c.Methods {
+			if m.Name == methodName {
+				c.Methods[i].PostCondition = cond
+				break
+			}
+		}
+		desired.Concepts[conceptName] = c
+	}
+	for _, inv := range invariants {
+		conceptName, methodName, invariant, err := splitTriple(inv)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "skipping invariant %q: %v\n", inv, err)
+			continue
+		}
+		c := desired.Concepts[conceptName]
+		c.Name = conceptName
+		for i, existing := range c.Methods {
+			if existing.Name == methodName {
+				c.Methods[i].Invariant = invariant
+				break
+			}
+		}
 		desired.Concepts[conceptName] = c
 	}
 	for _, o := range orchestrators {
@@ -253,6 +426,16 @@ func buildDesiredState(
 			continue
 		}
 		desired.Orchestrators[name] = orchestrator{Name: name}
+	}
+	for _, od := range orchDocs {
+		name, desc, err := splitPair(od)
+		if err != nil {
+			continue
+		}
+		o := desired.Orchestrators[name]
+		o.Name = name
+		o.Description = desc
+		desired.Orchestrators[name] = o
 	}
 	for _, p := range params {
 		orchName, fieldName, fieldType, err := splitTriple(p)
@@ -264,12 +447,37 @@ func buildDesiredState(
 		o.Params = append(o.Params, field{Name: fieldName, Type: fieldType})
 		desired.Orchestrators[orchName] = o
 	}
+	for _, pd := range paramDocs {
+		orchName, paramName, desc, err := splitTriple(pd)
+		if err != nil {
+			continue
+		}
+		o := desired.Orchestrators[orchName]
+		o.Name = orchName
+		for i, p := range o.Params {
+			if p.Name == paramName {
+				o.Params[i].Description = desc
+				break
+			}
+		}
+		desired.Orchestrators[orchName] = o
+	}
 	for _, p := range projections {
 		name := strings.TrimSpace(p)
 		if name == "" {
 			continue
 		}
 		desired.Projections[name] = projection{Name: name}
+	}
+	for _, pd := range projDocs {
+		name, desc, err := splitPair(pd)
+		if err != nil {
+			continue
+		}
+		p := desired.Projections[name]
+		p.Name = name
+		p.Description = desc
+		desired.Projections[name] = p
 	}
 	for _, q := range queries {
 		projName, fieldName, fieldType, err := splitTriple(q)
@@ -281,6 +489,21 @@ func buildDesiredState(
 		p.Query = append(p.Query, field{Name: fieldName, Type: fieldType})
 		desired.Projections[projName] = p
 	}
+	for _, qd := range queryDocs {
+		projName, fieldName, desc, err := splitTriple(qd)
+		if err != nil {
+			continue
+		}
+		p := desired.Projections[projName]
+		p.Name = projName
+		for i, f := range p.Query {
+			if f.Name == fieldName {
+				p.Query[i].Description = desc
+				break
+			}
+		}
+		desired.Projections[projName] = p
+	}
 	for _, r := range results {
 		projName, fieldName, fieldType, err := splitTriple(r)
 		if err != nil {
@@ -289,6 +512,21 @@ func buildDesiredState(
 		p := desired.Projections[projName]
 		p.Name = projName
 		p.Result = append(p.Result, field{Name: fieldName, Type: fieldType})
+		desired.Projections[projName] = p
+	}
+	for _, rd := range resultDocs {
+		projName, fieldName, desc, err := splitTriple(rd)
+		if err != nil {
+			continue
+		}
+		p := desired.Projections[projName]
+		p.Name = projName
+		for i, f := range p.Result {
+			if f.Name == fieldName {
+				p.Result[i].Description = desc
+				break
+			}
+		}
 		desired.Projections[projName] = p
 	}
 	for _, r := range routes {
@@ -313,12 +551,23 @@ func applyState(moduleName string, current state, desired state, force bool) (st
 		}
 	}
 
+	processedConcepts := map[string]bool{}
 	for name, c := range desired.Concepts {
 		currentConcept := current.Concepts[name]
 		merged := mergeConcept(currentConcept, c)
 		current.Concepts[name] = merged
 
 		if err := scaffoldConcept(moduleName, merged, currentConcept, force); err != nil {
+			return current, err
+		}
+		processedConcepts[name] = true
+	}
+
+	for name, c := range current.Concepts {
+		if processedConcepts[name] {
+			continue
+		}
+		if err := scaffoldConcept(moduleName, c, c, force); err != nil {
 			return current, err
 		}
 	}
@@ -362,8 +611,24 @@ func scaffoldConcept(moduleName string, c concept, previous concept, force bool)
 	}
 
 	modelPath := filepath.Join(conceptDir, "model.go")
-	if err := writeFileIfMissing(modelPath, conceptTemplate(c), force); err != nil {
-		return err
+	if _, err := os.Stat(modelPath); err == nil {
+		// Update existing
+		src, err := os.ReadFile(modelPath)
+		if err != nil {
+			return err
+		}
+		updated, err := UpdateStructFields(src, c.Name, c.Fields)
+		if err != nil {
+			return fmt.Errorf("failed to update struct: %w", err)
+		}
+		if err := os.WriteFile(modelPath, updated, 0644); err != nil {
+			return err
+		}
+	} else {
+		// Create new
+		if err := writeFileIfMissing(modelPath, conceptTemplate(c), force); err != nil {
+			return err
+		}
 	}
 
 	storeDir := filepath.Join("internal/adapters/storage", toSnakeCase(c.Name))
@@ -372,6 +637,10 @@ func scaffoldConcept(moduleName string, c concept, previous concept, force bool)
 	}
 	storePath := filepath.Join(storeDir, "store.go")
 	if err := writeFileIfMissing(storePath, storageTemplate(moduleName, c), force); err != nil {
+		return err
+	}
+
+	if err := writeFileIfMissing(filepath.Join(storeDir, "sqlite_store.go"), sqliteStoreTemplate(moduleName, c), force); err != nil {
 		return err
 	}
 
@@ -385,14 +654,96 @@ func scaffoldConcept(moduleName string, c concept, previous concept, force bool)
 func scaffoldOrchestrator(o orchestrator, force bool) error {
 	normalizeFields(&o.Params)
 	path := filepath.Join("internal/application/orchestrators", toSnakeCase(o.Name)+".go")
-	return writeFileIfMissing(path, orchestratorTemplate(o), force)
+
+	if _, err := os.Stat(path); err == nil {
+		// Update Go Struct
+		src, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		updated, err := UpdateStructFields(src, o.Name+"Input", o.Params)
+		if err != nil {
+			return fmt.Errorf("failed to update orchestrator input: %w", err)
+		}
+		if err := os.WriteFile(path, updated, 0644); err != nil {
+			return err
+		}
+	} else {
+		if err := writeFileIfMissing(path, orchestratorTemplate(o), force); err != nil {
+			return err
+		}
+	}
+
+	// UI Form
+	formPath := filepath.Join("internal/adapters/http/templates", "form_"+toSnakeCase(o.Name)+".html")
+	if _, err := os.Stat(formPath); err == nil {
+		// Update HTML
+		src, err := os.ReadFile(formPath)
+		if err != nil {
+			return err
+		}
+		updated, err := UpdateHTMLForm(string(src), o.Params)
+		if err != nil {
+			return fmt.Errorf("failed to update form html: %w", err)
+		}
+		if err := os.WriteFile(formPath, []byte(updated), 0644); err != nil {
+			return err
+		}
+	} else {
+		return writeFileIfMissing(formPath, formHTMLTemplate(o), force)
+	}
+	return nil
 }
 
 func scaffoldProjection(p projection, force bool) error {
 	normalizeFields(&p.Query)
 	normalizeFields(&p.Result)
 	path := filepath.Join("internal/application/projections", toSnakeCase(p.Name)+".go")
-	return writeFileIfMissing(path, projectionTemplate(p), force)
+
+	if _, err := os.Stat(path); err == nil {
+		// Update Go Structs
+		src, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		// Update Query Struct
+		updated, err := UpdateStructFields(src, p.Name+"Query", p.Query)
+		if err != nil {
+			return fmt.Errorf("failed to update projection query: %w", err)
+		}
+		// Update Result Struct
+		updated, err = UpdateStructFields(updated, p.Name+"Result", p.Result)
+		if err != nil {
+			return fmt.Errorf("failed to update projection result: %w", err)
+		}
+		if err := os.WriteFile(path, updated, 0644); err != nil {
+			return err
+		}
+	} else {
+		if err := writeFileIfMissing(path, projectionTemplate(p), force); err != nil {
+			return err
+		}
+	}
+
+	// UI View
+	viewPath := filepath.Join("internal/adapters/http/templates", toSnakeCase(p.Name)+".html")
+	if _, err := os.Stat(viewPath); err == nil {
+		// Update HTML
+		src, err := os.ReadFile(viewPath)
+		if err != nil {
+			return err
+		}
+		updated, err := UpdateHTMLView(string(src), p.Result)
+		if err != nil {
+			return fmt.Errorf("failed to update view html: %w", err)
+		}
+		if err := os.WriteFile(viewPath, []byte(updated), 0644); err != nil {
+			return err
+		}
+	} else {
+		return writeFileIfMissing(viewPath, viewHTMLTemplate(p), force)
+	}
+	return nil
 }
 
 func scaffoldRoutes(moduleName string, routes []route, force bool) error {
@@ -462,7 +813,36 @@ func normalizeConcept(c *concept) {
 	if !hasField(c.Fields, "ID") {
 		c.Fields = append([]field{{Name: "ID", Type: "string"}}, c.Fields...)
 	}
-	c.Methods = uniqueStrings(c.Methods)
+	seen := map[string]method{}
+	for _, m := range c.Methods {
+		name := strings.TrimSpace(m.Name)
+		if name == "" {
+			continue
+		}
+		if existing, ok := seen[name]; ok {
+			if m.Invariant != "" {
+				existing.Invariant = m.Invariant
+			}
+			if m.Description != "" {
+				existing.Description = m.Description
+			}
+			if m.PreCondition != "" {
+				existing.PreCondition = m.PreCondition
+			}
+			if m.PostCondition != "" {
+				existing.PostCondition = m.PostCondition
+			}
+			seen[name] = existing
+			continue
+		}
+		seen[name] = m
+	}
+	var out []method
+	for _, m := range seen {
+		out = append(out, m)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	c.Methods = out
 }
 
 func normalizeFields(fields *[]field) {
@@ -478,7 +858,14 @@ func normalizeFields(fields *[]field) {
 		if f.Type == "" {
 			f.Type = "string"
 		}
-		unique[name] = field{Name: name, Type: f.Type}
+		if existing, ok := unique[name]; ok {
+			if f.Description != "" {
+				existing.Description = f.Description
+				unique[name] = existing
+			}
+		} else {
+			unique[name] = field{Name: name, Type: f.Type, Description: f.Description}
+		}
 	}
 	var out []field
 	for _, f := range unique {
@@ -492,14 +879,43 @@ func mergeConcept(current concept, add concept) concept {
 	if current.Name == "" {
 		current.Name = add.Name
 	}
+	if add.Description != "" {
+		current.Description = add.Description
+	}
 	current.Fields = append(current.Fields, add.Fields...)
-	current.Methods = append(current.Methods, add.Methods...)
+	for _, m := range add.Methods {
+		found := false
+		for i, existing := range current.Methods {
+			if existing.Name == m.Name {
+				if m.Invariant != "" {
+					current.Methods[i].Invariant = m.Invariant
+				}
+				if m.Description != "" {
+					current.Methods[i].Description = m.Description
+				}
+				if m.PreCondition != "" {
+					current.Methods[i].PreCondition = m.PreCondition
+				}
+				if m.PostCondition != "" {
+					current.Methods[i].PostCondition = m.PostCondition
+				}
+				found = true
+				break
+			}
+		}
+		if !found {
+			current.Methods = append(current.Methods, m)
+		}
+	}
 	return current
 }
 
 func mergeOrchestrator(current orchestrator, add orchestrator) orchestrator {
 	if current.Name == "" {
 		current.Name = add.Name
+	}
+	if add.Description != "" {
+		current.Description = add.Description
 	}
 	current.Params = append(current.Params, add.Params...)
 	return current
@@ -508,6 +924,9 @@ func mergeOrchestrator(current orchestrator, add orchestrator) orchestrator {
 func mergeProjection(current projection, add projection) projection {
 	if current.Name == "" {
 		current.Name = add.Name
+	}
+	if add.Description != "" {
+		current.Description = add.Description
 	}
 	current.Query = append(current.Query, add.Query...)
 	current.Result = append(current.Result, add.Result...)
@@ -579,7 +998,7 @@ func hasField(fields []field, name string) bool {
 }
 
 func splitTriple(value string) (string, string, string, error) {
-	parts := strings.Split(value, ":")
+	parts := strings.SplitN(value, ":", 3)
 	if len(parts) != 3 {
 		return "", "", "", errors.New("expected three colon-separated parts")
 	}
@@ -587,7 +1006,7 @@ func splitTriple(value string) (string, string, string, error) {
 }
 
 func splitPair(value string) (string, string, error) {
-	parts := strings.Split(value, ":")
+	parts := strings.SplitN(value, ":", 2)
 	if len(parts) != 2 {
 		return "", "", errors.New("expected two colon-separated parts")
 	}
@@ -672,7 +1091,38 @@ func loadState() (state, error) {
 	}
 	var s state
 	if err := json.Unmarshal(data, &s); err != nil {
-		return state{}, err
+		// Try legacy format where Methods was []string
+		type legacyConcept struct {
+			Name    string   `json:"name"`
+			Fields  []field  `json:"fields"`
+			Methods []string `json:"methods"`
+		}
+		type legacyState struct {
+			Version       int                      `json:"version"`
+			Concepts      map[string]legacyConcept `json:"concepts"`
+			Orchestrators map[string]orchestrator  `json:"orchestrators"`
+			Projections   map[string]projection    `json:"projections"`
+			Routes        []route                  `json:"routes"`
+		}
+		var ls legacyState
+		if err2 := json.Unmarshal(data, &ls); err2 != nil {
+			return state{}, err
+		}
+		s.Version = ls.Version
+		s.Concepts = make(map[string]concept)
+		for k, v := range ls.Concepts {
+			c := concept{
+				Name:   v.Name,
+				Fields: v.Fields,
+			}
+			for _, m := range v.Methods {
+				c.Methods = append(c.Methods, method{Name: m})
+			}
+			s.Concepts[k] = c
+		}
+		s.Orchestrators = ls.Orchestrators
+		s.Projections = ls.Projections
+		s.Routes = ls.Routes
 	}
 	if s.Concepts == nil {
 		s.Concepts = map[string]concept{}
@@ -699,25 +1149,43 @@ func writeState(s state) error {
 
 func conceptTemplate(c concept) string {
 	type data struct {
-		Package string
-		Concept concept
+		Package   string
+		Concept   concept
+		NeedsTime bool
 	}
 	return executeTemplate(`package {{ .Package }}
-
-// {{ .Concept.Name }} holds state for the concept.
+{{ if .NeedsTime }}
+import "time"
+{{ end }}
+// {{ if .Concept.Description }}{{ .Concept.Description }}{{ else }}{{ .Concept.Name }} holds state for the concept.{{ end }}
 type {{ .Concept.Name }} struct {
 {{- range .Concept.Fields }}
-	{{ .Name }} {{ .Type }}
+	{{ if .Description }}// {{ .Description }}
+	{{ end }}{{ .Name }} {{ .Type }}
 {{- end }}
 }
 
 {{ range .Concept.Methods -}}
-func (c *{{ $.Concept.Name }}) {{ . }}() {
-	// TODO: describe state changes and invariants.
+// {{ .Name }} {{ if .Description }}- {{ .Description }}{{ end }}
+func (c *{{ $.Concept.Name }}) {{ .Name }}() {
+	// {{ if .PreCondition }}PRE: {{ .PreCondition }}
+	// {{ end }}{{ if .Invariant }}INVARIANT: {{ .Invariant }}
+	// {{ end }}{{ if .PostCondition }}POST: {{ .PostCondition }}
+	// {{ end }}
+	{{ if not .Invariant }}// TODO: {{ if .Description }}{{ .Description }}{{ else }}describe state changes and invariants.{{ end }}{{ end }}
 }
 
 {{ end -}}
-`, data{Package: toSnakeCase(c.Name), Concept: c})
+`, data{Package: toSnakeCase(c.Name), Concept: c, NeedsTime: needsTime(c.Fields)})
+}
+
+func needsTime(fields []field) bool {
+	for _, f := range fields {
+		if f.Type == "time.Time" {
+			return true
+		}
+	}
+	return false
 }
 
 func storageTemplate(moduleName string, c concept) string {
@@ -738,6 +1206,14 @@ import (
 type Store interface {
 	GetByID(ctx context.Context, id string) (domain.{{ .Concept.Name }}, error)
 	Save(ctx context.Context, value domain.{{ .Concept.Name }}) error
+	Delete(ctx context.Context, id string) error
+	List(ctx context.Context, filter ListFilter) ([]domain.{{ .Concept.Name }}, error)
+}
+
+// ListFilter carries filtering parameters for List operations.
+type ListFilter struct {
+	Limit  int
+	Offset int
 }
 `, data{Module: moduleName, Package: toSnakeCase(c.Name), Concept: c})
 }
@@ -745,54 +1221,65 @@ type Store interface {
 func orchestratorTemplate(o orchestrator) string {
 	type data struct {
 		Orchestrator orchestrator
+		NeedsTime    bool
 	}
 	return executeTemplate(`package orchestrators
-
+ 
 import "context"
-
+{{ if .NeedsTime }}
+import "time"
+{{ end }}
 // {{ .Orchestrator.Name }}Input carries input for the orchestrator.
 type {{ .Orchestrator.Name }}Input struct {
 {{- range .Orchestrator.Params }}
-	{{ .Name }} {{ .Type }}
+	{{ if .Description }}// {{ .Description }}
+	{{ end }}{{ .Name }} {{ .Type }}
 {{- end }}
 }
 
 // Execute{{ .Orchestrator.Name }} coordinates concept updates.
+// {{ if .Orchestrator.Description }}{{ .Orchestrator.Description }}{{ end }}
 func Execute{{ .Orchestrator.Name }}(ctx context.Context, input {{ .Orchestrator.Name }}Input) error {
 	// TODO: marshal input into concept operations.
 	return nil
 }
-`, data{Orchestrator: o})
+`, data{Orchestrator: o, NeedsTime: needsTime(o.Params)})
 }
 
 func projectionTemplate(p projection) string {
 	type data struct {
 		Projection projection
+		NeedsTime  bool
 	}
 	return executeTemplate(`package projections
-
+ 
 import "context"
-
+{{ if .NeedsTime }}
+import "time"
+{{ end }}
 // {{ .Projection.Name }}Query carries query parameters.
 type {{ .Projection.Name }}Query struct {
 {{- range .Projection.Query }}
-	{{ .Name }} {{ .Type }}
+	{{ if .Description }}// {{ .Description }}
+	{{ end }}{{ .Name }} {{ .Type }}
 {{- end }}
 }
 
 // {{ .Projection.Name }}Result holds projection output.
 type {{ .Projection.Name }}Result struct {
 {{- range .Projection.Result }}
-	{{ .Name }} {{ .Type }}
+	{{ if .Description }}// {{ .Description }}
+	{{ end }}{{ .Name }} {{ .Type }}
 {{- end }}
 }
 
 // Query{{ .Projection.Name }} reads projection state only.
+// {{ if .Projection.Description }}{{ .Projection.Description }}{{ end }}
 func Query{{ .Projection.Name }}(ctx context.Context, query {{ .Projection.Name }}Query) ({{ .Projection.Name }}Result, error) {
 	// TODO: read concept or projection state only.
 	return {{ .Projection.Name }}Result{}, nil
 }
-`, data{Projection: p})
+`, data{Projection: p, NeedsTime: needsTime(p.Query) || needsTime(p.Result)})
 }
 
 func routesTemplate(moduleName string, routes []route) string {
@@ -820,16 +1307,20 @@ func routesTemplate(moduleName string, routes []route) string {
 
 // `+routesGeneratedTag+`
 
-import "net/http"
-
-{{ if .Routes }}
 import (
+	"net/http"
+{{- if .Routes }}
 	"encoding/json"
-
+	"html/template"
+	"path/filepath"
+	
+	"github.com/gorilla/csrf"
+{{- end }}
+{{ if .Routes }}
 	"{{ .Module }}/internal/application/orchestrators"
 	"{{ .Module }}/internal/application/projections"
-)
 {{ end }}
+)
 
 func registerRoutes(mux *http.ServeMux) {
 {{- if .Routes }}
@@ -841,33 +1332,21 @@ func registerRoutes(mux *http.ServeMux) {
 
 {{ range .Routes -}}
 func {{ .HandlerName }}(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "{{ .Method }}" {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
 	ctx := r.Context()
+	isHTML := r.Header.Get("Accept") == "text/html"
 
-	{{- if .IsQuery }}
-	// TODO: parse query params into query struct.
-	query := projections.{{ .Target }}Query{}
-	result, err := projections.Query{{ .Target }}(ctx, query)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	if r.Method == "{{ .Method }}" {
+		{{- if .IsQuery }}
+		`+handlerQueryBody()+`
+		{{- else }}
+		`+handlerCommandBody()+`
+		{{- end }}
 		return
 	}
-	if err := json.NewEncoder(w).Encode(result); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	{{- else }}
-	// TODO: parse request body into input struct.
-	input := orchestrators.{{ .Target }}Input{}
-	if err := orchestrators.Execute{{ .Target }}(ctx, input); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-	{{- end }}
+	
+	`+handlerFallbackFormView()+`
+
+	w.WriteHeader(http.StatusMethodNotAllowed)
 }
 
 {{ end -}}
@@ -875,6 +1354,122 @@ func {{ .HandlerName }}(w http.ResponseWriter, r *http.Request) {
 		Module string
 		Routes []routeData
 	}{Module: moduleName, Routes: routeList})
+}
+
+// handlerQueryBody returns the template for GET/Query handlers
+func handlerQueryBody() string {
+	return `// GET: Projection
+		// TODO: parse query params into query struct.
+		query := projections.{{ .Target }}Query{} 
+		// For simplicity in scaffold, we parse from URL query.
+		// e.g. ?id=123 -> query.ID = "123"
+		
+		result, err := projections.Query{{ .Target }}(ctx, query)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		if isHTML {
+			tmplPath := filepath.Join("internal", "adapters", "http", "templates", "{{ .Target | toSnakeCase }}.html")
+			layoutPath := filepath.Join("internal", "adapters", "http", "templates", "layout.html")
+			
+			t, err := template.ParseFiles(layoutPath, tmplPath)
+			if err != nil {
+				http.Error(w, "Template error: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			// Combine result with any other UI data if needed
+			if err := t.Execute(w, result); err != nil {
+				http.Error(w, "Render error: "+err.Error(), http.StatusInternalServerError)
+			}
+			return
+		}
+
+		if err := json.NewEncoder(w).Encode(result); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}`
+}
+
+// handlerCommandBody returns the template for POST/PUT/DELETE/Command handlers
+func handlerCommandBody() string {
+	return `// POST/PUT/DELETE: Orchestrator
+		if isHTML && r.Method == "GET" {
+			// Serve the FORM
+			tmplPath := filepath.Join("internal", "adapters", "http", "templates", "form_{{ .Target | toSnakeCase }}.html")
+			layoutPath := filepath.Join("internal", "adapters", "http", "templates", "layout.html")
+			
+			t, err := template.ParseFiles(layoutPath, tmplPath)
+			if err != nil {
+				http.Error(w, "Template error: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			
+			data := struct {
+				CSRFToken string
+			}{
+				CSRFToken: csrf.Token(r),
+			}
+			
+			if err := t.Execute(w, data); err != nil {
+				http.Error(w, "Render error: "+err.Error(), http.StatusInternalServerError)
+			}
+			return
+		}
+
+		// Handle Form Submission or JSON body
+		input := orchestrators.{{ .Target }}Input{}
+		
+		if r.Header.Get("Content-Type") == "application/x-www-form-urlencoded" {
+			if err := r.ParseForm(); err != nil {
+				http.Error(w, "Form error: "+err.Error(), http.StatusBadRequest)
+				return
+			}
+			// Map Form values to Input
+			// scaffold TODO: use reflection or generate explicit mapping
+			// For basic scaffold, we leave it to the user or assume matching names.
+		} else {
+			// JSON
+			// if err := json.NewDecoder(r.Body).Decode(&input); err != nil { ... }
+		}
+
+		if err := orchestrators.Execute{{ .Target }}(ctx, input); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		
+		if isHTML {
+			http.Redirect(w, r, "/", http.StatusSeeOther)
+		} else {
+			w.WriteHeader(http.StatusNoContent)
+		}`
+}
+
+// handlerFallbackFormView returns the template for fallback form view on GET
+func handlerFallbackFormView() string {
+	return `// Fallback: serve form for non-GET routes when accessed via GET+HTML
+	if isHTML && r.Method == "GET" && "{{ .Method }}" != "GET" {
+		tmplPath := filepath.Join("internal", "adapters", "http", "templates", "form_{{ .Target | toSnakeCase }}.html")
+		layoutPath := filepath.Join("internal", "adapters", "http", "templates", "layout.html")
+		
+		t, err := template.ParseFiles(layoutPath, tmplPath)
+		if err != nil {
+			http.Error(w, "Template error: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		
+		data := struct {
+			CSRFToken string
+		}{
+			CSRFToken: csrf.Token(r),
+		}
+		
+		if err := t.Execute(w, data); err != nil {
+			http.Error(w, "Render error: "+err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}`
 }
 
 func handlerName(method, path, target string) string {
@@ -901,7 +1496,10 @@ func titleCase(s string) string {
 }
 
 func executeTemplate(tmpl string, data any) string {
-	parsed := template.Must(template.New("tmpl").Parse(tmpl))
+	funcMap := template.FuncMap{
+		"toSnakeCase": toSnakeCase,
+	}
+	parsed := template.Must(template.New("tmpl").Funcs(funcMap).Parse(tmpl))
 	var b strings.Builder
 	if err := parsed.Execute(&b, data); err != nil {
 		panic(err)
@@ -945,7 +1543,15 @@ func readModuleName() (string, error) {
 }
 
 func goModTemplate(moduleName string) string {
-	return fmt.Sprintf("module %s\n\ngo 1.21\n", moduleName)
+	return fmt.Sprintf(`module %s
+
+go 1.21
+
+require (
+	github.com/gorilla/csrf v1.7.2
+	modernc.org/sqlite v1.28.0
+)
+`, moduleName)
 }
 
 func serverMainTemplate(moduleName string) string {
@@ -975,14 +1581,281 @@ func main() {
 func webTemplate(moduleName string) string {
 	return executeTemplate(`package web
 
-import "net/http"
+import (
+	"net/http"
+	
+	"{{ .Module }}/internal/adapters/http/middleware"
+)
 
 // NewMux wires HTTP handlers for the app.
-func NewMux(staticDir string) *http.ServeMux {
+func NewMux(staticDir string) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("/", http.FileServer(http.Dir(staticDir)))
 	registerRoutes(mux)
-	return mux
+	
+	// Create CSRF protection
+	// SECURITY: In production, load this key from an environment variable or secrets manager.
+	// The key must be 32 bytes for AES-256 encryption. Never commit production keys to version control.
+	csrfKey := []byte("01234567890123456789012345678901") // 32 bytes (dev only)
+	
+	// Apply middleware: CSRF -> SecurityHeaders -> Mux
+	return middleware.Chain(mux, middleware.SecurityHeaders, middleware.CSRF(csrfKey))
 }
 `, struct{ Module string }{Module: moduleName})
+}
+func dbTemplate(moduleName string) string {
+	return executeTemplate(`package storage
+
+import (
+	"database/sql"
+	"log"
+
+	_ "modernc.org/sqlite"
+)
+
+func Init(dbPath string) *sql.DB {
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := db.Ping(); err != nil {
+		log.Fatal(err)
+	}
+	return db
+}
+`, nil)
+}
+
+func middlewareTemplate(moduleName string) string {
+	return executeTemplate(`package middleware
+
+import (
+	"net/http"
+
+	"github.com/gorilla/csrf"
+)
+
+// SecurityHeaders adds OWASP recommended headers.
+func SecurityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Content Security Policy (Basic)
+		// Allow scripts/styles from 'self' and inline (for now, scaffold simplicity)
+		// In production, use nonces/hashes.
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		next.ServeHTTP(w, r)
+	})
+}
+
+// CSRFMiddleware returns a handler that protects against CSRF attacks.
+// It assumes an encryption key is passed (32 bytes).
+func CSRF(authKey []byte) func(http.Handler) http.Handler {
+	// Secure: true requires HTTPS. For local dev (scaffold), we might want Insecure if strictly http.
+	// But let's default to Secure=false for localhost ease, or user can toggle.
+	// We'll use defaults which are Secure=true in Prod.
+	return csrf.Protect(authKey, csrf.Secure(false), csrf.Path("/")) 
+}
+
+// Chain applies middlewares in order (outer to inner).
+func Chain(h http.Handler, middlewares ...func(http.Handler) http.Handler) http.Handler {
+	for _, m := range middlewares {
+		h = m(h)
+	}
+	return h
+}
+`, nil)
+}
+
+func sqliteStoreTemplate(moduleName string, c concept) string {
+	type data struct {
+		Module  string
+		Package string
+		Concept concept
+	}
+	return executeTemplate(`package {{ .Package }}
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"strings"
+
+	domain "{{ .Module }}/internal/domain/{{ .Package }}"
+)
+
+// SQLiteStore implements domain.{{ .Concept.Name }}Store using SQLite.
+type SQLiteStore struct {
+	db *sql.DB
+}
+
+// NewSQLiteStore creates a new {{ .Concept.Name }}Store.
+func NewSQLiteStore(db *sql.DB) *SQLiteStore {
+	return &SQLiteStore{db: db}
+}
+
+// GetByID retrieves a {{ .Concept.Name }} by its ID.
+func (s *SQLiteStore) GetByID(ctx context.Context, id string) (domain.{{ .Concept.Name }}, error) {
+	query := "SELECT {{ range $i, $f := .Concept.Fields }}{{ if $i }}, {{ end }}{{ $f.Name | toSnakeCase }}{{ end }} FROM {{ .Concept.Name | toSnakeCase }} WHERE id = ?"
+	
+	row := s.db.QueryRowContext(ctx, query, id)
+	
+	var entity domain.{{ .Concept.Name }}
+	err := row.Scan(
+{{- range .Concept.Fields }}
+		&entity.{{ .Name }},
+{{- end }}
+	)
+	if err == sql.ErrNoRows {
+		return domain.{{ .Concept.Name }}{}, fmt.Errorf("{{ .Concept.Name | toSnakeCase }} not found: %w", err)
+	}
+	return entity, err
+}
+
+// Save persists a {{ .Concept.Name }} to the database.
+func (s *SQLiteStore) Save(ctx context.Context, entity domain.{{ .Concept.Name }}) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// Upsert implementation
+	fields := []string{ {{ range .Concept.Fields }}"{{ .Name | toSnakeCase }}",{{ end }} }
+	placeholders := []string{ {{ range .Concept.Fields }}"?",{{ end }} }
+	updates := []string{ {{ range .Concept.Fields }}"{{ .Name | toSnakeCase }}=excluded.{{ .Name | toSnakeCase }}",{{ end }} }
+
+	query := fmt.Sprintf(
+		"INSERT INTO {{ .Concept.Name | toSnakeCase }} (%s) VALUES (%s) ON CONFLICT(id) DO UPDATE SET %s",
+		strings.Join(fields, ", "),
+		strings.Join(placeholders, ", "),
+		strings.Join(updates, ", "),
+	)
+
+	_, err = tx.ExecContext(ctx, query,
+{{- range .Concept.Fields }}
+		entity.{{ .Name }},
+{{- end }}
+	)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+// Delete removes a {{ .Concept.Name }} from the database.
+func (s *SQLiteStore) Delete(ctx context.Context, id string) error {
+	_, err := s.db.ExecContext(ctx, "DELETE FROM {{ .Concept.Name | toSnakeCase }} WHERE id = ?", id)
+	return err
+}
+
+// List retrieves a list of {{ .Concept.Name }}s based on the filter.
+func (s *SQLiteStore) List(ctx context.Context, filter ListFilter) ([]domain.{{ .Concept.Name }}, error) {
+	query := "SELECT {{ range $i, $f := .Concept.Fields }}{{ if $i }}, {{ end }}{{ $f.Name | toSnakeCase }}{{ end }} FROM {{ .Concept.Name | toSnakeCase }} LIMIT ? OFFSET ?"
+	
+	rows, err := s.db.QueryContext(ctx, query, filter.Limit, filter.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []domain.{{ .Concept.Name }}
+	for rows.Next() {
+		var entity domain.{{ .Concept.Name }}
+		if err := rows.Scan(
+{{- range .Concept.Fields }}
+			&entity.{{ .Name }},
+{{- end }}
+		); err != nil {
+			return nil, err
+		}
+		results = append(results, entity)
+	}
+	return results, nil
+}
+`, data{Module: moduleName, Package: toSnakeCase(c.Name), Concept: c})
+}
+
+func layoutHTMLTemplate() string {
+	return executeTemplate(`<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Workshop App</title>
+    <link rel="stylesheet" href="/styles.css">
+    <style>
+        body { font-family: system-ui, sans-serif; max-width: 800px; margin: 0 auto; padding: 2rem; background: #f4f4f4; }
+        header { background: #333; color: #fff; padding: 1rem; border-radius: 8px; margin-bottom: 2rem; }
+        nav a { color: #fff; text-decoration: none; margin-right: 1rem; font-weight: bold; }
+        .card { background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1 { margin-top: 0; }
+        dl { display: grid; grid-template-columns: auto 1fr; gap: 0.5rem 2rem; }
+        dt { font-weight: bold; color: #666; }
+        .form-group { margin-bottom: 1rem; }
+        label { display: block; margin-bottom: 0.5rem; font-weight: bold; }
+        input[type="text"], input[type="number"] { width: 100%; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px; }
+        button { background: #007bff; color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 4px; cursor: pointer; font-size: 1rem; }
+        button:hover { background: #0056b3; }
+        footer { margin-top: 3rem; text-align: center; color: #888; border-top: 1px solid #ddd; padding-top: 1rem; }
+    </style>
+</head>
+<body>
+    <header>
+        <nav>
+            <a href="/">Home</a>
+        </nav>
+    </header>
+    <main>
+        {{ printf "{{ template \"content\" . }}" }}
+    </main>
+    <footer>
+        <p>&copy; 2026 Workshop</p>
+    </footer>
+</body>
+</html>`, nil)
+}
+
+func viewHTMLTemplate(p projection) string {
+	return executeTemplate(`{{ printf "{{ define \"content\" }}" }}
+<div class="card">
+    <h1>{{ .Projection.Name }}</h1>
+    <dl>
+    {{- range .Projection.Result }}
+        <dt>{{ .Name }}</dt>
+        <dd>{{ printf "{{ .%s }}" .Name }}</dd>
+    {{- end }}
+    </dl>
+    <p><a href="/">Back</a></p>
+</div>
+{{ printf "{{ end }}" }}`, struct{ Projection projection }{Projection: p})
+}
+
+func formHTMLTemplate(o orchestrator) string {
+	return executeTemplate(`{{ printf "{{ define \"content\" }}" }}
+<div class="card">
+    <h1>{{ .Orchestrator.Name }}</h1>
+    <form method="POST">
+        <input type="hidden" name="gorilla.csrf.Token" value="{{ printf "{{ .CSRFToken }}" }}">
+        
+        {{- range .Orchestrator.Params }}
+        <div class="form-group">
+            <label for="id_{{ .Name }}">{{ .Name }}</label>
+            {{ if eq .Type "int" -}}
+            <input type="number" id="id_{{ .Name }}" name="{{ .Name }}" required>
+            {{- else if eq .Type "bool" -}}
+            <input type="checkbox" id="id_{{ .Name }}" name="{{ .Name }}" value="true">
+            {{- else -}}
+            <input type="text" id="id_{{ .Name }}" name="{{ .Name }}" required>
+            {{- end }}
+        </div>
+        {{- end }}
+        
+        <button type="submit">Submit</button>
+    </form>
+    <p><a href="/">Cancel</a></p>
+</div>
+{{ printf "{{ end }}" }}`, struct{ Orchestrator orchestrator }{Orchestrator: o})
 }
