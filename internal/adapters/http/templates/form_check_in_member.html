@@ -1,0 +1,156 @@
+{{ define "content" }}
+<div class="card">
+    <h1>✅ Member Check-In</h1>
+
+    <div class="info-box">
+        <strong>Type your name</strong> to search. Select yourself from the list to check in.
+    </div>
+
+    <form method="POST" action="/checkin" id="checkinForm">
+        <input type="hidden" name="gorilla.csrf.Token" value="{{ .CSRFToken }}">
+        <input type="hidden" name="MemberID" id="hiddenMemberID">
+        <input type="hidden" name="ScheduleID" id="hiddenScheduleID">
+        <input type="hidden" name="ClassDate" id="hiddenClassDate">
+
+        <div class="form-group">
+            <label for="nameSearch">Your Name *</label>
+            <input type="text" id="nameSearch" autocomplete="off" required placeholder="Start typing your name...">
+        </div>
+
+        <div id="suggestions" class="suggestions-list"></div>
+
+        <div id="selectedMember" class="selected-member" style="display:none;">
+            <span id="selectedName"></span>
+            <button type="button" id="clearSelection" class="btn-clear">&times;</button>
+        </div>
+
+        <button type="submit" id="submitBtn" class="btn-primary" disabled>Check In</button>
+        <a href="/dashboard" class="btn-secondary">Cancel</a>
+    </form>
+
+    <div style="margin-top: 2rem; padding-top: 2rem; border-top: 2px solid #f0f0f0;">
+        <h3 style="margin-bottom: 1rem;">Today's Attendance</h3>
+        <a href="/attendance" style="color: #667eea; text-decoration: none; font-weight: 600;">View Full Attendance List →</a>
+    </div>
+</div>
+
+<style>
+    .form-group { margin-bottom: 1.5rem; }
+    label { display: block; margin-bottom: 0.5rem; font-weight: 600; color: #333; }
+    input[type="text"] {
+        width: 100%; padding: 0.75rem; border: 2px solid #e0e0e0;
+        border-radius: 8px; font-size: 1.1rem; transition: border-color 0.2s;
+    }
+    input:focus { outline: none; border-color: #2196f3; }
+    .info-box {
+        background: #e3f2fd; padding: 1rem; border-radius: 8px;
+        margin-bottom: 1.5rem; border-left: 4px solid #2196f3;
+    }
+    .suggestions-list {
+        max-height: 300px; overflow-y: auto; margin-bottom: 1rem;
+    }
+    .suggestion-item {
+        padding: 0.75rem 1rem; border: 1px solid #e0e0e0; border-radius: 8px;
+        margin-bottom: 0.25rem; cursor: pointer; display: flex;
+        justify-content: space-between; align-items: center; transition: background 0.15s;
+    }
+    .suggestion-item:hover { background: #e3f2fd; border-color: #2196f3; }
+    .suggestion-name { font-weight: 600; font-size: 1.05rem; }
+    .suggestion-program { color: #666; font-size: 0.85rem; }
+    .selected-member {
+        background: #e8f5e9; padding: 0.75rem 1rem; border-radius: 8px;
+        margin-bottom: 1.5rem; display: flex; justify-content: space-between;
+        align-items: center; border: 2px solid #4caf50; font-weight: 600;
+    }
+    .btn-clear {
+        background: none; border: none; font-size: 1.3rem; cursor: pointer;
+        color: #999; padding: 0 0.5rem;
+    }
+    .btn-clear:hover { color: #f44336; }
+    .btn-primary {
+        background: #2196f3; color: white; border: none; padding: 0.75rem 2rem;
+        border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer;
+        margin-right: 1rem;
+    }
+    .btn-primary:hover { background: #1976d2; }
+    .btn-primary:disabled { background: #bbb; cursor: not-allowed; }
+    .btn-secondary {
+        display: inline-block; padding: 0.75rem 2rem; color: #666;
+        text-decoration: none; border: 2px solid #e0e0e0; border-radius: 8px; font-weight: 600;
+    }
+    .btn-secondary:hover { border-color: #2196f3; color: #2196f3; }
+    .no-results { padding: 0.75rem; color: #999; font-style: italic; }
+</style>
+
+<script>
+(function() {
+    var searchInput = document.getElementById('nameSearch');
+    var suggestionsDiv = document.getElementById('suggestions');
+    var hiddenMemberID = document.getElementById('hiddenMemberID');
+    var selectedDiv = document.getElementById('selectedMember');
+    var selectedName = document.getElementById('selectedName');
+    var clearBtn = document.getElementById('clearSelection');
+    var submitBtn = document.getElementById('submitBtn');
+    var debounceTimer = null;
+
+    searchInput.addEventListener('input', function() {
+        clearTimeout(debounceTimer);
+        var query = searchInput.value.trim();
+        if (query.length < 2) {
+            suggestionsDiv.innerHTML = '';
+            return;
+        }
+        debounceTimer = setTimeout(function() {
+            fetch('/api/members/search?q=' + encodeURIComponent(query))
+                .then(function(r) { return r.json(); })
+                .then(function(members) {
+                    suggestionsDiv.innerHTML = '';
+                    if (!members || members.length === 0) {
+                        suggestionsDiv.innerHTML = '<div class="no-results">No matching members found</div>';
+                        return;
+                    }
+                    members.forEach(function(m) {
+                        var div = document.createElement('div');
+                        div.className = 'suggestion-item';
+                        div.innerHTML = '<span class="suggestion-name">' + escapeHtml(m.Name) + '</span>' +
+                            '<span class="suggestion-program">' + escapeHtml(m.Program) + '</span>';
+                        div.addEventListener('click', function() { selectMember(m); });
+                        suggestionsDiv.appendChild(div);
+                    });
+                });
+        }, 250);
+    });
+
+    function selectMember(m) {
+        hiddenMemberID.value = m.ID;
+        selectedName.textContent = m.Name + ' (' + m.Program + ')';
+        selectedDiv.style.display = 'flex';
+        searchInput.style.display = 'none';
+        suggestionsDiv.innerHTML = '';
+        submitBtn.disabled = false;
+    }
+
+    clearBtn.addEventListener('click', function() {
+        hiddenMemberID.value = '';
+        selectedDiv.style.display = 'none';
+        searchInput.style.display = '';
+        searchInput.value = '';
+        searchInput.focus();
+        submitBtn.disabled = true;
+    });
+
+    document.getElementById('checkinForm').addEventListener('submit', function(e) {
+        if (!hiddenMemberID.value) {
+            e.preventDefault();
+            alert('Please select your name from the search results.');
+        }
+    });
+
+    function escapeHtml(str) {
+        var div = document.createElement('div');
+        div.appendChild(document.createTextNode(str));
+        return div.innerHTML;
+    }
+})();
+</script>
+{{ end }}

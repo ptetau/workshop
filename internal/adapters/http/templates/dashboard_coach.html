@@ -1,0 +1,76 @@
+{{ define "content" }}
+<div class="card">
+    <h1>Coach Dashboard</h1>
+
+    <h2>Today's Classes</h2>
+    {{ if .TodaysClasses }}
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 1.5rem;">
+        <thead>
+            <tr style="background: #f8f9fa; border-bottom: 2px solid #dee2e6;">
+                <th style="padding: 0.5rem; text-align: left;">Time</th>
+                <th style="padding: 0.5rem; text-align: left;">Class</th>
+                <th style="padding: 0.5rem; text-align: left;">Program</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{ range .TodaysClasses }}
+            <tr style="border-bottom: 1px solid #dee2e6;">
+                <td style="padding: 0.5rem;">{{ .StartTime }} - {{ .EndTime }}</td>
+                <td style="padding: 0.5rem; font-weight: 600;">{{ .ClassTypeName }}</td>
+                <td style="padding: 0.5rem;">{{ .ProgramName }}</td>
+            </tr>
+            {{ end }}
+        </tbody>
+    </table>
+    {{ else }}
+    <p style="color: #6c757d; font-style: italic;">No classes scheduled today.</p>
+    {{ end }}
+
+    <h2>Today's Attendance</h2>
+    {{ if .Attendees }}
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 1.5rem;">
+        <thead>
+            <tr style="background: #f8f9fa; border-bottom: 2px solid #dee2e6;">
+                <th style="padding: 0.5rem; text-align: left;">Name</th>
+                <th style="padding: 0.5rem; text-align: left;">Check-In</th>
+                <th style="padding: 0.5rem; text-align: center;">Injury</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{ range .Attendees }}
+            <tr style="border-bottom: 1px solid #dee2e6;">
+                <td style="padding: 0.5rem; font-weight: 600;">{{ .MemberName }}</td>
+                <td style="padding: 0.5rem;">{{ .CheckInTime.Format "15:04" }}</td>
+                <td style="padding: 0.5rem; text-align: center;">
+                    {{ if .HasInjury }}
+                    <span style="background: #fff3cd; color: #856404; padding: 0.25rem 0.5rem; border-radius: 4px; font-weight: 600;">{{ .InjuryBodyPart }}</span>
+                    {{ else }}
+                    <span style="color: #6c757d;">—</span>
+                    {{ end }}
+                </td>
+            </tr>
+            {{ end }}
+        </tbody>
+    </table>
+    {{ else }}
+    <p style="color: #6c757d; font-style: italic;">No check-ins yet today.</p>
+    {{ end }}
+
+    {{ if .Notices }}
+    <h2>Notices</h2>
+    {{ range .Notices }}
+    <div style="background: #f8f9fa; padding: 1rem; border-radius: 6px; margin-bottom: 0.75rem; border-left: 4px solid #28a745;">
+        <strong>{{ .Title }}</strong>
+        <p style="margin: 0.5rem 0 0; color: #555;">{{ .Content }}</p>
+    </div>
+    {{ end }}
+    {{ end }}
+
+    <h2>Quick Links</h2>
+    <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1rem;">
+        <a href="/members" style="background: #007bff; color: white; padding: 0.5rem 1rem; border-radius: 6px; text-decoration: none; font-weight: 600;">Members</a>
+        <a href="/attendance" style="background: #28a745; color: white; padding: 0.5rem 1rem; border-radius: 6px; text-decoration: none; font-weight: 600;">Attendance</a>
+        <a href="/kiosk" style="background: #6f42c1; color: white; padding: 0.5rem 1rem; border-radius: 6px; text-decoration: none; font-weight: 600;">Launch Kiosk</a>
+    </div>
+</div>
+{{ end }}

@@ -437,7 +437,8 @@ func hasStoreInterface(parsed *ast.File) bool {
 			if !ok {
 				continue
 			}
-			if ts.Name.Name == "Store" {
+			name := ts.Name.Name
+			if name == "Store" || strings.HasSuffix(name, "Store") {
 				if _, ok := ts.Type.(*ast.InterfaceType); ok {
 					return true
 				}

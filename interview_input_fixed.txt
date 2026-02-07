@@ -1,0 +1,31 @@
+Order
+Tracks the lifecycle of an order
+Status
+string
+TotalCents
+int
+done
+Approve
+
+Cancel
+
+done
+done
+Create Order
+CustomerID
+string
+done
+POST
+/orders
+done
+Order Summary
+OrderID
+string
+done
+Status
+string
+Total
+int
+done
+/views/order-summary
+done

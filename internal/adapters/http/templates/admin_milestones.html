@@ -1,0 +1,64 @@
+{{ define "content" }}
+<div class="card">
+    <h1>Milestone Configuration</h1>
+
+    <div style="background:#f8f9fa;padding:1.5rem;border-radius:8px;margin-bottom:2rem;">
+        <h3 style="margin-top:0;">Add Milestone</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:1rem;">
+            <div class="form-group">
+                <label>Name</label>
+                <input type="text" id="msName" placeholder="Century Club">
+            </div>
+            <div class="form-group">
+                <label>Metric</label>
+                <select id="msMetric" style="width:100%;padding:0.5rem;border:1px solid #ccc;border-radius:4px;">
+                    <option value="classes">Classes</option>
+                    <option value="mat_hours">Mat Hours</option>
+                    <option value="streak_weeks">Streak Weeks</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Threshold</label>
+                <input type="number" id="msThreshold" placeholder="100">
+            </div>
+            <div class="form-group">
+                <label>Badge Icon</label>
+                <input type="text" id="msBadge" placeholder="🏆">
+            </div>
+        </div>
+        <button onclick="createMilestone()">Add Milestone</button>
+        <span id="formMsg" style="margin-left:1rem;color:#28a745;"></span>
+    </div>
+
+    <h2>Milestones</h2>
+    <div id="msList" style="color:#6c757d;">Loading...</div>
+
+    <p style="margin-top:2rem;"><a href="/dashboard" style="color:#007bff;text-decoration:none;font-weight:600;">← Back to Dashboard</a></p>
+</div>
+
+<script>
+function loadMilestones() {
+    fetch('/api/milestones').then(r=>r.json()).then(data => {
+        var el = document.getElementById('msList');
+        if (!data||data.length===0) { el.innerHTML='<p style="color:#6c757d;font-style:italic;">No milestones configured.</p>'; return; }
+        var html='<table style="width:100%;border-collapse:collapse;"><thead><tr style="background:#f8f9fa;border-bottom:2px solid #dee2e6;"><th style="padding:0.5rem;text-align:left;">Badge</th><th style="padding:0.5rem;text-align:left;">Name</th><th style="padding:0.5rem;text-align:left;">Metric</th><th style="padding:0.5rem;text-align:left;">Threshold</th></tr></thead><tbody>';
+        data.forEach(m => {
+            html+='<tr style="border-bottom:1px solid #dee2e6;"><td style="padding:0.5rem;font-size:1.5rem;">'+m.BadgeIcon+'</td><td style="padding:0.5rem;font-weight:600;">'+m.Name+'</td><td style="padding:0.5rem;">'+m.Metric+'</td><td style="padding:0.5rem;">'+m.Threshold+'</td></tr>';
+        });
+        html+='</tbody></table>';
+        el.innerHTML=html;
+    });
+}
+function createMilestone() {
+    fetch('/api/milestones',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+        Name:document.getElementById('msName').value,
+        Metric:document.getElementById('msMetric').value,
+        Threshold:parseInt(document.getElementById('msThreshold').value)||0,
+        BadgeIcon:document.getElementById('msBadge').value
+    })}).then(r=>{if(!r.ok)throw r;return r.json();})
+    .then(()=>{document.getElementById('formMsg').textContent='Created!';loadMilestones();setTimeout(()=>document.getElementById('formMsg').textContent='',2000);})
+    .catch(()=>document.getElementById('formMsg').textContent='Error');
+}
+loadMilestones();
+</script>
+{{ end }}

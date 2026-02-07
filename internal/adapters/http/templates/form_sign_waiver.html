@@ -1,0 +1,96 @@
+{{ define "content" }}
+<div class="card">
+    <h1>📄 Sign Waiver</h1>
+    <form method="POST" action="/waivers">
+        <input type="hidden" name="gorilla.csrf.Token" value="{{ .CSRFToken }}">
+
+        <div class="form-group">
+            <label for="id_MemberName">Full Name *</label>
+            <input type="text" id="id_MemberName" name="MemberName" required placeholder="Enter your full name">
+        </div>
+
+        <div class="form-group">
+            <label for="id_Email">Email Address *</label>
+            <input type="email" id="id_Email" name="Email" required placeholder="member@example.com">
+        </div>
+
+        <div style="background: #f0f4ff; padding: 1.5rem; border-radius: 8px; margin-bottom: 1.5rem; border: 1px solid #d0d8f0; max-height: 200px; overflow-y: auto; font-size: 0.9rem; line-height: 1.6;">
+            <strong>Workshop Jiu Jitsu — Waiver &amp; Code of Conduct</strong>
+            <p>By signing this waiver, I acknowledge the inherent risks associated with martial arts training including but not limited to sprains, strains, fractures, and other physical injuries. I voluntarily assume all risks and release Workshop Jiu Jitsu, its instructors, and staff from any liability.</p>
+            <p>I agree to follow the school's Code of Conduct, train respectfully with all partners, maintain personal hygiene standards, and report any injuries promptly using the Red Flag system.</p>
+        </div>
+
+        <div class="form-group" style="display: flex; align-items: center; gap: 0.75rem;">
+            <input type="checkbox" id="id_AcceptedTerms" name="AcceptedTerms" value="true" required style="width: 20px; height: 20px; cursor: pointer;">
+            <label for="id_AcceptedTerms" style="margin: 0; cursor: pointer;">I have read and accept the Waiver &amp; Code of Conduct *</label>
+        </div>
+
+        <div style="background: #e8f5e9; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem; border-left: 4px solid #4caf50;">
+            <strong>Note:</strong> This waiver is valid for 1 year from the date of signing. If you already have an account, signing again will renew your waiver.
+        </div>
+
+        <button type="submit" class="btn-primary">Sign Waiver</button>
+        <a href="/" class="btn-secondary">Cancel</a>
+    </form>
+</div>
+
+<style>
+    .form-group {
+        margin-bottom: 1.5rem;
+    }
+
+    label {
+        display: block;
+        margin-bottom: 0.5rem;
+        font-weight: 600;
+        color: #333;
+    }
+
+    input[type="text"],
+    input[type="email"] {
+        width: 100%;
+        padding: 0.75rem;
+        border: 2px solid #e0e0e0;
+        border-radius: 8px;
+        font-size: 1rem;
+        transition: border-color 0.2s;
+    }
+
+    input[type="text"]:focus,
+    input[type="email"]:focus {
+        outline: none;
+        border-color: #667eea;
+    }
+
+    .btn-primary {
+        background: #667eea;
+        color: white;
+        border: none;
+        padding: 0.75rem 2rem;
+        border-radius: 8px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        margin-right: 1rem;
+    }
+
+    .btn-primary:hover {
+        background: #5568d3;
+    }
+
+    .btn-secondary {
+        display: inline-block;
+        padding: 0.75rem 2rem;
+        color: #666;
+        text-decoration: none;
+        border: 2px solid #e0e0e0;
+        border-radius: 8px;
+        font-weight: 600;
+    }
+
+    .btn-secondary:hover {
+        border-color: #667eea;
+        color: #667eea;
+    }
+</style>
+{{ end }}

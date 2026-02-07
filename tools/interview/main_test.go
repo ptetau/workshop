@@ -13,11 +13,12 @@ func TestBuildScaffoldArgs(t *testing.T) {
 	g := graph{
 		Concepts: []concept{
 			{
-				Name: "Order",
+				Name:        "Order",
+				Description: "Represents a customer order",
 				Fields: []field{
 					{Name: "Status", Type: "string"},
 				},
-				Methods: []string{"Approve"},
+				Methods: []method{{Name: "Approve", Invariant: "Status must be pending"}},
 			},
 		},
 		Orchestrators: []orchestrator{

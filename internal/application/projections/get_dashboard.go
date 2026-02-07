@@ -1,0 +1,143 @@
+package projections
+
+import (
+	"context"
+	"time"
+
+	"workshop/internal/domain/grading"
+	"workshop/internal/domain/member"
+	"workshop/internal/domain/notice"
+	"workshop/internal/domain/traininggoal"
+)
+
+// DashboardNoticeStore defines the notice store interface needed by the dashboard projection.
+type DashboardNoticeStore interface {
+	ListPublished(ctx context.Context, noticeType string) ([]notice.Notice, error)
+}
+
+// DashboardProposalStore defines the grading proposal store interface needed by the dashboard projection.
+type DashboardProposalStore interface {
+	ListPending(ctx context.Context) ([]grading.Proposal, error)
+}
+
+// DashboardMessageStore defines the message store interface needed by the dashboard projection.
+type DashboardMessageStore interface {
+	CountUnread(ctx context.Context, receiverID string) (int, error)
+}
+
+// DashboardTrainingGoalStore defines the training goal store interface needed by the dashboard projection.
+type DashboardTrainingGoalStore interface {
+	GetActiveByMemberID(ctx context.Context, memberID string) (traininggoal.TrainingGoal, error)
+}
+
+// DashboardMemberStore defines the member store interface needed by the dashboard projection.
+type DashboardMemberStore interface {
+	GetByEmail(ctx context.Context, email string) (member.Member, error)
+}
+
+// GetDashboardQuery carries input for the dashboard projection.
+type GetDashboardQuery struct {
+	Role         string // admin, coach, member, trial
+	AccountEmail string // used to resolve MemberID for member/trial role
+}
+
+// GetDashboardDeps holds dependencies for the dashboard projection.
+type GetDashboardDeps struct {
+	TodaysClassesDeps GetTodaysClassesDeps
+	AttendanceDeps    GetAttendanceTodayDeps
+	InactiveDeps      GetInactiveMembersDeps
+	TrainingLogDeps   GetTrainingLogDeps
+	NoticeStore       DashboardNoticeStore
+	ProposalStore     DashboardProposalStore
+	MessageStore      DashboardMessageStore
+	TrainingGoalStore DashboardTrainingGoalStore
+	MemberStore       DashboardMemberStore
+}
+
+// DashboardResult carries the output of the dashboard projection.
+type DashboardResult struct {
+	Role string
+
+	// Shared
+	TodaysClasses []TodaysClassResult
+	Notices       []notice.Notice
+
+	// Admin
+	PendingProposals int
+	InactiveCount    int
+
+	// Coach
+	Attendees []AttendanceWithMember
+
+	// Member
+	TrainingLog  *TrainingLogResult
+	UnreadCount  int
+	TrainingGoal *traininggoal.TrainingGoal
+}
+
+// QueryGetDashboard aggregates dashboard data based on the user's role.
+func QueryGetDashboard(ctx context.Context, query GetDashboardQuery, deps GetDashboardDeps, now time.Time) (DashboardResult, error) {
+	result := DashboardResult{Role: query.Role}
+
+	// All roles: today's classes
+	classes, err := QueryGetTodaysClasses(ctx, now, deps.TodaysClassesDeps)
+	if err == nil {
+		result.TodaysClasses = classes
+	}
+
+	// All roles: published school-wide notices
+	notices, err := deps.NoticeStore.ListPublished(ctx, "school_wide")
+	if err == nil {
+		result.Notices = notices
+	}
+
+	switch query.Role {
+	case "admin":
+		// Pending grading proposals
+		proposals, err := deps.ProposalStore.ListPending(ctx)
+		if err == nil {
+			result.PendingProposals = len(proposals)
+		}
+		// Inactive members
+		inactiveQuery := GetInactiveMembersQuery{DaysSinceLastCheckIn: 30}
+		inactive, err := QueryGetInactiveMembers(ctx, inactiveQuery, deps.InactiveDeps)
+		if err == nil {
+			result.InactiveCount = len(inactive)
+		}
+
+	case "coach":
+		// Today's attendance with injury flags
+		attendanceQuery := GetAttendanceTodayQuery{}
+		attendanceResult, err := QueryGetAttendanceToday(ctx, attendanceQuery, deps.AttendanceDeps)
+		if err == nil {
+			result.Attendees = attendanceResult.Attendees
+		}
+
+	case "member", "trial":
+		if query.AccountEmail != "" {
+			// Resolve member ID from account email
+			memberRecord, err := deps.MemberStore.GetByEmail(ctx, query.AccountEmail)
+			if err == nil && memberRecord.ID != "" {
+				memberID := memberRecord.ID
+				// Training log summary
+				logQuery := GetTrainingLogQuery{MemberID: memberID}
+				logResult, err := QueryGetTrainingLog(ctx, logQuery, deps.TrainingLogDeps)
+				if err == nil {
+					result.TrainingLog = &logResult
+				}
+				// Unread messages
+				count, err := deps.MessageStore.CountUnread(ctx, memberID)
+				if err == nil {
+					result.UnreadCount = count
+				}
+				// Active training goal
+				goal, err := deps.TrainingGoalStore.GetActiveByMemberID(ctx, memberID)
+				if err == nil && goal.ID != "" {
+					result.TrainingGoal = &goal
+				}
+			}
+		}
+	}
+
+	return result, nil
+}

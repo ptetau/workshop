@@ -1,0 +1,77 @@
+{{ define "content" }}
+<div class="card">
+    <h1>Account Management</h1>
+
+    <div style="background:#f8f9fa;padding:1.5rem;border-radius:8px;margin-bottom:2rem;">
+        <h3 style="margin-top:0;">Create Account</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;">
+            <div class="form-group">
+                <label>Email</label>
+                <input type="text" id="acctEmail" placeholder="coach@workshop.co.nz">
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="text" id="acctPass" placeholder="min 8 chars">
+            </div>
+            <div class="form-group">
+                <label>Role</label>
+                <select id="acctRole" style="width:100%;padding:0.5rem;border:1px solid #ccc;border-radius:4px;">
+                    <option value="coach">Coach</option>
+                    <option value="member">Member</option>
+                    <option value="admin">Admin</option>
+                </select>
+            </div>
+        </div>
+        <button onclick="createAccount()">Create Account</button>
+        <span id="formMsg" style="margin-left:1rem;color:#28a745;"></span>
+    </div>
+
+    <h2>Accounts</h2>
+    <table style="width:100%;border-collapse:collapse;">
+        <thead>
+            <tr style="background:#f8f9fa;border-bottom:2px solid #dee2e6;">
+                <th style="padding:0.5rem;text-align:left;">Email</th>
+                <th style="padding:0.5rem;text-align:left;">Role</th>
+                <th style="padding:0.5rem;text-align:right;">Actions</th>
+            </tr>
+        </thead>
+        <tbody id="acctBody">
+            <tr><td colspan="3" style="padding:1rem;color:#6c757d;text-align:center;">Loading...</td></tr>
+        </tbody>
+    </table>
+
+    <p style="margin-top:2rem;"><a href="/dashboard" style="color:#007bff;text-decoration:none;font-weight:600;">← Back to Dashboard</a></p>
+</div>
+
+<script>
+function loadAccounts() {
+    fetch('/api/accounts').then(r=>r.json()).then(data => {
+        var b = document.getElementById('acctBody');
+        if (!data||data.length===0) { b.innerHTML='<tr><td colspan="3" style="padding:1rem;color:#6c757d;text-align:center;">No accounts.</td></tr>'; return; }
+        b.innerHTML='';
+        data.forEach(a => {
+            var roleOpts = ['admin','coach','member'].filter(r=>r!==a.Role).map(r=>'<option value="'+r+'">'+r+'</option>').join('');
+            b.innerHTML+='<tr style="border-bottom:1px solid #dee2e6;">'+
+                '<td style="padding:0.5rem;">'+a.Email+'</td>'+
+                '<td style="padding:0.5rem;"><span style="display:inline-block;padding:0.15rem 0.5rem;border-radius:12px;font-size:0.85rem;font-weight:600;background:'+(a.Role==='admin'?'#e3f2fd':'#e8f5e9')+';color:'+(a.Role==='admin'?'#1565c0':'#2e7d32')+';">'+a.Role+'</span></td>'+
+                '<td style="padding:0.5rem;text-align:right;"><select onchange="changeRole(\''+a.ID+'\',this.value)" style="padding:0.25rem;border:1px solid #ccc;border-radius:4px;"><option value="">Change role...</option>'+roleOpts+'</select></td></tr>';
+        });
+    });
+}
+function createAccount() {
+    fetch('/api/accounts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+        Email:document.getElementById('acctEmail').value,
+        Password:document.getElementById('acctPass').value,
+        Role:document.getElementById('acctRole').value
+    })}).then(r=>{if(!r.ok)throw r;return r.json();})
+    .then(()=>{document.getElementById('formMsg').textContent='Created!';loadAccounts();setTimeout(()=>document.getElementById('formMsg').textContent='',2000);})
+    .catch(()=>document.getElementById('formMsg').textContent='Error');
+}
+function changeRole(id,role) {
+    if(!role) return;
+    fetch('/api/accounts/role',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({AccountID:id,NewRole:role})})
+    .then(()=>loadAccounts());
+}
+loadAccounts();
+</script>
+{{ end }}

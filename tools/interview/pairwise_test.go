@@ -39,6 +39,7 @@ func TestPairwiseInterviewCombinations(t *testing.T) {
 func TestDisambiguationYesMergesConcepts(t *testing.T) {
 	input := strings.Join([]string{
 		"Order",
+		"Description",
 		"done", // fields
 		"done", // methods
 		"Orderr",
@@ -63,10 +64,12 @@ func TestDisambiguationYesMergesConcepts(t *testing.T) {
 func TestDisambiguationNoAddsConcept(t *testing.T) {
 	input := strings.Join([]string{
 		"Order",
+		"Description",
 		"done", // fields
 		"done", // methods
 		"Orderr",
 		"no",
+		"Description",
 		"done", // fields
 		"done", // methods
 		"done",
@@ -101,13 +104,14 @@ func buildInterviewInput(combo []bool) string {
 	// Concepts
 	if hasConcept {
 		lines = append(lines, "Order")
+		lines = append(lines, "Description for Order")
 		if hasField {
-			lines = append(lines, "Status", "string", "done")
+			lines = append(lines, "Status", "string", "Desc", "done")
 		} else {
 			lines = append(lines, "done")
 		}
 		if hasMethod {
-			lines = append(lines, "Approve", "done")
+			lines = append(lines, "Approve", "Desc", "Invariant", "Pre", "Post", "done")
 		} else {
 			lines = append(lines, "done")
 		}
@@ -119,8 +123,9 @@ func buildInterviewInput(combo []bool) string {
 	// Orchestrators
 	if hasOrchestrator {
 		lines = append(lines, "Create Order")
+		lines = append(lines, "Description for CreateOrder")
 		if hasParam {
-			lines = append(lines, "CustomerID", "string", "done")
+			lines = append(lines, "CustomerID", "string", "Desc", "done")
 		} else {
 			lines = append(lines, "done")
 		}
@@ -137,13 +142,14 @@ func buildInterviewInput(combo []bool) string {
 	// Projections
 	if hasProjection {
 		lines = append(lines, "Order Summary")
+		lines = append(lines, "Description for OrderSummary")
 		if hasQueryResult {
-			lines = append(lines, "OrderID", "string", "done")
+			lines = append(lines, "OrderID", "string", "Desc", "done")
 		} else {
 			lines = append(lines, "done")
 		}
 		if hasQueryResult {
-			lines = append(lines, "Status", "string", "done")
+			lines = append(lines, "Status", "string", "Desc", "done")
 		} else {
 			lines = append(lines, "done")
 		}

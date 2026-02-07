@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Workshop Kiosk</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: system-ui, sans-serif; background: #1a1a2e; color: #eee; min-height: 100vh; display: flex; flex-direction: column; align-items: center; }
+        .kiosk-header { width: 100%; background: #16213e; padding: 1.5rem; text-align: center; }
+        .kiosk-header h1 { font-size: 2rem; color: #e94560; letter-spacing: 2px; }
+        .kiosk-main { flex: 1; width: 100%; max-width: 600px; padding: 2rem; display: flex; flex-direction: column; align-items: center; }
+        .search-box { width: 100%; margin-bottom: 1.5rem; }
+        .search-box input { width: 100%; padding: 1.25rem; font-size: 1.5rem; border: 2px solid #e94560; border-radius: 12px; background: #16213e; color: #eee; text-align: center; outline: none; }
+        .search-box input::placeholder { color: #666; }
+        .search-box input:focus { border-color: #0f3460; box-shadow: 0 0 20px rgba(233,69,96,0.3); }
+        .results { width: 100%; list-style: none; }
+        .results li { padding: 1rem 1.5rem; margin-bottom: 0.5rem; background: #16213e; border-radius: 8px; cursor: pointer; font-size: 1.25rem; transition: background 0.2s; }
+        .results li:hover { background: #0f3460; }
+        .classes { width: 100%; list-style: none; margin-top: 1rem; }
+        .classes li { padding: 1rem 1.5rem; margin-bottom: 0.5rem; background: #16213e; border-radius: 8px; cursor: pointer; font-size: 1.1rem; transition: background 0.2s; }
+        .classes li:hover { background: #0f3460; }
+        .success { text-align: center; margin-top: 3rem; }
+        .success h2 { font-size: 2.5rem; color: #28a745; margin-bottom: 1rem; }
+        .success p { font-size: 1.25rem; color: #aaa; }
+        .trial-prompt { background: #e94560; color: white; padding: 1.5rem; border-radius: 12px; margin-top: 2rem; text-align: center; font-size: 1.1rem; }
+        .guest-btn { margin-top: 2rem; padding: 1rem 2rem; background: #0f3460; color: white; border: 2px solid #e94560; border-radius: 8px; font-size: 1.1rem; cursor: pointer; }
+        .guest-btn:hover { background: #e94560; }
+        .exit-bar { width: 100%; padding: 1rem; text-align: center; }
+        .exit-btn { background: none; border: 1px solid #444; color: #666; padding: 0.5rem 1.5rem; border-radius: 6px; cursor: pointer; font-size: 0.9rem; }
+        .exit-btn:hover { border-color: #e94560; color: #e94560; }
+        .hidden { display: none; }
+        .status { color: #666; text-align: center; padding: 1rem; font-size: 1rem; }
+    </style>
+</head>
+<body>
+    <div class="kiosk-header">
+        <h1>WORKSHOP</h1>
+    </div>
+    <div class="kiosk-main">
+        <div id="step-search">
+            <div class="search-box">
+                <input type="text" id="nameInput" placeholder="Type your name..." autocomplete="off" autofocus>
+            </div>
+            <ul class="results" id="memberResults"></ul>
+            <p class="status" id="searchStatus">Start typing to find your name</p>
+            <button class="guest-btn" onclick="guestCheckIn()">Guest Check-In</button>
+        </div>
+
+        <div id="step-classes" class="hidden">
+            <p style="text-align: center; font-size: 1.3rem; margin-bottom: 1rem;">Select your class, <strong id="selectedName"></strong></p>
+            <ul class="classes" id="classList"></ul>
+            <button class="guest-btn" onclick="resetKiosk()" style="margin-top: 1rem;">Back</button>
+        </div>
+
+        <div id="step-done" class="hidden">
+            <div class="success">
+                <h2>Checked In!</h2>
+                <p id="doneMessage"></p>
+            </div>
+            <div id="trialPrompt" class="trial-prompt hidden">
+                Enjoying Workshop? Talk to your coach about signing up!
+            </div>
+        </div>
+    </div>
+    <div class="exit-bar">
+        <button class="exit-btn" onclick="exitKiosk()">Exit Kiosk</button>
+    </div>
+
+    <script>
+        let selectedMember = null;
+        let debounceTimer = null;
+
+        const nameInput = document.getElementById('nameInput');
+        const memberResults = document.getElementById('memberResults');
+        const searchStatus = document.getElementById('searchStatus');
+        const stepSearch = document.getElementById('step-search');
+        const stepClasses = document.getElementById('step-classes');
+        const stepDone = document.getElementById('step-done');
+
+        nameInput.addEventListener('input', function() {
+            clearTimeout(debounceTimer);
+            const query = this.value.trim();
+            if (query.length < 2) {
+                memberResults.innerHTML = '';
+                searchStatus.textContent = 'Start typing to find your name';
+                searchStatus.className = 'status';
+                return;
+            }
+            searchStatus.textContent = 'Searching...';
+            debounceTimer = setTimeout(() => searchMembers(query), 250);
+        });
+
+        async function searchMembers(query) {
+            try {
+                const response = await fetch('/api/members/search?q=' + encodeURIComponent(query));
+                const members = await response.json();
+                memberResults.innerHTML = '';
+                if (!members || members.length === 0) {
+                    searchStatus.textContent = 'No members found';
+                    return;
+                }
+                searchStatus.textContent = '';
+                members.forEach(m => {
+                    const li = document.createElement('li');
+                    li.textContent = m.Name + ' (' + m.Program + ')';
+                    li.onclick = () => selectMember(m);
+                    memberResults.appendChild(li);
+                });
+            } catch (err) {
+                searchStatus.textContent = 'Search error';
+            }
+        }
+
+        async function selectMember(member) {
+            selectedMember = member;
+            document.getElementById('selectedName').textContent = member.Name;
+            stepSearch.classList.add('hidden');
+            stepClasses.classList.remove('hidden');
+
+            try {
+                const response = await fetch('/api/classes/today');
+                const classes = await response.json();
+                const classList = document.getElementById('classList');
+                classList.innerHTML = '';
+                if (!classes || classes.length === 0) {
+                    classList.innerHTML = '<li style="color: #666; cursor: default;">No classes today</li>';
+                    return;
+                }
+                classes.forEach(c => {
+                    const li = document.createElement('li');
+                    li.textContent = c.StartTime + ' - ' + c.EndTime + '  ' + c.ClassTypeName + ' (' + c.ProgramName + ')';
+                    li.onclick = () => checkIn(c.ScheduleID);
+                    classList.appendChild(li);
+                });
+            } catch (err) {
+                document.getElementById('classList').innerHTML = '<li style="color: #c00;">Failed to load classes</li>';
+            }
+        }
+
+        async function checkIn(scheduleID) {
+            try {
+                const body = JSON.stringify({
+                    MemberID: selectedMember.ID,
+                    ScheduleID: scheduleID
+                });
+                await fetch('/checkin', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: body
+                });
+                stepClasses.classList.add('hidden');
+                stepDone.classList.remove('hidden');
+                document.getElementById('doneMessage').textContent = selectedMember.Name + ' is on the mats!';
+
+                if (selectedMember.Status === 'trial') {
+                    document.getElementById('trialPrompt').classList.remove('hidden');
+                }
+
+                setTimeout(resetKiosk, 5000);
+            } catch (err) {
+                alert('Check-in failed');
+            }
+        }
+
+        function guestCheckIn() {
+            window.location.href = '/forms/sign-waiver';
+        }
+
+        function resetKiosk() {
+            selectedMember = null;
+            nameInput.value = '';
+            memberResults.innerHTML = '';
+            searchStatus.textContent = 'Start typing to find your name';
+            stepSearch.classList.remove('hidden');
+            stepClasses.classList.add('hidden');
+            stepDone.classList.remove('hidden');
+            stepDone.classList.add('hidden');
+            document.getElementById('trialPrompt').classList.add('hidden');
+            nameInput.focus();
+        }
+
+        async function exitKiosk() {
+            const password = prompt('Enter password to exit kiosk:');
+            if (!password) return;
+            try {
+                const response = await fetch('/api/kiosk/exit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ Password: password })
+                });
+                if (response.ok) {
+                    window.location.href = '/dashboard';
+                } else {
+                    alert('Invalid password');
+                }
+            } catch (err) {
+                alert('Exit failed');
+            }
+        }
+    </script>
+</body>
+</html>

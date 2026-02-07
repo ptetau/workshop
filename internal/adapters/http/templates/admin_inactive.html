@@ -1,0 +1,41 @@
+{{ define "content" }}
+<div class="card">
+    <h1>Inactive Member Radar</h1>
+
+    <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem;">
+        <label style="margin:0;">Days since last check-in:</label>
+        <input type="number" id="days" value="30" style="width:80px;">
+        <button onclick="loadInactive()">Refresh</button>
+    </div>
+
+    <div id="inactiveList" style="color:#6c757d;">Loading...</div>
+
+    <p style="margin-top:2rem;"><a href="/dashboard" style="color:#007bff;text-decoration:none;font-weight:600;">← Back to Dashboard</a></p>
+</div>
+
+<script>
+function loadInactive() {
+    var days = document.getElementById('days').value || 30;
+    fetch('/api/members/inactive?days='+days).then(r=>r.json()).then(data => {
+        var el = document.getElementById('inactiveList');
+        if (!data||data.length===0) { el.innerHTML='<p style="color:#28a745;font-weight:600;">No inactive members for this period.</p>'; return; }
+        el.innerHTML='<table style="width:100%;border-collapse:collapse;"><thead><tr style="background:#f8f9fa;border-bottom:2px solid #dee2e6;"><th style="padding:0.5rem;text-align:left;">Name</th><th style="padding:0.5rem;text-align:left;">Email</th><th style="padding:0.5rem;text-align:left;">Last Check-In</th><th style="padding:0.5rem;text-align:right;">Actions</th></tr></thead><tbody>';
+        data.forEach(m => {
+            var lastDate = m.LastCheckIn ? m.LastCheckIn.substring(0,10) : 'Never';
+            el.innerHTML+='<tr style="border-bottom:1px solid #dee2e6;">'+
+                '<td style="padding:0.5rem;font-weight:600;">'+m.Name+'</td>'+
+                '<td style="padding:0.5rem;">'+m.Email+'</td>'+
+                '<td style="padding:0.5rem;">'+lastDate+'</td>'+
+                '<td style="padding:0.5rem;text-align:right;"><button onclick="archiveMember(\''+m.ID+'\')" style="background:#dc3545;padding:0.25rem 0.75rem;font-size:0.85rem;">Archive</button></td></tr>';
+        });
+        el.innerHTML+='</tbody></table>';
+    });
+}
+function archiveMember(id) {
+    if (!confirm('Archive this member?')) return;
+    fetch('/api/members/archive',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({MemberID:id})})
+    .then(()=>loadInactive());
+}
+loadInactive();
+</script>
+{{ end }}

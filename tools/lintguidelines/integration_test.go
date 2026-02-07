@@ -9,13 +9,15 @@ import (
 
 func TestScaffoldedAppPassesLint(t *testing.T) {
 	repoRoot := findRepoRoot(t)
+	scaffoldDir := filepath.Join(repoRoot, "tools", "scaffold")
 	workDir := t.TempDir()
 
-	runGo(t, repoRoot, repoRoot, "run", "./tools/scaffold", "init",
+	runGo(t, repoRoot, scaffoldDir, "run", ".", "init",
 		"--root", workDir,
 		"--concept", "Order",
 		"--field", "Order:Status:string",
 		"--method", "Order:Approve",
+		"--post", "Order:Approve:Order is approved",
 		"--orchestrator", "CreateOrder",
 		"--param", "CreateOrder:CustomerID:string",
 		"--projection", "OrderSummary",
@@ -30,9 +32,10 @@ func TestScaffoldedAppPassesLint(t *testing.T) {
 
 func TestScaffoldedAppWithMultipleConceptsPassesLint(t *testing.T) {
 	repoRoot := findRepoRoot(t)
+	scaffoldDir := filepath.Join(repoRoot, "tools", "scaffold")
 	workDir := t.TempDir()
 
-	runGo(t, repoRoot, repoRoot, "run", "./tools/scaffold", "init",
+	runGo(t, repoRoot, scaffoldDir, "run", ".", "init",
 		"--root", workDir,
 		"--concept", "Order",
 		"--field", "Order:Status:string",

@@ -1,0 +1,60 @@
+{{ define "content" }}
+<div class="card">
+    <h1>📋 Member List</h1>
+
+    {{ if .Members }}
+    <table style="width: 100%; border-collapse: collapse; margin: 1rem 0;">
+        <thead>
+            <tr style="background: #f8f9fa; border-bottom: 2px solid #dee2e6;">
+                <th style="padding: 0.75rem; text-align: left;">Name</th>
+                <th style="padding: 0.75rem; text-align: left;">Email</th>
+                <th style="padding: 0.75rem; text-align: left;">Program</th>
+                <th style="padding: 0.75rem; text-align: center;">Status</th>
+                <th style="padding: 0.75rem; text-align: center;">Injury</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{ range .Members }}
+            <tr style="border-bottom: 1px solid #dee2e6;">
+                <td style="padding: 0.75rem;"><a href="/members/profile?id={{ .ID }}" style="color: #667eea; text-decoration: none; font-weight: 600;">{{ .Name }}</a></td>
+                <td style="padding: 0.75rem;">{{ .Email }}</td>
+                <td style="padding: 0.75rem;">
+                    <span
+                        style="display: inline-block; padding: 0.25rem 0.75rem; border-radius: 12px; font-size: 0.85rem; font-weight: 600; background: #e3f2fd; color: #1976d2;">
+                        {{ .Program }}
+                    </span>
+                </td>
+                <td style="padding: 0.75rem; text-align: center;">
+                    {{ if eq .Status "active" }}
+                    <span style="color: #28a745; font-weight: 600;">✓ Active</span>
+                    {{ else }}
+                    <span style="color: #dc3545; font-weight: 600;">✗ Inactive</span>
+                    {{ end }}
+                </td>
+                <td style="padding: 0.75rem; text-align: center;">
+                    {{ if .HasInjury }}
+                    <span
+                        style="display: inline-block; padding: 0.25rem 0.75rem; border-radius: 12px; background: #fff3cd; color: #856404; font-weight: 600;">
+                        🚨 {{ .InjuryBodyPart }}
+                    </span>
+                    {{ else }}
+                    <span style="color: #6c757d;">—</span>
+                    {{ end }}
+                </td>
+            </tr>
+            {{ end }}
+        </tbody>
+    </table>
+    {{ else }}
+    <p
+        style="color: #6c757d; font-style: italic; padding: 2rem; text-align: center; background: #f8f9fa; border-radius: 8px;">
+        No members registered yet. <a href="/members" style="color: #007bff; text-decoration: underline;">Register a new
+            member</a>
+    </p>
+    {{ end }}
+
+    <p style="margin-top: 2rem;">
+        <a href="/dashboard" style="color: #007bff; text-decoration: none; font-weight: 600;">← Back to Dashboard</a>
+    </p>
+</div>
+{{ end }}

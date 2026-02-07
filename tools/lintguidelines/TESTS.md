@@ -1,6 +1,6 @@
 # Lintguidelines CLI - Simulation & Exploratory Tests
 
-Static analysis linter for validating architecture guidelines. Enforces naming, coupling, routing, and storage isolation rules.
+Static analysis linter for validating architecture guidelines. Enforces naming, coupling, routing, storage isolation, and documentation rules.
 
 ## Quick Reference
 
@@ -36,6 +36,7 @@ go test ./tools/lintguidelines -v -run Pairwise
 | `route-query` | GET → projections only | `internal/adapters/http/routes.go` |
 | `route-command` | POST/PUT/DELETE → orchestrators only | `internal/adapters/http/routes.go` |
 | `storage-isolation` | Storage matches concept, no cross-imports | `internal/adapters/storage/<concept>/` |
+| `documentation` | Exported methods must have comments and PRE/POST/INVARIANT tags | `internal/domain/<concept>/*.go` |
 
 ---
 

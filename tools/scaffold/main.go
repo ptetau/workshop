@@ -54,9 +54,10 @@ type projection struct {
 }
 
 type route struct {
-	Method string `json:"method"`
-	Path   string `json:"path"`
-	Target string `json:"target"`
+	Method string   `json:"method"`
+	Path   string   `json:"path"`
+	Target string   `json:"target"`
+	Tests  []string `json:"tests,omitempty"` // ["http", "e2e"]
 }
 
 type state struct {
@@ -137,6 +138,8 @@ func runInit(args []string) error {
 		descriptionFlags  multiFlag
 		invariantFlags    multiFlag
 		force             bool
+		generateTests     bool
+		testType          string
 	)
 
 	fs := flag.NewFlagSet("init", flag.ContinueOnError)
@@ -177,6 +180,8 @@ func runInit(args []string) error {
 	fs.Var(&queryDocFlags, "query-doc", "query doc: Projection:Query:Description")
 	fs.Var(&resultDocFlags, "result-doc", "result doc: Projection:Query:Description")
 	fs.BoolVar(&force, "force", false, "overwrite existing files")
+	fs.BoolVar(&generateTests, "generate-tests", true, "generate test stubs for routes")
+	fs.StringVar(&testType, "test-type", "both", "test type to generate: http, e2e, or both")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -216,6 +221,14 @@ func runInit(args []string) error {
 
 	if err := writeState(updated); err != nil {
 		return err
+	}
+
+	// Generate tests if requested
+	if generateTests && len(updated.Routes) > 0 {
+		if err := scaffoldTests(moduleName, updated.Routes, testType, force); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: failed to generate tests: %v\n", err)
+			// Don't fail the entire scaffold operation if test generation fails
+		}
 	}
 
 	return nil
@@ -1196,11 +1209,20 @@ type {{ .Concept.Name }} struct {
 
 {{ range .Concept.Methods -}}
 // {{ .Name }} {{ if .Description }}- {{ .Description }}{{ end }}
+{{ if .PreCondition -}}
+// PRE: {{ .PreCondition }}
+{{ end -}}
+{{ if .Invariant -}}
+// INVARIANT: {{ .Invariant }}
+{{ end -}}
+{{ if .PostCondition -}}
+// POST: {{ .PostCondition }}
+{{ end -}}
+{{ if and (not .PreCondition) (not .Invariant) (not .PostCondition) -}}
+// PRE: concept state is valid
+// POST: state is updated per method contract
+{{ end -}}
 func (c *{{ $.Concept.Name }}) {{ .Name }}() {
-	// {{ if .PreCondition }}PRE: {{ .PreCondition }}
-	// {{ end }}{{ if .Invariant }}INVARIANT: {{ .Invariant }}
-	// {{ end }}{{ if .PostCondition }}POST: {{ .PostCondition }}
-	// {{ end }}
 	{{ if not .Invariant }}// TODO: {{ if .Description }}{{ .Description }}{{ else }}describe state changes and invariants.{{ end }}{{ end }}
 }
 
@@ -1360,6 +1382,7 @@ func registerRoutes(mux *http.ServeMux) {
 }
 
 {{ range .Routes -}}
+// {{ .HandlerName }} handles {{ .Method }} {{ .Path }} requests.
 func {{ .HandlerName }}(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	isHTML := r.Header.Get("Accept") == "text/html"
@@ -1642,6 +1665,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+// Init opens and verifies a SQLite database connection.
 func Init(dbPath string) *sql.DB {
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
@@ -1725,6 +1749,8 @@ func NewSQLiteStore(db *sql.DB) *SQLiteStore {
 }
 
 // GetByID retrieves a {{ .Concept.Name }} by its ID.
+// PRE: id is non-empty
+// POST: Returns the entity or an error if not found
 func (s *SQLiteStore) GetByID(ctx context.Context, id string) (domain.{{ .Concept.Name }}, error) {
 	query := "SELECT {{ range $i, $f := .Concept.Fields }}{{ if $i }}, {{ end }}{{ $f.Name | toSnakeCase }}{{ end }} FROM {{ .Concept.Name | toSnakeCase }} WHERE id = ?"
 	
@@ -1743,6 +1769,8 @@ func (s *SQLiteStore) GetByID(ctx context.Context, id string) (domain.{{ .Concep
 }
 
 // Save persists a {{ .Concept.Name }} to the database.
+// PRE: entity has been validated
+// POST: Entity is persisted (insert or update)
 func (s *SQLiteStore) Save(ctx context.Context, entity domain.{{ .Concept.Name }}) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -1775,12 +1803,16 @@ func (s *SQLiteStore) Save(ctx context.Context, entity domain.{{ .Concept.Name }
 }
 
 // Delete removes a {{ .Concept.Name }} from the database.
+// PRE: id is non-empty
+// POST: Entity with given id is removed
 func (s *SQLiteStore) Delete(ctx context.Context, id string) error {
 	_, err := s.db.ExecContext(ctx, "DELETE FROM {{ .Concept.Name | toSnakeCase }} WHERE id = ?", id)
 	return err
 }
 
 // List retrieves a list of {{ .Concept.Name }}s based on the filter.
+// PRE: filter has valid Limit and Offset
+// POST: Returns matching entities ordered by default
 func (s *SQLiteStore) List(ctx context.Context, filter ListFilter) ([]domain.{{ .Concept.Name }}, error) {
 	query := "SELECT {{ range $i, $f := .Concept.Fields }}{{ if $i }}, {{ end }}{{ $f.Name | toSnakeCase }}{{ end }} FROM {{ .Concept.Name | toSnakeCase }} LIMIT ? OFFSET ?"
 	

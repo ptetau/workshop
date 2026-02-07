@@ -13,6 +13,9 @@ go test ./tools/scaffold -v -run Pairwise
 
 # View help
 go run ./tools/scaffold init --help
+
+# Generate with metadata
+go run ./tools/scaffold init --root . --concept Member --description "Member domain" --field "Member:Name:string" --field-doc "Member:Name:The member's full name"
 ```
 
 ---
@@ -34,6 +37,8 @@ go run ./tools/scaffold init --help
 | `--orchestrator X` | `internal/application/orchestrators/<x>.go` |
 | `--projection X` | `internal/application/projections/<x>.go` |
 | `--route METHOD:PATH:TARGET` | `internal/adapters/http/routes.go` (regenerated) |
+| `--pre`, `--post`, `--invariant` | Adds metadata comments to methods |
+| `--*-doc` | Adds documentation to fields, methods, etc. |
 
 ---
 
@@ -100,6 +105,37 @@ func (c *Order) Approve() {
 
 func (c *Order) Cancel() {
     // TODO: describe state changes and invariants.
+}
+```
+
+```go
+func (c *Order) Approve() {
+    // TODO: describe state changes and invariants.
+}
+
+func (c *Order) Cancel() {
+    // TODO: describe state changes and invariants.
+}
+```
+
+### 3b. Concept with Rich Metadata
+
+```powershell
+go run ./tools/scaffold init --root C:\temp\test `
+  --concept Order `
+  --method Order:Approve `
+  --method-doc "Order:Approve:Approves the order" `
+  --pre "Order:Approve:Status is pending" `
+  --post "Order:Approve:Status is approved"
+```
+
+```go
+// Approve - Approves the order
+func (c *Order) Approve() {
+    // PRE: Status is pending
+    // POST: Status is approved
+    // 
+    // TODO: Approves the order
 }
 ```
 

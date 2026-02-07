@@ -1,0 +1,110 @@
+{{ define "content" }}
+<div class="card">
+    <h1>Schedule Management</h1>
+
+    <div id="createForm" style="background: #f8f9fa; padding: 1.5rem; border-radius: 8px; margin-bottom: 2rem;">
+        <h3 style="margin-top:0;">Add Schedule Entry</h3>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div class="form-group">
+                <label>Class Type</label>
+                <select id="classTypeID" style="width:100%;padding:0.5rem;border:1px solid #ccc;border-radius:4px;">
+                    <option value="">Loading...</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Day</label>
+                <select id="day" style="width:100%;padding:0.5rem;border:1px solid #ccc;border-radius:4px;">
+                    <option value="monday">Monday</option>
+                    <option value="tuesday">Tuesday</option>
+                    <option value="wednesday">Wednesday</option>
+                    <option value="thursday">Thursday</option>
+                    <option value="friday">Friday</option>
+                    <option value="saturday">Saturday</option>
+                    <option value="sunday">Sunday</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Start Time</label>
+                <input type="text" id="startTime" placeholder="06:00">
+            </div>
+            <div class="form-group">
+                <label>End Time</label>
+                <input type="text" id="endTime" placeholder="07:30">
+            </div>
+        </div>
+        <button onclick="createSchedule()" style="margin-top:0.5rem;">Add Schedule</button>
+        <span id="formMsg" style="margin-left:1rem;color:#28a745;"></span>
+    </div>
+
+    <h2>Current Schedules</h2>
+    <table id="scheduleTable" style="width:100%;border-collapse:collapse;">
+        <thead>
+            <tr style="background:#f8f9fa;border-bottom:2px solid #dee2e6;">
+                <th style="padding:0.5rem;text-align:left;">Day</th>
+                <th style="padding:0.5rem;text-align:left;">Time</th>
+                <th style="padding:0.5rem;text-align:left;">Class Type</th>
+                <th style="padding:0.5rem;text-align:right;">Actions</th>
+            </tr>
+        </thead>
+        <tbody id="scheduleBody">
+            <tr><td colspan="4" style="padding:1rem;color:#6c757d;text-align:center;">Loading...</td></tr>
+        </tbody>
+    </table>
+
+    <p style="margin-top:2rem;"><a href="/dashboard" style="color:#007bff;text-decoration:none;font-weight:600;">← Back to Dashboard</a></p>
+</div>
+
+<script>
+var classTypes = [];
+function loadClassTypes() {
+    fetch('/api/class-types').then(r => r.json()).then(data => {
+        classTypes = data || [];
+        var sel = document.getElementById('classTypeID');
+        sel.innerHTML = '<option value="">Select class type</option>';
+        classTypes.forEach(ct => {
+            sel.innerHTML += '<option value="'+ct.ID+'">'+ct.Name+' ('+ct.ProgramID+')</option>';
+        });
+    });
+}
+function classTypeName(id) {
+    var ct = classTypes.find(c => c.ID === id);
+    return ct ? ct.Name : id;
+}
+function loadSchedules() {
+    fetch('/api/schedules').then(r => r.json()).then(data => {
+        var body = document.getElementById('scheduleBody');
+        if (!data || data.length === 0) {
+            body.innerHTML = '<tr><td colspan="4" style="padding:1rem;color:#6c757d;text-align:center;">No schedules yet.</td></tr>';
+            return;
+        }
+        body.innerHTML = '';
+        data.forEach(s => {
+            body.innerHTML += '<tr style="border-bottom:1px solid #dee2e6;">' +
+                '<td style="padding:0.5rem;text-transform:capitalize;">'+s.Day+'</td>' +
+                '<td style="padding:0.5rem;">'+s.StartTime+' - '+s.EndTime+'</td>' +
+                '<td style="padding:0.5rem;font-weight:600;">'+classTypeName(s.ClassTypeID)+'</td>' +
+                '<td style="padding:0.5rem;text-align:right;"><button onclick="deleteSchedule(\''+s.ID+'\')" style="background:#dc3545;padding:0.25rem 0.75rem;font-size:0.85rem;">Delete</button></td>' +
+                '</tr>';
+        });
+    });
+}
+function createSchedule() {
+    var body = {
+        ClassTypeID: document.getElementById('classTypeID').value,
+        Day: document.getElementById('day').value,
+        StartTime: document.getElementById('startTime').value,
+        EndTime: document.getElementById('endTime').value
+    };
+    fetch('/api/schedules', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) })
+        .then(r => { if (!r.ok) throw r; return r.json(); })
+        .then(() => { document.getElementById('formMsg').textContent = 'Created!'; loadSchedules(); setTimeout(() => document.getElementById('formMsg').textContent = '', 2000); })
+        .catch(() => document.getElementById('formMsg').textContent = 'Error creating schedule');
+}
+function deleteSchedule(id) {
+    fetch('/api/schedules?id='+id, { method: 'DELETE' })
+        .then(() => loadSchedules());
+}
+loadClassTypes();
+setTimeout(loadSchedules, 300);
+</script>
+{{ end }}

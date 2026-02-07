@@ -1,0 +1,99 @@
+{{ define "content" }}
+<div class="card">
+    <h1>Grading Management</h1>
+
+    <h2>Pending Proposals</h2>
+    <div id="proposalList" style="color:#6c757d;">Loading...</div>
+
+    <h2 style="margin-top:2rem;">Grading Readiness</h2>
+    <div id="readinessList" style="color:#6c757d;">Loading...</div>
+
+    <h2 style="margin-top:2rem;">Grading Config</h2>
+    <div style="background:#f8f9fa;padding:1.5rem;border-radius:8px;margin-bottom:1rem;">
+        <h3 style="margin-top:0;">Add Config</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:1rem;">
+            <div class="form-group">
+                <label>Program</label>
+                <select id="cfgProgram" style="width:100%;padding:0.5rem;border:1px solid #ccc;border-radius:4px;">
+                    <option value="adults">Adults</option>
+                    <option value="kids">Kids</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Belt</label>
+                <input type="text" id="cfgBelt" placeholder="blue">
+            </div>
+            <div class="form-group">
+                <label>Flight Time (hrs)</label>
+                <input type="number" id="cfgHours" placeholder="150">
+            </div>
+            <div class="form-group">
+                <label>Stripes</label>
+                <input type="number" id="cfgStripes" placeholder="4">
+            </div>
+        </div>
+        <button onclick="createConfig()">Add Config</button>
+        <span id="cfgMsg" style="margin-left:1rem;color:#28a745;"></span>
+    </div>
+    <div id="configList" style="color:#6c757d;">Loading...</div>
+
+    <p style="margin-top:2rem;"><a href="/dashboard" style="color:#007bff;text-decoration:none;font-weight:600;">← Back to Dashboard</a></p>
+</div>
+
+<script>
+function loadProposals() {
+    fetch('/api/grading/proposals').then(r=>r.json()).then(data => {
+        var el = document.getElementById('proposalList');
+        if (!data||data.length===0) { el.innerHTML='<p style="color:#6c757d;font-style:italic;">No pending proposals.</p>'; return; }
+        el.innerHTML='';
+        data.forEach(p => {
+            var isPending = p.Status==='pending';
+            el.innerHTML+='<div style="background:#fff;border:1px solid #dee2e6;padding:1rem;border-radius:8px;margin-bottom:0.5rem;display:flex;justify-content:space-between;align-items:center;">'+
+                '<div><strong>'+p.MemberID.substring(0,8)+'...</strong> → '+p.TargetBelt+' <span style="font-size:0.8rem;color:#999;">('+p.Status+')</span></div>'+
+                (isPending?'<div><button onclick="decide(\''+p.ID+'\',\'approve\')" style="background:#28a745;padding:0.25rem 0.75rem;font-size:0.85rem;margin-right:0.5rem;">Approve</button><button onclick="decide(\''+p.ID+'\',\'reject\')" style="background:#dc3545;padding:0.25rem 0.75rem;font-size:0.85rem;">Reject</button></div>':'')+
+                '</div>';
+        });
+    });
+}
+function decide(id,decision) {
+    fetch('/api/grading/proposals/decide',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ProposalID:id,Decision:decision})})
+    .then(()=>loadProposals());
+}
+function loadReadiness() {
+    fetch('/api/grading/readiness').then(r=>r.json()).then(data => {
+        var el = document.getElementById('readinessList');
+        if (!data||data.length===0) { el.innerHTML='<p style="color:#6c757d;font-style:italic;">No members approaching eligibility.</p>'; return; }
+        el.innerHTML='<table style="width:100%;border-collapse:collapse;"><thead><tr style="background:#f8f9fa;border-bottom:2px solid #dee2e6;"><th style="padding:0.5rem;text-align:left;">Member</th><th style="padding:0.5rem;text-align:left;">Belt</th><th style="padding:0.5rem;text-align:left;">Hours</th><th style="padding:0.5rem;text-align:left;">Progress</th></tr></thead><tbody>';
+        data.forEach(m => {
+            el.innerHTML+='<tr style="border-bottom:1px solid #dee2e6;"><td style="padding:0.5rem;font-weight:600;">'+m.MemberName+'</td><td style="padding:0.5rem;">'+m.CurrentBelt+'</td><td style="padding:0.5rem;">'+m.FlightTimeHours+'h</td><td style="padding:0.5rem;">'+m.ProgressPct+'%</td></tr>';
+        });
+        el.innerHTML+='</tbody></table>';
+    }).catch(()=>{document.getElementById('readinessList').innerHTML='<p style="color:#6c757d;font-style:italic;">Could not load readiness data.</p>';});
+}
+function loadConfigs() {
+    fetch('/api/grading/config').then(r=>r.json()).then(data => {
+        var el = document.getElementById('configList');
+        if (!data||data.length===0) { el.innerHTML='<p style="color:#6c757d;font-style:italic;">No configs.</p>'; return; }
+        el.innerHTML='<table style="width:100%;border-collapse:collapse;"><thead><tr style="background:#f8f9fa;border-bottom:2px solid #dee2e6;"><th style="padding:0.5rem;text-align:left;">Program</th><th style="padding:0.5rem;text-align:left;">Belt</th><th style="padding:0.5rem;text-align:left;">Flight Time</th><th style="padding:0.5rem;text-align:left;">Stripes</th></tr></thead><tbody>';
+        data.forEach(c => {
+            el.innerHTML+='<tr style="border-bottom:1px solid #dee2e6;"><td style="padding:0.5rem;">'+c.Program+'</td><td style="padding:0.5rem;font-weight:600;">'+c.Belt+'</td><td style="padding:0.5rem;">'+c.FlightTimeHours+'h</td><td style="padding:0.5rem;">'+c.StripeCount+'</td></tr>';
+        });
+        el.innerHTML+='</tbody></table>';
+    });
+}
+function createConfig() {
+    fetch('/api/grading/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+        Program:document.getElementById('cfgProgram').value,
+        Belt:document.getElementById('cfgBelt').value,
+        FlightTimeHours:parseInt(document.getElementById('cfgHours').value)||0,
+        AttendancePct:0,
+        StripeCount:parseInt(document.getElementById('cfgStripes').value)||4
+    })}).then(r=>{if(!r.ok)throw r;return r.json();})
+    .then(()=>{document.getElementById('cfgMsg').textContent='Created!';loadConfigs();setTimeout(()=>document.getElementById('cfgMsg').textContent='',2000);})
+    .catch(()=>document.getElementById('cfgMsg').textContent='Error');
+}
+loadProposals();
+loadReadiness();
+loadConfigs();
+</script>
+{{ end }}

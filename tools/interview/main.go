@@ -20,27 +20,39 @@ const (
 )
 
 type field struct {
-	Name string `json:"name"`
-	Type string `json:"type"`
+	Name        string `json:"name"`
+	Type        string `json:"type"`
+	Description string `json:"description"`
+}
+
+type method struct {
+	Name          string `json:"name"`
+	Invariant     string `json:"invariant"`
+	Description   string `json:"description"`
+	PreCondition  string `json:"preCondition"`
+	PostCondition string `json:"postCondition"`
 }
 
 type concept struct {
-	Name    string  `json:"name"`
-	Fields  []field `json:"fields"`
-	Methods []string
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Fields      []field  `json:"fields"`
+	Methods     []method `json:"methods"`
 }
 
 type orchestrator struct {
-	Name   string  `json:"name"`
-	Params []field `json:"params"`
-	Route  *route  `json:"route,omitempty"`
+	Name        string  `json:"name"`
+	Description string  `json:"description"`
+	Params      []field `json:"params"`
+	Route       *route  `json:"route,omitempty"`
 }
 
 type projection struct {
-	Name   string  `json:"name"`
-	Query  []field `json:"query"`
-	Result []field `json:"result"`
-	Route  *route  `json:"route,omitempty"`
+	Name        string  `json:"name"`
+	Description string  `json:"description"`
+	Query       []field `json:"query"`
+	Result      []field `json:"result"`
+	Route       *route  `json:"route,omitempty"`
 }
 
 type route struct {
@@ -143,6 +155,7 @@ func (i *interviewer) askConcepts() []concept {
 			continue
 		}
 		c := concept{Name: symbol}
+		c.Description = i.askLine(fmt.Sprintf("Description for concept %s (state invariants)", symbol))
 		c.Fields = i.askFields(symbol, "Field")
 		c.Methods = i.askMethods(symbol)
 		concepts = append(concepts, c)
@@ -163,6 +176,7 @@ func (i *interviewer) askOrchestrators() []orchestrator {
 			continue
 		}
 		o := orchestrator{Name: symbol}
+		o.Description = i.askLine(fmt.Sprintf("Description for orchestrator %s", symbol))
 		o.Params = i.askFields(symbol, "Param")
 		o.Route = i.askCommandRoute(symbol)
 		orchestrators = append(orchestrators, o)
@@ -183,6 +197,7 @@ func (i *interviewer) askProjections() []projection {
 			continue
 		}
 		p := projection{Name: symbol}
+		p.Description = i.askLine(fmt.Sprintf("Description for projection %s", symbol))
 		p.Query = i.askFields(symbol, "Query field")
 		p.Result = i.askFields(symbol, "Result field")
 		p.Route = i.askQueryRoute(symbol)
@@ -199,19 +214,24 @@ func (i *interviewer) askFields(owner, label string) []field {
 			break
 		}
 		typ, _ := i.askSingleWord("Type (string/int/bool/time/custom)", "string")
-		fields = append(fields, field{Name: symbolify(name), Type: typ})
+		desc := i.askLine(fmt.Sprintf("Description for %s %s", label, name))
+		fields = append(fields, field{Name: symbolify(name), Type: typ, Description: desc})
 	}
 	return fields
 }
 
-func (i *interviewer) askMethods(owner string) []string {
-	var methods []string
+func (i *interviewer) askMethods(owner string) []method {
+	var methods []method
 	for {
 		name, ok := i.askSingleWord(fmt.Sprintf("Method for %s", owner), "")
 		if !ok {
 			break
 		}
-		methods = append(methods, symbolify(name))
+		desc := i.askLine(fmt.Sprintf("Description for method %s.%s", owner, name))
+		invariant := i.askLine(fmt.Sprintf("Invariant for method %s.%s", owner, name))
+		pre := i.askLine(fmt.Sprintf("Pre-condition for method %s.%s", owner, name))
+		post := i.askLine(fmt.Sprintf("Post-condition for method %s.%s", owner, name))
+		methods = append(methods, method{Name: symbolify(name), Invariant: invariant, Description: desc, PreCondition: pre, PostCondition: post})
 	}
 	return methods
 }
@@ -270,7 +290,7 @@ func (i *interviewer) askSingleWord(prompt string, defaultValue string) (string,
 		if answer == "" && defaultValue != "" {
 			return defaultValue, true
 		}
-		if strings.EqualFold(answer, "done") {
+		if answer == "" || strings.EqualFold(answer, "done") {
 			return "", false
 		}
 		if strings.Contains(answer, " ") {
@@ -282,17 +302,15 @@ func (i *interviewer) askSingleWord(prompt string, defaultValue string) (string,
 }
 
 func (i *interviewer) askPhrase(prompt string) (string, bool) {
-	for {
-		answer := strings.TrimSpace(i.askLine(prompt))
-		if strings.EqualFold(answer, "done") {
-			return "", false
-		}
-		if answer == "" {
-			i.say("Please provide a short phrase or 'done'.")
-			continue
-		}
-		return answer, true
+	answer := strings.TrimSpace(i.askLine(prompt))
+	if strings.EqualFold(answer, "done") {
+		return "", false
 	}
+	if answer == "" {
+		// EOF or empty line treats as done
+		return "", false
+	}
+	return answer, true
 }
 
 func (i *interviewer) askLine(prompt string) string {
@@ -364,15 +382,39 @@ func buildScaffoldArgs(g graph) []string {
 		args = append(args, "--concept", c.Name)
 		for _, f := range c.Fields {
 			args = append(args, "--field", fmt.Sprintf("%s:%s:%s", c.Name, f.Name, f.Type))
+			if f.Description != "" {
+				args = append(args, "--field-doc", fmt.Sprintf("%s:%s:%s", c.Name, f.Name, f.Description))
+			}
 		}
 		for _, m := range c.Methods {
-			args = append(args, "--method", fmt.Sprintf("%s:%s", c.Name, m))
+			args = append(args, "--method", fmt.Sprintf("%s:%s", c.Name, m.Name))
+			if m.Invariant != "" {
+				args = append(args, "--invariant", fmt.Sprintf("%s:%s:%s", c.Name, m.Name, m.Invariant))
+			}
+			if m.Description != "" {
+				args = append(args, "--method-doc", fmt.Sprintf("%s:%s:%s", c.Name, m.Name, m.Description))
+			}
+			if m.PreCondition != "" {
+				args = append(args, "--pre", fmt.Sprintf("%s:%s:%s", c.Name, m.Name, m.PreCondition))
+			}
+			if m.PostCondition != "" {
+				args = append(args, "--post", fmt.Sprintf("%s:%s:%s", c.Name, m.Name, m.PostCondition))
+			}
+		}
+		if c.Description != "" {
+			args = append(args, "--description", fmt.Sprintf("%s:%s", c.Name, c.Description))
 		}
 	}
 	for _, o := range g.Orchestrators {
 		args = append(args, "--orchestrator", o.Name)
+		if o.Description != "" {
+			args = append(args, "--orchestrator-doc", fmt.Sprintf("%s:%s", o.Name, o.Description))
+		}
 		for _, p := range o.Params {
 			args = append(args, "--param", fmt.Sprintf("%s:%s:%s", o.Name, p.Name, p.Type))
+			if p.Description != "" {
+				args = append(args, "--param-doc", fmt.Sprintf("%s:%s:%s", o.Name, p.Name, p.Description))
+			}
 		}
 		if o.Route != nil {
 			args = append(args, "--route", fmt.Sprintf("%s:%s:%s", o.Route.Method, o.Route.Path, o.Route.Target))
@@ -380,11 +422,20 @@ func buildScaffoldArgs(g graph) []string {
 	}
 	for _, p := range g.Projections {
 		args = append(args, "--projection", p.Name)
+		if p.Description != "" {
+			args = append(args, "--projection-doc", fmt.Sprintf("%s:%s", p.Name, p.Description))
+		}
 		for _, q := range p.Query {
 			args = append(args, "--query", fmt.Sprintf("%s:%s:%s", p.Name, q.Name, q.Type))
+			if q.Description != "" {
+				args = append(args, "--query-doc", fmt.Sprintf("%s:%s:%s", p.Name, q.Name, q.Description))
+			}
 		}
 		for _, r := range p.Result {
 			args = append(args, "--result", fmt.Sprintf("%s:%s:%s", p.Name, r.Name, r.Type))
+			if r.Description != "" {
+				args = append(args, "--result-doc", fmt.Sprintf("%s:%s:%s", p.Name, r.Name, r.Description))
+			}
 		}
 		if p.Route != nil {
 			args = append(args, "--route", fmt.Sprintf("%s:%s:%s", p.Route.Method, p.Route.Path, p.Route.Target))

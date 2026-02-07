@@ -1,0 +1,108 @@
+{{ define "content" }}
+<div class="card">
+    <h1>🚨 Report Injury</h1>
+    <form method="POST" action="/injuries">
+        <input type="hidden" name="gorilla.csrf.Token" value="{{ .CSRFToken }}">
+
+        <div class="form-group">
+            <label for="id_MemberID">Member ID *</label>
+            <input type="text" id="id_MemberID" name="MemberID" required placeholder="Enter member UUID">
+            <small style="color: #666; font-size: 0.9rem;">Tip: Copy from member list</small>
+        </div>
+
+        <div class="form-group">
+            <label for="id_BodyPart">Injured Body Part *</label>
+            <select id="id_BodyPart" name="BodyPart" required>
+                <option value="">-- Select Body Part --</option>
+                <option value="knee">Knee</option>
+                <option value="shoulder">Shoulder</option>
+                <option value="back">Back</option>
+                <option value="neck">Neck</option>
+                <option value="ankle">Ankle</option>
+                <option value="wrist">Wrist</option>
+                <option value="elbow">Elbow</option>
+                <option value="hip">Hip</option>
+                <option value="ribs">Ribs</option>
+                <option value="other">Other</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="id_Description">Description *</label>
+            <textarea id="id_Description" name="Description" required rows="4"
+                placeholder="Describe the injury and any limitations..."></textarea>
+        </div>
+
+        <div
+            style="background: #fff3cd; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem; border-left: 4px solid #ffc107;">
+            <strong>Note:</strong> This injury will be flagged for 7 days to alert instructors.
+        </div>
+
+        <button type="submit" class="btn-primary">Report Injury</button>
+        <a href="/index.html" class="btn-secondary">Cancel</a>
+    </form>
+</div>
+
+<style>
+    .form-group {
+        margin-bottom: 1.5rem;
+    }
+
+    label {
+        display: block;
+        margin-bottom: 0.5rem;
+        font-weight: 600;
+        color: #333;
+    }
+
+    input[type="text"],
+    select,
+    textarea {
+        width: 100%;
+        padding: 0.75rem;
+        border: 2px solid #e0e0e0;
+        border-radius: 8px;
+        font-size: 1rem;
+        font-family: inherit;
+        transition: border-color 0.2s;
+    }
+
+    input:focus,
+    select:focus,
+    textarea:focus {
+        outline: none;
+        border-color: #ffc107;
+    }
+
+    .btn-primary {
+        background: #ffc107;
+        color: #333;
+        border: none;
+        padding: 0.75rem 2rem;
+        border-radius: 8px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        margin-right: 1rem;
+    }
+
+    .btn-primary:hover {
+        background: #ffb300;
+    }
+
+    .btn-secondary {
+        display: inline-block;
+        padding: 0.75rem 2rem;
+        color: #666;
+        text-decoration: none;
+        border: 2px solid #e0e0e0;
+        border-radius: 8px;
+        font-weight: 600;
+    }
+
+    .btn-secondary:hover {
+        border-color: #ffc107;
+        color: #ffc107;
+    }
+</style>
+{{ end }}

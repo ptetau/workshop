@@ -1,20 +1,245 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
+
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Workshop</title>
-  <link rel="stylesheet" href="styles.css" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Workshop Jiu Jitsu - Layer 1 Foundation</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2rem;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+    }
+
+    .container {
+      background: white;
+      border-radius: 16px;
+      padding: 2rem;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 3rem;
+      padding-bottom: 2rem;
+      border-bottom: 2px solid #f0f0f0;
+    }
+
+    h1 {
+      color: #667eea;
+      font-size: 2.5rem;
+      margin: 0 0 0.5rem 0;
+    }
+
+    .subtitle {
+      color: #666;
+      font-size: 1.1rem;
+    }
+
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .feature-card {
+      background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+      padding: 1.5rem;
+      border-radius: 12px;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .feature-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    }
+
+    .feature-card h3 {
+      margin: 0 0 0.5rem 0;
+      color: #333;
+      font-size: 1.3rem;
+    }
+
+    .feature-card p {
+      color: #666;
+      margin: 0 0 1rem 0;
+      font-size: 0.95rem;
+    }
+
+    .btn {
+      display: inline-block;
+      background: #667eea;
+      color: white;
+      padding: 0.75rem 1.5rem;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: 600;
+      transition: background 0.2s;
+      border: none;
+      cursor: pointer;
+      font-size: 1rem;
+    }
+
+    .btn:hover {
+      background: #5568d3;
+    }
+
+    .btn-secondary {
+      background: #48bb78;
+    }
+
+    .btn-secondary:hover {
+      background: #38a169;
+    }
+
+    .api-section {
+      background: #f8f9fa;
+      padding: 1.5rem;
+      border-radius: 12px;
+      margin-top: 2rem;
+    }
+
+    .api-section h2 {
+      margin: 0 0 1rem 0;
+      color: #333;
+    }
+
+    .endpoint {
+      background: white;
+      padding: 0.75rem 1rem;
+      margin: 0.5rem 0;
+      border-radius: 6px;
+      font-family: 'Courier New', monospace;
+      font-size: 0.9rem;
+      border-left: 4px solid #667eea;
+    }
+
+    .method {
+      display: inline-block;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      font-weight: bold;
+      margin-right: 0.5rem;
+      font-size: 0.8rem;
+    }
+
+    .method-get {
+      background: #48bb78;
+      color: white;
+    }
+
+    .method-post {
+      background: #4299e1;
+      color: white;
+    }
+
+    .status {
+      margin-top: 2rem;
+      padding: 1rem;
+      background: #e6fffa;
+      border-left: 4px solid #38b2ac;
+      border-radius: 6px;
+    }
+
+    .status h3 {
+      margin: 0 0 0.5rem 0;
+      color: #234e52;
+    }
+  </style>
 </head>
+
 <body>
-  <main class="page">
-    <section class="hero">
-      <h1>Workshop</h1>
-      <p>Go + HTML + CSS + JS, served static.</p>
-      <button id="ping" class="cta">Ping</button>
-      <span id="status" class="status" aria-live="polite"></span>
-    </section>
-  </main>
-  <script src="app.js"></script>
+  <div class="container">
+    <header>
+      <h1>🥋 Workshop Jiu Jitsu</h1>
+      <p class="subtitle">Layer 1: Foundation - Member Management & Safety</p>
+    </header>
+
+    <div class="features">
+      <div class="feature-card">
+        <h3>📝 Register Member</h3>
+        <p>Add new members to the system with email, name, and program selection.</p>
+        <a href="/members/register" class="btn">Register New Member</a>
+      </div>
+
+      <div class="feature-card">
+        <h3>👥 View Members</h3>
+        <p>See all registered members with their program and injury status.</p>
+        <a href="/members" class="btn btn-secondary">View Member List</a>
+      </div>
+
+      <div class="feature-card">
+        <h3>✅ Check In</h3>
+        <p>Record member attendance for today's training session.</p>
+        <a href="/checkin/form" class="btn">Check In Member</a>
+      </div>
+
+      <div class="feature-card">
+        <h3>📊 Today's Attendance</h3>
+        <p>View all members who checked in today with injury indicators.</p>
+        <a href="/attendance" class="btn btn-secondary">View Attendance</a>
+      </div>
+
+      <div class="feature-card">
+        <h3>🚨 Report Injury</h3>
+        <p>Flag injuries so instructors can provide appropriate modifications.</p>
+        <a href="/injuries/form" class="btn">Report Injury</a>
+      </div>
+
+      <div class="feature-card">
+        <h3>📄 Sign Waiver</h3>
+        <p>Digital waiver signing for new members and annual renewals.</p>
+        <a href="/waivers/form" class="btn">Sign Waiver</a>
+      </div>
+    </div>
+
+    <div class="api-section">
+      <h2>🔌 API Endpoints</h2>
+      <p>JSON API available for integration:</p>
+
+      <div class="endpoint">
+        <span class="method method-post">POST</span>
+        <span>/members</span> - Register member
+      </div>
+      <div class="endpoint">
+        <span class="method method-get">GET</span>
+        <span>/members</span> - List all members
+      </div>
+      <div class="endpoint">
+        <span class="method method-get">GET</span>
+        <span>/members/profile?id={id}</span> - Get member profile
+      </div>
+      <div class="endpoint">
+        <span class="method method-post">POST</span>
+        <span>/checkin</span> - Check in member
+      </div>
+      <div class="endpoint">
+        <span class="method method-get">GET</span>
+        <span>/attendance</span> - Today's attendance
+      </div>
+      <div class="endpoint">
+        <span class="method method-post">POST</span>
+        <span>/injuries</span> - Report injury
+      </div>
+      <div class="endpoint">
+        <span class="method method-post">POST</span>
+        <span>/waivers</span> - Sign waiver
+      </div>
+    </div>
+
+    <div class="status">
+      <h3>✅ System Status</h3>
+      <p><strong>Layer 1 Foundation:</strong> Fully operational</p>
+      <p><strong>Features:</strong> Member management, check-in tracking, injury reporting, waiver signing</p>
+      <p><strong>Database:</strong> SQLite with 4 tables (member, attendance, injury, waiver)</p>
+    </div>
+  </div>
 </body>
+
 </html>

@@ -198,18 +198,21 @@ echo "Build an e-commerce order system" | go run ./tools/interview --root C:\tem
 
 # Interactive Prompts - Enter:
 Concept: Order
-Field: Status → string → TotalCents → int → done
-Method: Approve → Cancel → done
+Description: Order domain entity
+Field: Status → string → Description: Order status → TotalCents → int → Description: Total amount → done
+Method: Approve → Description: Approves order → Invariant: status=approved → Pre: status=new → Post: status=approved → Cancel → Description: Cancels order → Invariant: status=cancelled → Pre: status!=shipped → Post: status=cancelled → done
 done (concepts)
 
 Orchestrator: Create Order
-Param: CustomerID → string → done
+Description: Creates a new order
+Param: CustomerID → string → Description: The customer ID → done
 Route: POST → /orders
 done (orchestrators)
 
 Projection: Order Summary
-Query: OrderID → string → done
-Result: Status → string → Total → int → done
+Description: Summary view of orders
+Query: OrderID → string → Description: filter by ID → done
+Result: Status → string → Description: status → Total → int → Description: total → done
 Route: /views/order-summary
 done (projections)
 

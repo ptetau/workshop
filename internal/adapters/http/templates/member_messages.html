@@ -1,0 +1,44 @@
+{{ define "content" }}
+<div class="card">
+    <h1>My Messages</h1>
+
+    <div id="msgList" style="color:#6c757d;">Loading...</div>
+
+    <p style="margin-top:2rem;"><a href="/dashboard" style="color:#007bff;text-decoration:none;font-weight:600;">← Back to Dashboard</a></p>
+</div>
+
+<script>
+var memberID = '{{ .MemberID }}';
+function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+function loadMessages() {
+    if (!memberID) return;
+    fetch('/api/messages?member_id='+memberID).then(r=>r.json()).then(data => {
+        var el = document.getElementById('msgList');
+        if (!data||data.length===0) { el.innerHTML='<p style="color:#6c757d;font-style:italic;">No messages.</p>'; return; }
+        el.innerHTML='';
+        data.forEach(m => {
+            var isUnread = !m.ReadAt || m.ReadAt === '0001-01-01T00:00:00Z';
+            el.innerHTML+='<div onclick="markRead(\''+m.ID+'\',this)" style="background:'+(isUnread?'#fff3e0':'#fff')+';border:1px solid #dee2e6;padding:1rem;border-radius:8px;margin-bottom:0.75rem;cursor:pointer;border-left:4px solid '+(isUnread?'#e65100':'#dee2e6')+';">'+
+                '<div style="display:flex;justify-content:space-between;align-items:center;">'+
+                '<strong>'+esc(m.Subject)+'</strong>'+
+                (isUnread?'<span style="font-size:0.75rem;padding:0.15rem 0.5rem;border-radius:12px;background:#e65100;color:#fff;">New</span>':'')+
+                '</div>'+
+                '<p style="margin:0.5rem 0 0;color:#555;">'+esc(m.Content)+'</p>'+
+                '<div style="font-size:0.8rem;color:#999;margin-top:0.5rem;">'+new Date(m.CreatedAt).toLocaleDateString()+'</div></div>';
+        });
+    }).catch(() => {
+        document.getElementById('msgList').innerHTML = '<p style="color:#6c757d;font-style:italic;">Could not load messages.</p>';
+    });
+}
+function markRead(id, el) {
+    fetch('/api/messages/read',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({MessageID:id})})
+    .then(() => {
+        el.style.background = '#fff';
+        el.style.borderLeftColor = '#dee2e6';
+        var badge = el.querySelector('span[style*="background:#e65100"]');
+        if (badge) badge.remove();
+    });
+}
+if (memberID) { loadMessages(); } else { document.getElementById('msgList').innerHTML = '<p style="color:#6c757d;font-style:italic;">No member profile linked to this account.</p>'; }
+</script>
+{{ end }}

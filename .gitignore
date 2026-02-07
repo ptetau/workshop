@@ -24,3 +24,8 @@ Thumbs.db
 bin/
 dist/
 tmp/
+
+# SQLite
+*.db
+*.db-shm
+*.db-wal

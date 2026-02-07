@@ -1,0 +1,55 @@
+{{ define "content" }}
+<div class="card">
+    <h1>📊 Today's Attendance</h1>
+
+    {{ if .Attendees }}
+    <p style="color: #666; margin-bottom: 1.5rem;">
+        <strong>{{ len .Attendees }}</strong> member(s) checked in today
+    </p>
+
+    <table style="width: 100%; border-collapse: collapse; margin: 1rem 0;">
+        <thead>
+            <tr style="background: #f8f9fa; border-bottom: 2px solid #dee2e6;">
+                <th style="padding: 0.75rem; text-align: left;">Member Name</th>
+                <th style="padding: 0.75rem; text-align: left;">Check-In Time</th>
+                <th style="padding: 0.75rem; text-align: center;">Injury Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{ range .Attendees }}
+            <tr style="border-bottom: 1px solid #dee2e6;">
+                <td style="padding: 0.75rem; font-weight: 600;">{{ .MemberName }}</td>
+                <td style="padding: 0.75rem; color: #666;">
+                    {{ .CheckInTime.Format "3:04 PM" }}
+                </td>
+                <td style="padding: 0.75rem; text-align: center;">
+                    {{ if .HasInjury }}
+                    <span
+                        style="display: inline-block; padding: 0.25rem 0.75rem; border-radius: 12px; background: #fff3cd; color: #856404; font-weight: 600; font-size: 0.9rem;">
+                        🚨 {{ .InjuryBodyPart }}
+                    </span>
+                    {{ else }}
+                    <span style="color: #28a745; font-weight: 600;">✓ No Injury</span>
+                    {{ end }}
+                </td>
+            </tr>
+            {{ end }}
+        </tbody>
+    </table>
+    {{ else }}
+    <div style="padding: 3rem; text-align: center; background: #f8f9fa; border-radius: 8px;">
+        <p style="color: #6c757d; font-size: 1.1rem; margin-bottom: 1rem;">No check-ins recorded today</p>
+        <a href="/checkin"
+            style="display: inline-block; background: #2196f3; color: white; padding: 0.75rem 1.5rem; border-radius: 8px; text-decoration: none; font-weight: 600;">
+            Check In Member
+        </a>
+    </div>
+    {{ end }}
+
+    <div style="margin-top: 2rem; padding-top: 2rem; border-top: 2px solid #f0f0f0;">
+        <a href="/dashboard" style="color: #667eea; text-decoration: none; font-weight: 600;">← Back to Dashboard</a>
+        <span style="margin: 0 1rem; color: #dee2e6;">|</span>
+        <a href="/members" style="color: #667eea; text-decoration: none; font-weight: 600;">View All Members</a>
+    </div>
+</div>
+{{ end }}

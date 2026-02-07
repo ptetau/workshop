@@ -1,0 +1,260 @@
+{
+  "version": 1,
+  "concepts": {
+    "Attendance": {
+      "name": "Attendance",
+      "description": "",
+      "fields": [
+        {
+          "name": "MemberID",
+          "type": "string"
+        },
+        {
+          "name": "CheckInTime",
+          "type": "time.Time"
+        },
+        {
+          "name": "CheckOutTime",
+          "type": "time.Time"
+        }
+      ],
+      "methods": null
+    },
+    "Injury": {
+      "name": "Injury",
+      "description": "",
+      "fields": [
+        {
+          "name": "MemberID",
+          "type": "string"
+        },
+        {
+          "name": "BodyPart",
+          "type": "string"
+        },
+        {
+          "name": "Description",
+          "type": "string"
+        },
+        {
+          "name": "ReportedAt",
+          "type": "time.Time"
+        }
+      ],
+      "methods": null
+    },
+    "Member": {
+      "name": "Member",
+      "description": "",
+      "fields": [
+        {
+          "name": "Name",
+          "type": "string"
+        },
+        {
+          "name": "Email",
+          "type": "string"
+        },
+        {
+          "name": "Program",
+          "type": "string"
+        },
+        {
+          "name": "Fee",
+          "type": "int"
+        },
+        {
+          "name": "Frequency",
+          "type": "string"
+        },
+        {
+          "name": "Status",
+          "type": "string"
+        }
+      ],
+      "methods": null
+    },
+    "Waiver": {
+      "name": "Waiver",
+      "description": "",
+      "fields": [
+        {
+          "name": "MemberID",
+          "type": "string"
+        },
+        {
+          "name": "SignedAt",
+          "type": "time.Time"
+        },
+        {
+          "name": "IPAddress",
+          "type": "string"
+        },
+        {
+          "name": "AcceptedTerms",
+          "type": "bool"
+        }
+      ],
+      "methods": null
+    }
+  },
+  "orchestrators": {
+    "CheckInMember": {
+      "name": "CheckInMember",
+      "params": [
+        {
+          "name": "MemberID",
+          "type": "string"
+        }
+      ]
+    },
+    "RegisterMember": {
+      "name": "RegisterMember",
+      "params": [
+        {
+          "name": "Name",
+          "type": "string"
+        },
+        {
+          "name": "Email",
+          "type": "string"
+        },
+        {
+          "name": "Program",
+          "type": "string"
+        }
+      ]
+    },
+    "ReportInjury": {
+      "name": "ReportInjury",
+      "params": [
+        {
+          "name": "MemberID",
+          "type": "string"
+        },
+        {
+          "name": "BodyPart",
+          "type": "string"
+        },
+        {
+          "name": "Description",
+          "type": "string"
+        }
+      ]
+    },
+    "SignWaiver": {
+      "name": "SignWaiver",
+      "params": [
+        {
+          "name": "MemberName",
+          "type": "string"
+        },
+        {
+          "name": "Email",
+          "type": "string"
+        },
+        {
+          "name": "AcceptedTerms",
+          "type": "bool"
+        }
+      ]
+    }
+  },
+  "projections": {
+    "GetAttendanceToday": {
+      "name": "GetAttendanceToday",
+      "query": [
+        {
+          "name": "Date",
+          "type": "string"
+        }
+      ],
+      "result": [
+        {
+          "name": "Attendees",
+          "type": "string"
+        }
+      ]
+    },
+    "GetMemberList": {
+      "name": "GetMemberList",
+      "query": [
+        {
+          "name": "Program",
+          "type": "string"
+        }
+      ],
+      "result": [
+        {
+          "name": "Members",
+          "type": "string"
+        }
+      ]
+    },
+    "GetMemberProfile": {
+      "name": "GetMemberProfile",
+      "query": [
+        {
+          "name": "MemberID",
+          "type": "string"
+        }
+      ],
+      "result": [
+        {
+          "name": "Name",
+          "type": "string"
+        },
+        {
+          "name": "Email",
+          "type": "string"
+        },
+        {
+          "name": "Status",
+          "type": "string"
+        }
+      ]
+    }
+  },
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/attendance",
+      "target": "GetAttendanceToday"
+    },
+    {
+      "method": "POST",
+      "path": "/checkin",
+      "target": "CheckInMember"
+    },
+    {
+      "method": "POST",
+      "path": "/injuries",
+      "target": "ReportInjury"
+    },
+    {
+      "method": "GET",
+      "path": "/members",
+      "target": "GetMemberList"
+    },
+    {
+      "method": "POST",
+      "path": "/members",
+      "target": "RegisterMember"
+    },
+    {
+      "method": "GET",
+      "path": "/members/profile",
+      "target": "GetMemberProfile"
+    },
+    {
+      "method": "GET",
+      "path": "/test",
+      "target": "TestQuery"
+    },
+    {
+      "method": "POST",
+      "path": "/waivers",
+      "target": "SignWaiver"
+    }
+  ]
+}

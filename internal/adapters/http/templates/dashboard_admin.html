@@ -1,0 +1,64 @@
+{{ define "content" }}
+<div class="card">
+    <h1>Admin Dashboard</h1>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin: 1.5rem 0;">
+        <div style="background: #e3f2fd; padding: 1.5rem; border-radius: 8px; text-align: center;">
+            <div style="font-size: 2rem; font-weight: bold; color: #1565c0;">{{ .PendingProposals }}</div>
+            <div style="color: #666; margin-top: 0.5rem;">Pending Grading Proposals</div>
+        </div>
+        <div style="background: #fff3e0; padding: 1.5rem; border-radius: 8px; text-align: center;">
+            <div style="font-size: 2rem; font-weight: bold; color: #e65100;">{{ .InactiveCount }}</div>
+            <div style="color: #666; margin-top: 0.5rem;">Inactive Members (30d)</div>
+        </div>
+    </div>
+
+    <h2>Today's Classes</h2>
+    {{ if .TodaysClasses }}
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 1.5rem;">
+        <thead>
+            <tr style="background: #f8f9fa; border-bottom: 2px solid #dee2e6;">
+                <th style="padding: 0.5rem; text-align: left;">Time</th>
+                <th style="padding: 0.5rem; text-align: left;">Class</th>
+                <th style="padding: 0.5rem; text-align: left;">Program</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{ range .TodaysClasses }}
+            <tr style="border-bottom: 1px solid #dee2e6;">
+                <td style="padding: 0.5rem;">{{ .StartTime }} - {{ .EndTime }}</td>
+                <td style="padding: 0.5rem; font-weight: 600;">{{ .ClassTypeName }}</td>
+                <td style="padding: 0.5rem;">{{ .ProgramName }}</td>
+            </tr>
+            {{ end }}
+        </tbody>
+    </table>
+    {{ else }}
+    <p style="color: #6c757d; font-style: italic;">No classes scheduled today.</p>
+    {{ end }}
+
+    {{ if .Notices }}
+    <h2>Recent Notices</h2>
+    {{ range .Notices }}
+    <div style="background: #f8f9fa; padding: 1rem; border-radius: 6px; margin-bottom: 0.75rem; border-left: 4px solid #007bff;">
+        <strong>{{ .Title }}</strong>
+        <p style="margin: 0.5rem 0 0; color: #555;">{{ .Content }}</p>
+    </div>
+    {{ end }}
+    {{ end }}
+
+    <h2>Quick Links</h2>
+    <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1rem;">
+        <a href="/members" style="background: #007bff; color: white; padding: 0.5rem 1rem; border-radius: 6px; text-decoration: none; font-weight: 600;">Members</a>
+        <a href="/attendance" style="background: #28a745; color: white; padding: 0.5rem 1rem; border-radius: 6px; text-decoration: none; font-weight: 600;">Attendance</a>
+        <a href="/kiosk" style="background: #6f42c1; color: white; padding: 0.5rem 1rem; border-radius: 6px; text-decoration: none; font-weight: 600;">Kiosk</a>
+        <a href="/admin/schedules" style="background: #17a2b8; color: white; padding: 0.5rem 1rem; border-radius: 6px; text-decoration: none; font-weight: 600;">Schedules</a>
+        <a href="/admin/holidays" style="background: #fd7e14; color: white; padding: 0.5rem 1rem; border-radius: 6px; text-decoration: none; font-weight: 600;">Holidays</a>
+        <a href="/admin/terms" style="background: #20c997; color: white; padding: 0.5rem 1rem; border-radius: 6px; text-decoration: none; font-weight: 600;">Terms</a>
+        <a href="/admin/accounts" style="background: #6c757d; color: white; padding: 0.5rem 1rem; border-radius: 6px; text-decoration: none; font-weight: 600;">Accounts</a>
+        <a href="/admin/notices" style="background: #e83e8c; color: white; padding: 0.5rem 1rem; border-radius: 6px; text-decoration: none; font-weight: 600;">Notices</a>
+        <a href="/admin/grading" style="background: #343a40; color: white; padding: 0.5rem 1rem; border-radius: 6px; text-decoration: none; font-weight: 600;">Grading</a>
+        <a href="/admin/inactive" style="background: #dc3545; color: white; padding: 0.5rem 1rem; border-radius: 6px; text-decoration: none; font-weight: 600;">Inactive Radar</a>
+        <a href="/admin/milestones" style="background: #ffc107; color: #333; padding: 0.5rem 1rem; border-radius: 6px; text-decoration: none; font-weight: 600;">Milestones</a>
+    </div>
+</div>
+{{ end }}
