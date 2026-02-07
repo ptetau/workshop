@@ -1,6 +1,6 @@
 {{ define "content" }}
 <div class="card">
-    <h1>My Dashboard</h1>
+    <h1>{{ if .TrainingLog }}Welcome back, {{ .TrainingLog.MemberName }}{{ else }}My Dashboard{{ end }}</h1>
 
     {{ if .TrainingLog }}
     <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin: 1.5rem 0;">
@@ -68,7 +68,7 @@
     <h2>Quick Links</h2>
     <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1rem;">
         <a href="/training-log" style="background: #007bff; color: white; padding: 0.5rem 1rem; border-radius: 6px; text-decoration: none; font-weight: 600;">Training Log</a>
-        <a href="/messages" style="background: #e83e8c; color: white; padding: 0.5rem 1rem; border-radius: 6px; text-decoration: none; font-weight: 600;">Messages</a>
+        <a href="/messages" style="background: #e83e8c; color: white; padding: 0.5rem 1rem; border-radius: 6px; text-decoration: none; font-weight: 600;">Messages{{ if gt .UnreadCount 0 }} <span style="background:#fff;color:#e83e8c;border-radius:10px;padding:0.1rem 0.5rem;font-size:0.8rem;margin-left:0.25rem;">{{ .UnreadCount }}</span>{{ end }}</a>
     </div>
 </div>
 {{ end }}

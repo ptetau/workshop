@@ -47,15 +47,17 @@ function loadTrainingLog() {
         document.getElementById('streak').textContent = (data.CurrentStreak || 0) + 'w';
 
         var el = document.getElementById('attendanceList');
-        if (!data.RecentSessions || data.RecentSessions.length === 0) {
+        if (!data.Entries || data.Entries.length === 0) {
             el.innerHTML = '<p style="color:#6c757d;font-style:italic;">No recent sessions.</p>';
             return;
         }
-        el.innerHTML = '<table style="width:100%;border-collapse:collapse;"><thead><tr style="background:#f8f9fa;border-bottom:2px solid #dee2e6;"><th style="padding:0.5rem;text-align:left;">Date</th><th style="padding:0.5rem;text-align:left;">Class</th><th style="padding:0.5rem;text-align:left;">Hours</th></tr></thead><tbody>';
-        data.RecentSessions.forEach(s => {
-            el.innerHTML += '<tr style="border-bottom:1px solid #dee2e6;"><td style="padding:0.5rem;">'+esc(s.Date)+'</td><td style="padding:0.5rem;">'+esc(s.ClassName)+'</td><td style="padding:0.5rem;">'+s.Hours+'h</td></tr>';
+        var recent = data.Entries.slice(0, 20);
+        var html = '<table style="width:100%;border-collapse:collapse;"><thead><tr style="background:#f8f9fa;border-bottom:2px solid #dee2e6;"><th style="padding:0.5rem;text-align:left;">Date</th><th style="padding:0.5rem;text-align:left;">Time</th><th style="padding:0.5rem;text-align:left;">Hours</th></tr></thead><tbody>';
+        recent.forEach(s => {
+            html += '<tr style="border-bottom:1px solid #dee2e6;"><td style="padding:0.5rem;">'+esc(s.Date)+'</td><td style="padding:0.5rem;">'+esc(s.CheckIn)+(s.CheckOut?' – '+esc(s.CheckOut):'')+'</td><td style="padding:0.5rem;">'+s.DurationH.toFixed(1)+'h</td></tr>';
         });
-        el.innerHTML += '</tbody></table>';
+        html += '</tbody></table>';
+        el.innerHTML = html;
     }).catch(() => {
         document.getElementById('attendanceList').innerHTML = '<p style="color:#6c757d;font-style:italic;">Could not load training log.</p>';
     });

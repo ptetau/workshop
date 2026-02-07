@@ -2,6 +2,17 @@
 <div class="card">
     <h1>Coach Dashboard</h1>
 
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1.5rem 0;">
+        <div style="background: #e8f5e9; padding: 1.25rem; border-radius: 8px; text-align: center;">
+            <div style="font-size: 1.75rem; font-weight: bold; color: #2e7d32;">{{ len .Attendees }}</div>
+            <div style="color: #666; margin-top: 0.25rem;">Checked In Today</div>
+        </div>
+        <div style="background: #e3f2fd; padding: 1.25rem; border-radius: 8px; text-align: center;">
+            <div style="font-size: 1.75rem; font-weight: bold; color: #1565c0;">{{ len .TodaysClasses }}</div>
+            <div style="color: #666; margin-top: 0.25rem;">Classes Today</div>
+        </div>
+    </div>
+
     <h2>Today's Classes</h2>
     {{ if .TodaysClasses }}
     <table style="width: 100%; border-collapse: collapse; margin-bottom: 1.5rem;">
