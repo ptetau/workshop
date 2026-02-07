@@ -9,7 +9,7 @@
     <div id="readinessList" style="color:#6c757d;">Loading...</div>
 
     <h2 style="margin-top:2rem;">Grading Config</h2>
-    <div style="background:#f8f9fa;padding:1.5rem;border-radius:8px;margin-bottom:1rem;">
+    <div style="background:#f8f9fa;padding:1.5rem;border-radius:2px;margin-bottom:1rem;">
         <h3 style="margin-top:0;">Add Config</h3>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:1rem;">
             <div class="form-group">
@@ -33,11 +33,11 @@
             </div>
         </div>
         <button onclick="createConfig()">Add Config</button>
-        <span id="cfgMsg" style="margin-left:1rem;color:#28a745;"></span>
+        <span id="cfgMsg" style="margin-left:1rem;color:#F9B232;"></span>
     </div>
     <div id="configList" style="color:#6c757d;">Loading...</div>
 
-    <p style="margin-top:2rem;"><a href="/dashboard" style="color:#007bff;text-decoration:none;font-weight:600;">← Back to Dashboard</a></p>
+    <p style="margin-top:2rem;"><a href="/dashboard" style="color:#F9B232;text-decoration:none;font-weight:600;">← Back to Dashboard</a></p>
 </div>
 
 <script>
@@ -48,9 +48,9 @@ function loadProposals() {
         el.innerHTML='';
         data.forEach(p => {
             var isPending = p.Status==='pending';
-            el.innerHTML+='<div style="background:#fff;border:1px solid #dee2e6;padding:1rem;border-radius:8px;margin-bottom:0.5rem;display:flex;justify-content:space-between;align-items:center;">'+
+            el.innerHTML+='<div style="background:#fff;border:1px solid #dee2e6;padding:1rem;border-radius:2px;margin-bottom:0.5rem;display:flex;justify-content:space-between;align-items:center;">'+
                 '<div><strong>'+p.MemberID.substring(0,8)+'...</strong> → '+p.TargetBelt+' <span style="font-size:0.8rem;color:#999;">('+p.Status+')</span></div>'+
-                (isPending?'<div><button onclick="decide(\''+p.ID+'\',\'approve\')" style="background:#28a745;padding:0.25rem 0.75rem;font-size:0.85rem;margin-right:0.5rem;">Approve</button><button onclick="decide(\''+p.ID+'\',\'reject\')" style="background:#dc3545;padding:0.25rem 0.75rem;font-size:0.85rem;">Reject</button></div>':'')+
+                (isPending?'<div><button onclick="decide(\''+p.ID+'\',\'approve\')" style="background:#F9B232;padding:0.25rem 0.75rem;font-size:0.85rem;margin-right:0.5rem;">Approve</button><button onclick="decide(\''+p.ID+'\',\'reject\')" style="background:#dc3545;padding:0.25rem 0.75rem;font-size:0.85rem;">Reject</button></div>':'')+
                 '</div>';
         });
     });

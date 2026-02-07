@@ -1,11 +1,11 @@
 {{ define "content" }}
 <div class="card">
     <h1>Theme Carousel</h1>
-    <p style="color:#666;margin-bottom:1.5rem;">Current technical blocks for structured study. Each theme runs for 4 weeks.</p>
+    <p style="color:var(--text-muted);margin-bottom:1.5rem;">Current technical blocks for structured study. Each theme runs for 4 weeks.</p>
 
     {{ if eq .Role "admin" "coach" }}
-    <details style="margin-bottom:2rem;background:#f8f9fa;padding:1rem;border-radius:8px;">
-        <summary style="cursor:pointer;font-weight:bold;">Create New Theme</summary>
+    <details style="margin-bottom:2rem;background:var(--bg);padding:1rem;">
+        <summary style="cursor:pointer;font-weight:600;font-size:0.85rem;text-transform:uppercase;letter-spacing:0.5px;">Create New Theme</summary>
         <form id="createThemeForm" style="margin-top:1rem;">
             <div class="form-group">
                 <label for="themeName">Theme Name</label>
@@ -44,7 +44,7 @@
     <div id="pastThemes"></div>
 
     <p style="margin-top:2rem;">
-        <a href="/library" style="color:#007bff;font-weight:600;">View Technical Library →</a>
+        <a href="/library" style="font-weight:600;">View Technical Library →</a>
     </p>
     <p><a href="/dashboard">← Back to Dashboard</a></p>
 </div>
@@ -81,19 +81,19 @@ function renderThemeCard(t, status) {
     var week = weekNumber(t.StartDate, t.EndDate);
     var badge = '';
     if (status === 'active') {
-        badge = '<span style="background:#28a745;color:#fff;padding:0.2rem 0.6rem;border-radius:12px;font-size:0.8rem;font-weight:600;">Week '+week+' of 4</span>';
+        badge = '<span style="background:#F9B232;color:#fff;padding:0.2rem 0.6rem;font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Week '+week+' of 4</span>';
     } else if (status === 'upcoming') {
-        badge = '<span style="background:#ffc107;color:#333;padding:0.2rem 0.6rem;border-radius:12px;font-size:0.8rem;font-weight:600;">Starts '+formatDate(t.StartDate)+'</span>';
+        badge = '<span style="background:#1A1B1F;color:#fff;padding:0.2rem 0.6rem;font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Starts '+formatDate(t.StartDate)+'</span>';
     }
     var prog = t.Program === 'adults' ? '🥋 Adults' : '👦 Kids';
-    return '<div style="background:#fff;border:2px solid '+(status==='active'?'#28a745':'#dee2e6')+';padding:1.25rem;border-radius:8px;margin-bottom:1rem;">'
+    return '<div style="background:#fff;border:1px solid '+(status==='active'?'#F9B232':'#e0e0e0')+';padding:1.25rem;margin-bottom:1rem;"'+(status==='active'?' border-left:3px solid #F9B232;':'')+'>'
         + '<div style="display:flex;justify-content:space-between;align-items:center;">'
         + '<strong style="font-size:1.1rem;">'+esc(t.Name)+'</strong>'
         + badge
         + '</div>'
-        + '<div style="color:#666;margin-top:0.5rem;">'+prog+' · '+formatDate(t.StartDate)+' – '+formatDate(t.EndDate)+'</div>'
-        + (t.Description ? '<p style="margin:0.5rem 0 0;color:#555;">'+esc(t.Description)+'</p>' : '')
-        + '<div style="margin-top:0.75rem;"><a href="/library?theme_id='+esc(t.ID)+'" style="color:#007bff;font-weight:600;text-decoration:none;">View Clips →</a></div>'
+        + '<div style="color:#6c757d;margin-top:0.5rem;font-size:0.85rem;">'+prog+' · '+formatDate(t.StartDate)+' – '+formatDate(t.EndDate)+'</div>'
+        + (t.Description ? '<p style="margin:0.5rem 0 0;color:#333;font-size:0.9rem;">'+esc(t.Description)+'</p>' : '')
+        + '<div style="margin-top:0.75rem;"><a href="/library?theme_id='+esc(t.ID)+'" style="color:#F9B232;font-weight:600;text-decoration:none;font-size:0.85rem;">View Clips →</a></div>'
         + '</div>';
 }
 

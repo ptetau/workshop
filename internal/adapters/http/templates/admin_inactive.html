@@ -10,7 +10,7 @@
 
     <div id="inactiveList" style="color:#6c757d;">Loading...</div>
 
-    <p style="margin-top:2rem;"><a href="/dashboard" style="color:#007bff;text-decoration:none;font-weight:600;">← Back to Dashboard</a></p>
+    <p style="margin-top:2rem;"><a href="/dashboard" style="color:#F9B232;text-decoration:none;font-weight:600;">← Back to Dashboard</a></p>
 </div>
 
 <script>
@@ -18,7 +18,7 @@ function loadInactive() {
     var days = document.getElementById('days').value || 30;
     fetch('/api/members/inactive?days='+days).then(r=>r.json()).then(data => {
         var el = document.getElementById('inactiveList');
-        if (!data||data.length===0) { el.innerHTML='<p style="color:#28a745;font-weight:600;">No inactive members for this period.</p>'; return; }
+        if (!data||data.length===0) { el.innerHTML='<p style="color:#F9B232;font-weight:600;">No inactive members for this period.</p>'; return; }
         el.innerHTML='<table style="width:100%;border-collapse:collapse;"><thead><tr style="background:#f8f9fa;border-bottom:2px solid #dee2e6;"><th style="padding:0.5rem;text-align:left;">Name</th><th style="padding:0.5rem;text-align:left;">Email</th><th style="padding:0.5rem;text-align:left;">Last Check-In</th><th style="padding:0.5rem;text-align:right;">Actions</th></tr></thead><tbody>';
         data.forEach(m => {
             var lastDate = m.LastCheckIn ? m.LastCheckIn.substring(0,10) : 'Never';

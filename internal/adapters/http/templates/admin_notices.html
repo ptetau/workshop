@@ -2,7 +2,7 @@
 <div class="card">
     <h1>Notice Management</h1>
 
-    <div style="background:#f8f9fa;padding:1.5rem;border-radius:8px;margin-bottom:2rem;">
+    <div style="background:#f8f9fa;padding:1.5rem;border-radius:2px;margin-bottom:2rem;">
         <h3 style="margin-top:0;">Create Notice</h3>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
             <div class="form-group">
@@ -22,13 +22,13 @@
             <input type="text" id="noticeContent" placeholder="Notice content...">
         </div>
         <button onclick="createNotice()">Create &amp; Publish</button>
-        <span id="formMsg" style="margin-left:1rem;color:#28a745;"></span>
+        <span id="formMsg" style="margin-left:1rem;color:#F9B232;"></span>
     </div>
 
     <h2>All Notices</h2>
     <div id="noticeList" style="color:#6c757d;">Loading...</div>
 
-    <p style="margin-top:2rem;"><a href="/dashboard" style="color:#007bff;text-decoration:none;font-weight:600;">← Back to Dashboard</a></p>
+    <p style="margin-top:2rem;"><a href="/dashboard" style="color:#F9B232;text-decoration:none;font-weight:600;">← Back to Dashboard</a></p>
 </div>
 
 <script>
@@ -38,9 +38,9 @@ function loadNotices() {
         if (!data||data.length===0) { el.innerHTML='<p style="color:#6c757d;font-style:italic;">No notices yet.</p>'; return; }
         el.innerHTML='';
         data.forEach(n => {
-            var statusColor = n.Status==='published'?'#28a745':'#ffc107';
-            var publishBtn = n.Status!=='published'?'<button onclick="publishNotice(\''+n.ID+'\')" style="background:#28a745;padding:0.25rem 0.75rem;font-size:0.85rem;margin-left:0.5rem;">Publish</button>':'';
-            el.innerHTML+='<div style="background:#fff;border:1px solid #dee2e6;padding:1rem;border-radius:8px;margin-bottom:0.75rem;border-left:4px solid '+statusColor+';">'+
+            var statusColor = n.Status==='published'?'#F9B232':'#ffc107';
+            var publishBtn = n.Status!=='published'?'<button onclick="publishNotice(\''+n.ID+'\')" style="background:#F9B232;padding:0.25rem 0.75rem;font-size:0.85rem;margin-left:0.5rem;">Publish</button>':'';
+            el.innerHTML+='<div style="background:#fff;border:1px solid #dee2e6;padding:1rem;border-radius:2px;margin-bottom:0.75rem;border-left:4px solid '+statusColor+';">'+
                 '<div style="display:flex;justify-content:space-between;align-items:center;">'+
                 '<strong>'+n.Title+'</strong>'+
                 '<span style="font-size:0.8rem;padding:0.15rem 0.5rem;border-radius:12px;background:'+(n.Status==='published'?'#e8f5e9':'#fff3e0')+';color:'+(n.Status==='published'?'#2e7d32':'#e65100')+';">'+n.Status+'</span></div>'+

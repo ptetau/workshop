@@ -1,7 +1,7 @@
 {{ define "content" }}
 <div class="card">
     <h1>Technical Library</h1>
-    <p style="color:#666;margin-bottom:1.5rem;">Curated clips promoted by coaches. Isolate sequences and study on repeat.</p>
+    <p style="color:var(--text-muted);margin-bottom:1.5rem;">Curated clips promoted by coaches. Isolate sequences and study on repeat.</p>
 
     <div style="display:flex;gap:1rem;margin-bottom:1.5rem;flex-wrap:wrap;align-items:center;">
         <select id="filterTheme" style="width:auto;min-width:200px;">
@@ -14,20 +14,20 @@
 
     <div id="clipGrid"></div>
 
-    <div id="clipPlayer" style="display:none;margin-top:2rem;background:#000;border-radius:8px;overflow:hidden;">
+    <div id="clipPlayer" style="display:none;margin-top:2rem;background:#000;border-radius:2px;overflow:hidden;">
         <div id="playerContainer" style="position:relative;padding-bottom:56.25%;height:0;">
             <iframe id="ytPlayer" style="position:absolute;top:0;left:0;width:100%;height:100%;" frameborder="0" allow="autoplay;encrypted-media" allowfullscreen></iframe>
         </div>
         <div id="playerInfo" style="background:#1a1a1a;padding:1rem;color:#fff;">
             <strong id="playerTitle"></strong>
             <span id="playerTime" style="color:#aaa;margin-left:1rem;"></span>
-            <button onclick="closePlayer()" style="float:right;background:#dc3545;padding:0.4rem 0.8rem;font-size:0.85rem;">Close</button>
+            <button onclick="closePlayer()" style="float:right;background:#F9B232;padding:0.4rem 0.8rem;font-size:0.8rem;">Close</button>
         </div>
     </div>
 
     {{ if eq .Role "admin" "coach" "member" }}
-    <details id="addClipSection" style="margin-top:2rem;background:#f8f9fa;padding:1rem;border-radius:8px;">
-        <summary style="cursor:pointer;font-weight:bold;">Add a Clip</summary>
+    <details id="addClipSection" style="margin-top:2rem;background:var(--bg);padding:1rem;">
+        <summary style="cursor:pointer;font-weight:600;font-size:0.85rem;text-transform:uppercase;letter-spacing:0.5px;">Add a Clip</summary>
         <form id="createClipForm" style="margin-top:1rem;">
             <div class="form-group">
                 <label for="clipTheme">Theme</label>
@@ -61,9 +61,9 @@
     {{ end }}
 
     <p style="margin-top:2rem;">
-        <a href="/themes" style="color:#007bff;font-weight:600;">← View Themes</a>
+        <a href="/themes" style="font-weight:600;">&larr; View Themes</a>
         &nbsp;·&nbsp;
-        <a href="/dashboard">← Back to Dashboard</a>
+        <a href="/dashboard">&larr; Back to Dashboard</a>
     </p>
 </div>
 
@@ -123,12 +123,12 @@ function loadClips() {
         clips.forEach(c => {
             var thumb = c.YouTubeID ? 'https://img.youtube.com/vi/'+esc(c.YouTubeID)+'/mqdefault.jpg' : '';
             var dur = c.EndSeconds - c.StartSeconds;
-            var promoteBadge = c.Promoted ? '<span style="background:#28a745;color:#fff;padding:0.15rem 0.5rem;border-radius:10px;font-size:0.75rem;">Promoted</span>' : '';
+            var promoteBadge = c.Promoted ? '<span style="background:#F9B232;color:#fff;padding:0.15rem 0.5rem;font-size:0.7rem;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Promoted</span>' : '';
             var promoteBtn = '';
             if (!c.Promoted && (userRole === 'admin' || userRole === 'coach')) {
-                promoteBtn = '<button onclick="promoteClip(\''+esc(c.ID)+'\')" style="background:#6f42c1;padding:0.3rem 0.6rem;font-size:0.8rem;margin-top:0.5rem;">Promote</button>';
+                promoteBtn = '<button onclick="promoteClip(\''+esc(c.ID)+'\')" style="background:#1A1B1F;padding:0.3rem 0.6rem;font-size:0.75rem;margin-top:0.5rem;letter-spacing:0.5px;">Promote</button>';
             }
-            html += '<div style="background:#fff;border:1px solid #dee2e6;border-radius:8px;overflow:hidden;cursor:pointer;" onclick="playClip(\''+esc(c.YouTubeID)+'\','+c.StartSeconds+','+c.EndSeconds+',\''+esc(c.Title)+'\')">'
+            html += '<div style="background:#fff;border:1px solid #e0e0e0;overflow:hidden;cursor:pointer;" onclick="playClip(\''+esc(c.YouTubeID)+'\','+c.StartSeconds+','+c.EndSeconds+',\''+esc(c.Title)+'\')">'
                 + (thumb ? '<img src="'+thumb+'" style="width:100%;height:160px;object-fit:cover;" alt="">' : '<div style="height:160px;background:#333;"></div>')
                 + '<div style="padding:0.75rem;">'
                 + '<div style="display:flex;justify-content:space-between;align-items:start;">'

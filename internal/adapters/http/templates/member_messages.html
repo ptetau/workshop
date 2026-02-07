@@ -4,7 +4,7 @@
 
     <div id="msgList" style="color:#6c757d;">Loading...</div>
 
-    <p style="margin-top:2rem;"><a href="/dashboard" style="color:#007bff;text-decoration:none;font-weight:600;">← Back to Dashboard</a></p>
+    <p style="margin-top:2rem;"><a href="/dashboard" style="color:#F9B232;text-decoration:none;font-weight:600;">← Back to Dashboard</a></p>
 </div>
 
 <script>
@@ -18,7 +18,7 @@ function loadMessages() {
         el.innerHTML='';
         data.forEach(m => {
             var isUnread = !m.ReadAt || m.ReadAt === '0001-01-01T00:00:00Z';
-            el.innerHTML+='<div onclick="markRead(\''+m.ID+'\',this)" style="background:'+(isUnread?'#fff3e0':'#fff')+';border:1px solid #dee2e6;padding:1rem;border-radius:8px;margin-bottom:0.75rem;cursor:pointer;border-left:4px solid '+(isUnread?'#e65100':'#dee2e6')+';">'+
+            el.innerHTML+='<div onclick="markRead(\''+m.ID+'\',this)" style="background:'+(isUnread?'#fff3e0':'#fff')+';border:1px solid #dee2e6;padding:1rem;border-radius:2px;margin-bottom:0.75rem;cursor:pointer;border-left:4px solid '+(isUnread?'#e65100':'#dee2e6')+';">'+
                 '<div style="display:flex;justify-content:space-between;align-items:center;">'+
                 '<strong>'+esc(m.Subject)+'</strong>'+
                 (isUnread?'<span style="font-size:0.75rem;padding:0.15rem 0.5rem;border-radius:12px;background:#e65100;color:#fff;">New</span>':'')+

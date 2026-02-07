@@ -26,7 +26,7 @@
                 </td>
                 <td style="padding: 0.75rem; text-align: center;">
                     {{ if eq .Status "active" }}
-                    <span style="color: #28a745; font-weight: 600;">✓ Active</span>
+                    <span style="color: #F9B232; font-weight: 600;">✓ Active</span>
                     {{ else }}
                     <span style="color: #dc3545; font-weight: 600;">✗ Inactive</span>
                     {{ end }}
@@ -47,14 +47,14 @@
     </table>
     {{ else }}
     <p
-        style="color: #6c757d; font-style: italic; padding: 2rem; text-align: center; background: #f8f9fa; border-radius: 8px;">
-        No members registered yet. <a href="/members" style="color: #007bff; text-decoration: underline;">Register a new
+        style="color: #6c757d; font-style: italic; padding: 2rem; text-align: center; background: #f8f9fa; border-radius:2px;">
+        No members registered yet. <a href="/members" style="color: #F9B232; text-decoration: underline;">Register a new
             member</a>
     </p>
     {{ end }}
 
     <p style="margin-top: 2rem;">
-        <a href="/dashboard" style="color: #007bff; text-decoration: none; font-weight: 600;">← Back to Dashboard</a>
+        <a href="/dashboard" style="color: #F9B232; text-decoration: none; font-weight: 600;">← Back to Dashboard</a>
     </p>
 </div>
 {{ end }}

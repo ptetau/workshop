@@ -3,25 +3,25 @@
     <h1>👤 Member Profile</h1>
 
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
-        <div style="background: #f8f9fa; padding: 1.25rem; border-radius: 8px;">
+        <div style="background: #f8f9fa; padding: 1.25rem; border-radius:2px;">
             <div style="color: #666; font-size: 0.85rem; margin-bottom: 0.25rem;">Name</div>
             <div style="font-size: 1.2rem; font-weight: 600;">{{ .Name }}</div>
         </div>
-        <div style="background: #f8f9fa; padding: 1.25rem; border-radius: 8px;">
+        <div style="background: #f8f9fa; padding: 1.25rem; border-radius:2px;">
             <div style="color: #666; font-size: 0.85rem; margin-bottom: 0.25rem;">Email</div>
             <div style="font-size: 1.2rem;">{{ .Email }}</div>
         </div>
-        <div style="background: #f8f9fa; padding: 1.25rem; border-radius: 8px;">
+        <div style="background: #f8f9fa; padding: 1.25rem; border-radius:2px;">
             <div style="color: #666; font-size: 0.85rem; margin-bottom: 0.25rem;">Program</div>
             <div>
                 <span style="display: inline-block; padding: 0.25rem 0.75rem; border-radius: 12px; font-size: 0.85rem; font-weight: 600; background: #e3f2fd; color: #1976d2;">{{ .Program }}</span>
             </div>
         </div>
-        <div style="background: #f8f9fa; padding: 1.25rem; border-radius: 8px;">
+        <div style="background: #f8f9fa; padding: 1.25rem; border-radius:2px;">
             <div style="color: #666; font-size: 0.85rem; margin-bottom: 0.25rem;">Status</div>
             <div>
                 {{ if eq .Status "active" }}
-                <span style="color: #28a745; font-weight: 600;">✓ Active</span>
+                <span style="color: #F9B232; font-weight: 600;">✓ Active</span>
                 {{ else }}
                 <span style="color: #dc3545; font-weight: 600;">✗ Inactive</span>
                 {{ end }}
@@ -30,7 +30,7 @@
     </div>
 
     <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
-        <div style="background: {{ if .HasValidWaiver }}#e8f5e9{{ else }}#fff3cd{{ end }}; padding: 1.25rem; border-radius: 8px; text-align: center;">
+        <div style="background: {{ if .HasValidWaiver }}#e8f5e9{{ else }}#fff3cd{{ end }}; padding: 1.25rem; border-radius:2px; text-align: center;">
             <div style="font-size: 2rem; margin-bottom: 0.5rem;">📄</div>
             <div style="font-weight: 600; margin-bottom: 0.25rem;">Waiver</div>
             {{ if .HasValidWaiver }}
@@ -40,19 +40,19 @@
             {{ end }}
         </div>
 
-        <div style="background: {{ if .ActiveInjuries }}#fff3cd{{ else }}#e8f5e9{{ end }}; padding: 1.25rem; border-radius: 8px; text-align: center;">
+        <div style="background: {{ if .ActiveInjuries }}#fff3cd{{ else }}#e8f5e9{{ end }}; padding: 1.25rem; border-radius:2px; text-align: center;">
             <div style="font-size: 2rem; margin-bottom: 0.5rem;">🚨</div>
             <div style="font-weight: 600; margin-bottom: 0.25rem;">Injuries</div>
             {{ if .ActiveInjuries }}
                 {{ range .ActiveInjuries }}
-                <span style="display: inline-block; padding: 0.15rem 0.5rem; border-radius: 8px; background: #ffecb3; color: #856404; font-size: 0.85rem; margin: 0.15rem;">{{ . }}</span>
+                <span style="display: inline-block; padding: 0.15rem 0.5rem; border-radius:2px; background: #ffecb3; color: #856404; font-size: 0.85rem; margin: 0.15rem;">{{ . }}</span>
                 {{ end }}
             {{ else }}
             <span style="color: #2e7d32; font-weight: 600;">None</span>
             {{ end }}
         </div>
 
-        <div style="background: #e3f2fd; padding: 1.25rem; border-radius: 8px; text-align: center;">
+        <div style="background: #e3f2fd; padding: 1.25rem; border-radius:2px; text-align: center;">
             <div style="font-size: 2rem; margin-bottom: 0.5rem;">📊</div>
             <div style="font-weight: 600; margin-bottom: 0.25rem;">Attendance (30d)</div>
             <span style="font-size: 1.5rem; font-weight: 700; color: #1565c0;">{{ .RecentAttendance }}</span>
@@ -70,14 +70,14 @@
     {{ end }}
 
     {{ if eq (currentRole) "admin" }}
-    <div style="margin-top:2rem;padding:1.5rem;background:#f8f9fa;border-radius:8px;">
+    <div style="margin-top:2rem;padding:1.5rem;background:#f8f9fa;border-radius:2px;">
         <h3 style="margin-top:0;">Admin Actions</h3>
         {{ if eq .Status "active" }}
         <button onclick="archiveMember()" style="background:#dc3545;">Archive Member</button>
         {{ else }}
-        <button onclick="restoreMember()" style="background:#28a745;">Restore Member</button>
+        <button onclick="restoreMember()" style="background:#F9B232;">Restore Member</button>
         {{ end }}
-        <span id="actionMsg" style="margin-left:1rem;color:#28a745;"></span>
+        <span id="actionMsg" style="margin-left:1rem;color:#F9B232;"></span>
     </div>
     {{ end }}
 
@@ -97,7 +97,7 @@ function loadObservations() {
         if (!data||data.length===0) { el.innerHTML='<p style="color:#6c757d;font-style:italic;">No observations yet.</p>'; return; }
         el.innerHTML='';
         data.forEach(o => {
-            el.innerHTML+='<div style="background:#fff;border:1px solid #dee2e6;padding:0.75rem;border-radius:6px;margin-bottom:0.5rem;border-left:3px solid #6f42c1;">'+
+            el.innerHTML+='<div style="background:#fff;border:1px solid #dee2e6;padding:0.75rem;border-radius:2px;margin-bottom:0.5rem;border-left:3px solid #1A1B1F;">'+
                 '<p style="margin:0;">'+o.Content+'</p>'+
                 '<div style="font-size:0.8rem;color:#999;margin-top:0.25rem;">'+new Date(o.CreatedAt).toLocaleDateString()+'</div></div>';
         });
