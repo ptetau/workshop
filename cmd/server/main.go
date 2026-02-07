@@ -13,6 +13,7 @@ import (
 	accountStore "workshop/internal/adapters/storage/account"
 	attendanceStore "workshop/internal/adapters/storage/attendance"
 	classTypeStore "workshop/internal/adapters/storage/classtype"
+	clipStorePkg "workshop/internal/adapters/storage/clip"
 	gradingStore "workshop/internal/adapters/storage/grading"
 	holidayStore "workshop/internal/adapters/storage/holiday"
 	injuryStore "workshop/internal/adapters/storage/injury"
@@ -24,6 +25,7 @@ import (
 	programStore "workshop/internal/adapters/storage/program"
 	scheduleStore "workshop/internal/adapters/storage/schedule"
 	termStore "workshop/internal/adapters/storage/term"
+	themeStorePkg "workshop/internal/adapters/storage/theme"
 	trainingGoalStore "workshop/internal/adapters/storage/traininggoal"
 	waiverStore "workshop/internal/adapters/storage/waiver"
 	"workshop/internal/application/orchestrators"
@@ -77,6 +79,8 @@ func main() {
 		ObservationStore:     observationStore.NewSQLiteStore(db),
 		MilestoneStore:       milestoneStore.NewSQLiteStore(db),
 		TrainingGoalStore:    trainingGoalStore.NewSQLiteStore(db),
+		ThemeStore:           themeStorePkg.NewSQLiteStore(db),
+		ClipStore:            clipStorePkg.NewSQLiteStore(db),
 	}
 
 	// Seed default admin account if no accounts exist
@@ -114,6 +118,8 @@ func main() {
 		MilestoneStore:       stores.MilestoneStore,
 		TrainingGoalStore:    stores.TrainingGoalStore,
 		ClassTypeStore:       stores.ClassTypeStore,
+		ThemeStore:           stores.ThemeStore,
+		ClipStore:            stores.ClipStore,
 	}
 	if err := orchestrators.ExecuteSeedSynthetic(context.Background(), synDeps, adminAcct.ID); err != nil {
 		log.Fatalf("failed to seed synthetic data: %v", err)
@@ -123,7 +129,7 @@ func main() {
 	mux := web.NewMux("static", stores)
 
 	// Start server
-	log.Println("Layer 1a+1b Core Operations + Engagement is ready!")
+	log.Println("Layer 1a+1b+2 Core Operations + Engagement + Spine is ready!")
 	log.Println("Server starting on http://localhost:8080")
 	log.Println("\nAvailable endpoints:")
 	log.Println("  GET  /login                 - Login page")

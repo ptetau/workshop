@@ -1,0 +1,141 @@
+{{ define "content" }}
+<div class="card">
+    <h1>Theme Carousel</h1>
+    <p style="color:#666;margin-bottom:1.5rem;">Current technical blocks for structured study. Each theme runs for 4 weeks.</p>
+
+    {{ if eq .Role "admin" "coach" }}
+    <details style="margin-bottom:2rem;background:#f8f9fa;padding:1rem;border-radius:8px;">
+        <summary style="cursor:pointer;font-weight:bold;">Create New Theme</summary>
+        <form id="createThemeForm" style="margin-top:1rem;">
+            <div class="form-group">
+                <label for="themeName">Theme Name</label>
+                <input type="text" id="themeName" placeholder="e.g. Leg Lasso Series" required>
+            </div>
+            <div class="form-group">
+                <label for="themeDesc">Description</label>
+                <input type="text" id="themeDesc" placeholder="Brief summary of the technical focus">
+            </div>
+            <div class="form-group">
+                <label for="themeProgram">Program</label>
+                <select id="themeProgram">
+                    <option value="adults">Adults</option>
+                    <option value="kids">Kids</option>
+                </select>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+                <div class="form-group">
+                    <label for="themeStart">Start Date</label>
+                    <input type="date" id="themeStart" required>
+                </div>
+                <div class="form-group">
+                    <label for="themeEnd">End Date</label>
+                    <input type="date" id="themeEnd" required>
+                </div>
+            </div>
+            <button type="submit">Create Theme</button>
+        </form>
+    </details>
+    {{ end }}
+
+    <div id="activeThemes"></div>
+    <h2 style="margin-top:2rem;">Upcoming</h2>
+    <div id="upcomingThemes"></div>
+    <h2 style="margin-top:2rem;">Past Themes</h2>
+    <div id="pastThemes"></div>
+
+    <p style="margin-top:2rem;">
+        <a href="/library" style="color:#007bff;font-weight:600;">View Technical Library →</a>
+    </p>
+    <p><a href="/dashboard">← Back to Dashboard</a></p>
+</div>
+
+<script>
+var userRole = '{{ .Role }}';
+function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+
+function formatDate(d) {
+    if (!d) return '';
+    return new Date(d).toLocaleDateString('en-NZ', {day:'numeric',month:'short',year:'numeric'});
+}
+
+function weekNumber(start, end) {
+    var now = new Date();
+    var s = new Date(start);
+    var e = new Date(end);
+    if (now < s || now > e) return 0;
+    var days = Math.floor((now - s) / (1000*60*60*24));
+    var w = Math.floor(days / 7) + 1;
+    return w > 4 ? 4 : w;
+}
+
+function themeStatus(start, end) {
+    var now = new Date();
+    var s = new Date(start);
+    var e = new Date(end);
+    if (now < s) return 'upcoming';
+    if (now > e) return 'completed';
+    return 'active';
+}
+
+function renderThemeCard(t, status) {
+    var week = weekNumber(t.StartDate, t.EndDate);
+    var badge = '';
+    if (status === 'active') {
+        badge = '<span style="background:#28a745;color:#fff;padding:0.2rem 0.6rem;border-radius:12px;font-size:0.8rem;font-weight:600;">Week '+week+' of 4</span>';
+    } else if (status === 'upcoming') {
+        badge = '<span style="background:#ffc107;color:#333;padding:0.2rem 0.6rem;border-radius:12px;font-size:0.8rem;font-weight:600;">Starts '+formatDate(t.StartDate)+'</span>';
+    }
+    var prog = t.Program === 'adults' ? '🥋 Adults' : '👦 Kids';
+    return '<div style="background:#fff;border:2px solid '+(status==='active'?'#28a745':'#dee2e6')+';padding:1.25rem;border-radius:8px;margin-bottom:1rem;">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;">'
+        + '<strong style="font-size:1.1rem;">'+esc(t.Name)+'</strong>'
+        + badge
+        + '</div>'
+        + '<div style="color:#666;margin-top:0.5rem;">'+prog+' · '+formatDate(t.StartDate)+' – '+formatDate(t.EndDate)+'</div>'
+        + (t.Description ? '<p style="margin:0.5rem 0 0;color:#555;">'+esc(t.Description)+'</p>' : '')
+        + '<div style="margin-top:0.75rem;"><a href="/library?theme_id='+esc(t.ID)+'" style="color:#007bff;font-weight:600;text-decoration:none;">View Clips →</a></div>'
+        + '</div>';
+}
+
+function loadThemes() {
+    fetch('/api/themes').then(r=>r.json()).then(themes => {
+        var active = '', upcoming = '', past = '';
+        themes.forEach(t => {
+            var s = themeStatus(t.StartDate, t.EndDate);
+            if (s === 'active') active += renderThemeCard(t, s);
+            else if (s === 'upcoming') upcoming += renderThemeCard(t, s);
+            else past += renderThemeCard(t, s);
+        });
+        document.getElementById('activeThemes').innerHTML = active || '<p style="color:#6c757d;font-style:italic;">No active themes right now.</p>';
+        document.getElementById('upcomingThemes').innerHTML = upcoming || '<p style="color:#6c757d;font-style:italic;">No upcoming themes.</p>';
+        document.getElementById('pastThemes').innerHTML = past || '<p style="color:#6c757d;font-style:italic;">No past themes.</p>';
+    });
+}
+
+document.addEventListener('DOMContentLoaded', loadThemes);
+
+var form = document.getElementById('createThemeForm');
+if (form) {
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        fetch('/api/themes', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({
+                Name: document.getElementById('themeName').value,
+                Description: document.getElementById('themeDesc').value,
+                Program: document.getElementById('themeProgram').value,
+                StartDate: document.getElementById('themeStart').value,
+                EndDate: document.getElementById('themeEnd').value
+            })
+        }).then(r => {
+            if (!r.ok) return r.text().then(t => { throw new Error(t); });
+            return r.json();
+        }).then(() => {
+            form.reset();
+            loadThemes();
+        }).catch(err => alert('Error: ' + err.message));
+    });
+}
+</script>
+{{ end }}

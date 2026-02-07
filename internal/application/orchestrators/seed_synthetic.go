@@ -9,6 +9,7 @@ import (
 	"workshop/internal/domain/account"
 	"workshop/internal/domain/attendance"
 	"workshop/internal/domain/classtype"
+	"workshop/internal/domain/clip"
 	"workshop/internal/domain/grading"
 	"workshop/internal/domain/holiday"
 	"workshop/internal/domain/injury"
@@ -19,6 +20,7 @@ import (
 	"workshop/internal/domain/observation"
 	"workshop/internal/domain/schedule"
 	"workshop/internal/domain/term"
+	"workshop/internal/domain/theme"
 	"workshop/internal/domain/traininggoal"
 	"workshop/internal/domain/waiver"
 
@@ -46,6 +48,8 @@ type SyntheticSeedDeps struct {
 	MilestoneStore       synMilestoneStore
 	TrainingGoalStore    synTrainingGoalStore
 	ClassTypeStore       synClassTypeStore
+	ThemeStore           synThemeStore
+	ClipStore            synClipStore
 }
 
 type synMemberStore interface {
@@ -106,6 +110,13 @@ type synAccountStore interface {
 type synClassTypeStore interface {
 	List(ctx context.Context) ([]classtype.ClassType, error)
 }
+type synThemeStore interface {
+	Save(ctx context.Context, t theme.Theme) error
+	List(ctx context.Context) ([]theme.Theme, error)
+}
+type synClipStore interface {
+	Save(ctx context.Context, c clip.Clip) error
+}
 
 // ExecuteSeedSynthetic populates the database with realistic BJJ school data.
 // It is idempotent — skips if members already exist beyond the initial seed.
@@ -114,12 +125,28 @@ func ExecuteSeedSynthetic(ctx context.Context, deps SyntheticSeedDeps, adminAcco
 	if err != nil {
 		return fmt.Errorf("seed_synthetic: list members: %w", err)
 	}
+	now := time.Now()
+
+	// --- Layer 2: Themes & Clips (runs independently of member seeding) ---
+	if deps.ThemeStore != nil && deps.ClipStore != nil {
+		existingThemes, _ := deps.ThemeStore.List(ctx)
+		if len(existingThemes) == 0 {
+			// Need a coach ID for CreatedBy — try to find existing coach
+			coachForThemes := adminAccountID
+			existingCoach, coachErr := deps.AccountStore.GetByEmail(ctx, "coach@workshop.co.nz")
+			if coachErr == nil {
+				coachForThemes = existingCoach.ID
+			}
+			if err := seedThemesAndClips(ctx, deps, now, coachForThemes); err != nil {
+				return err
+			}
+		}
+	}
+
 	if len(existing) > 5 {
 		slog.Info("seed_event", "event", "synthetic_skip", "reason", "already_seeded")
 		return nil
 	}
-
-	now := time.Now()
 
 	// --- Coach account ---
 	coachAccountID := ""
@@ -645,4 +672,80 @@ func dayOfWeek(w time.Weekday) string {
 		return "sunday"
 	}
 	return ""
+}
+
+// seedThemesAndClips creates realistic BJJ technical themes and study clips.
+// PRE: deps.ThemeStore and deps.ClipStore are non-nil
+// POST: 4 themes and 7 clips are persisted
+func seedThemesAndClips(ctx context.Context, deps SyntheticSeedDeps, now time.Time, createdBy string) error {
+	themeData := []struct {
+		name   string
+		desc   string
+		prog   string
+		offset int
+	}{
+		{"Leg Lasso Series", "Controlling distance and off-balancing from open guard using the leg lasso grip system.", "adults", -14},
+		{"Closed Guard Attacks", "Cross-collar chokes, arm bars, and triangle setups from closed guard.", "adults", 14},
+		{"Half Guard Sweeps", "Underhook recovery, deep half transitions, and the Lucas Leite sweep series.", "adults", -42},
+		{"Animal Movements", "Fun warmups and coordination drills: bear crawls, shrimping, and technical stand-ups.", "kids", -7},
+	}
+	themeIDs := make([]string, len(themeData))
+	for i, td := range themeData {
+		themeIDs[i] = uuid.New().String()
+		start := now.AddDate(0, 0, td.offset)
+		t := theme.Theme{
+			ID:          themeIDs[i],
+			Name:        td.name,
+			Description: td.desc,
+			Program:     td.prog,
+			StartDate:   start,
+			EndDate:     start.AddDate(0, 0, 27),
+			CreatedBy:   createdBy,
+			CreatedAt:   now.AddDate(0, 0, td.offset-1),
+		}
+		if err := deps.ThemeStore.Save(ctx, t); err != nil {
+			return fmt.Errorf("seed theme: %w", err)
+		}
+	}
+
+	clipData := []struct {
+		themeIdx int
+		title    string
+		url      string
+		start    int
+		end      int
+		notes    string
+		promoted bool
+	}{
+		{0, "Lachlan Giles Leg Lasso Sweep", "https://www.youtube.com/watch?v=JxDl1yvMLj0", 45, 78, "Watch the hip angle when entering lasso", true},
+		{0, "Leg Lasso to Omoplata", "https://www.youtube.com/watch?v=JxDl1yvMLj0", 120, 155, "Key detail: control the sleeve before inverting", true},
+		{0, "Lasso Guard Retention", "https://www.youtube.com/watch?v=JxDl1yvMLj0", 200, 230, "Re-lasso after guard pass attempt", false},
+		{2, "Deep Half Entry from Half Guard", "https://www.youtube.com/watch?v=eVDCKbWRnOA", 30, 60, "Duck under the crossface and scoop the far leg", true},
+		{2, "Lucas Leite Sweep", "https://www.youtube.com/watch?v=eVDCKbWRnOA", 90, 125, "Classic sweep from deep half — waiter sweep variation", true},
+		{1, "Roger Gracie Cross-Collar Choke", "https://www.youtube.com/watch?v=2o-YDvHbfl4", 15, 50, "Posture break, first grip deep, elbow to the mat", false},
+		{3, "Bear Crawl Technique", "https://www.youtube.com/watch?v=CLJGMi3NFWI", 10, 35, "Keep hips low, opposite hand and foot", true},
+	}
+	for _, cd := range clipData {
+		c := clip.Clip{
+			ID:           uuid.New().String(),
+			ThemeID:      themeIDs[cd.themeIdx],
+			Title:        cd.title,
+			YouTubeURL:   cd.url,
+			StartSeconds: cd.start,
+			EndSeconds:   cd.end,
+			Notes:        cd.notes,
+			CreatedBy:    createdBy,
+			Promoted:     cd.promoted,
+			CreatedAt:    now.AddDate(0, 0, -3),
+		}
+		if cd.promoted {
+			c.PromotedBy = createdBy
+		}
+		_ = c.ExtractYouTubeID()
+		if err := deps.ClipStore.Save(ctx, c); err != nil {
+			return fmt.Errorf("seed clip: %w", err)
+		}
+	}
+	slog.Info("seed_event", "event", "themes_clips_seeded", "themes", len(themeData), "clips", len(clipData))
+	return nil
 }

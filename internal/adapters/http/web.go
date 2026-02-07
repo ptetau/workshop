@@ -8,6 +8,7 @@ import (
 	accountStore "workshop/internal/adapters/storage/account"
 	attendanceStore "workshop/internal/adapters/storage/attendance"
 	classTypeStore "workshop/internal/adapters/storage/classtype"
+	clipStore "workshop/internal/adapters/storage/clip"
 	gradingStore "workshop/internal/adapters/storage/grading"
 	holidayStore "workshop/internal/adapters/storage/holiday"
 	injuryStore "workshop/internal/adapters/storage/injury"
@@ -19,6 +20,7 @@ import (
 	programStore "workshop/internal/adapters/storage/program"
 	scheduleStore "workshop/internal/adapters/storage/schedule"
 	termStore "workshop/internal/adapters/storage/term"
+	themeStore "workshop/internal/adapters/storage/theme"
 	trainingGoalStore "workshop/internal/adapters/storage/traininggoal"
 	waiverStore "workshop/internal/adapters/storage/waiver"
 )
@@ -43,6 +45,8 @@ type Stores struct {
 	ObservationStore     observationStore.Store
 	MilestoneStore       milestoneStore.Store
 	TrainingGoalStore    trainingGoalStore.Store
+	ThemeStore           themeStore.Store
+	ClipStore            clipStore.Store
 }
 
 // Global stores instance (set by NewMux)

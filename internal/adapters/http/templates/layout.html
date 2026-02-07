@@ -41,6 +41,10 @@
             <a href="/training-log">Training Log</a>
             <a href="/messages">Messages</a>
             {{ end }}
+            {{ if or (eq (currentRole) "admin") (eq (currentRole) "coach") (eq (currentRole) "member") }}
+            <a href="/themes">Themes</a>
+            <a href="/library">Library</a>
+            {{ end }}
             <form method="POST" action="/logout" style="display:inline;margin-left:auto;">
                 <input type="hidden" name="gorilla.csrf.Token" value="{{ csrfToken }}">
                 <button type="submit" style="background:none;border:none;color:#fff;cursor:pointer;font-weight:bold;font-size:1rem;">Logout</button>

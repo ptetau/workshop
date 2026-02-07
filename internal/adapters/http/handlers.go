@@ -20,6 +20,7 @@ import (
 	"workshop/internal/application/orchestrators"
 	"workshop/internal/application/projections"
 	accountDomain "workshop/internal/domain/account"
+	clipDomain "workshop/internal/domain/clip"
 	gradingDomain "workshop/internal/domain/grading"
 	holidayDomain "workshop/internal/domain/holiday"
 	messageDomain "workshop/internal/domain/message"
@@ -28,6 +29,7 @@ import (
 	observationDomain "workshop/internal/domain/observation"
 	scheduleDomain "workshop/internal/domain/schedule"
 	termDomain "workshop/internal/domain/term"
+	themeDomain "workshop/internal/domain/theme"
 	trainingGoalDomain "workshop/internal/domain/traininggoal"
 )
 
@@ -2165,4 +2167,255 @@ func handleKioskPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tpl.Execute(w, nil)
+}
+
+// --- Layer 2: Spine Handlers ---
+
+// handleThemes handles GET/POST for /api/themes
+func handleThemes(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if r.Method == "GET" {
+		if _, ok := middleware.GetSessionFromContext(ctx); !ok {
+			http.Error(w, "not authenticated", http.StatusUnauthorized)
+			return
+		}
+		program := r.URL.Query().Get("program")
+		var themes []themeDomain.Theme
+		var err error
+		if program != "" {
+			themes, err = stores.ThemeStore.ListByProgram(ctx, program)
+		} else {
+			themes, err = stores.ThemeStore.List(ctx)
+		}
+		if err != nil {
+			internalError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if themes == nil {
+			w.Write([]byte("[]"))
+			return
+		}
+		json.NewEncoder(w).Encode(themes)
+		return
+	}
+
+	if r.Method == "POST" {
+		sess, ok := middleware.GetSessionFromContext(ctx)
+		if !ok {
+			http.Error(w, "not authenticated", http.StatusUnauthorized)
+			return
+		}
+		if sess.Role != "admin" && sess.Role != "coach" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		var input struct {
+			Name        string `json:"Name"`
+			Description string `json:"Description"`
+			Program     string `json:"Program"`
+			StartDate   string `json:"StartDate"`
+			EndDate     string `json:"EndDate"`
+		}
+		if err := strictDecode(r, &input); err != nil {
+			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			return
+		}
+		startDate, err := time.Parse("2006-01-02", input.StartDate)
+		if err != nil {
+			http.Error(w, "invalid start date format (use YYYY-MM-DD)", http.StatusBadRequest)
+			return
+		}
+		endDate, err := time.Parse("2006-01-02", input.EndDate)
+		if err != nil {
+			http.Error(w, "invalid end date format (use YYYY-MM-DD)", http.StatusBadRequest)
+			return
+		}
+		theme := themeDomain.Theme{
+			ID:          generateID(),
+			Name:        input.Name,
+			Description: input.Description,
+			Program:     input.Program,
+			StartDate:   startDate,
+			EndDate:     endDate,
+			CreatedBy:   sess.AccountID,
+			CreatedAt:   timeNow(),
+		}
+		if err := theme.Validate(); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := stores.ThemeStore.Save(ctx, theme); err != nil {
+			internalError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(theme)
+		return
+	}
+
+	w.WriteHeader(http.StatusMethodNotAllowed)
+}
+
+// handleClips handles GET/POST for /api/clips
+func handleClips(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if r.Method == "GET" {
+		if _, ok := middleware.GetSessionFromContext(ctx); !ok {
+			http.Error(w, "not authenticated", http.StatusUnauthorized)
+			return
+		}
+		themeID := r.URL.Query().Get("theme_id")
+		promoted := r.URL.Query().Get("promoted")
+		var clips []clipDomain.Clip
+		var err error
+		if promoted == "true" {
+			clips, err = stores.ClipStore.ListPromoted(ctx)
+		} else if themeID != "" {
+			clips, err = stores.ClipStore.ListByThemeID(ctx, themeID)
+		} else {
+			http.Error(w, "theme_id or promoted=true is required", http.StatusBadRequest)
+			return
+		}
+		if err != nil {
+			internalError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if clips == nil {
+			w.Write([]byte("[]"))
+			return
+		}
+		json.NewEncoder(w).Encode(clips)
+		return
+	}
+
+	if r.Method == "POST" {
+		sess, ok := middleware.GetSessionFromContext(ctx)
+		if !ok {
+			http.Error(w, "not authenticated", http.StatusUnauthorized)
+			return
+		}
+		var input struct {
+			ThemeID      string `json:"ThemeID"`
+			Title        string `json:"Title"`
+			YouTubeURL   string `json:"YouTubeURL"`
+			StartSeconds int    `json:"StartSeconds"`
+			EndSeconds   int    `json:"EndSeconds"`
+			Notes        string `json:"Notes"`
+		}
+		if err := strictDecode(r, &input); err != nil {
+			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			return
+		}
+		clip := clipDomain.Clip{
+			ID:           generateID(),
+			ThemeID:      input.ThemeID,
+			Title:        input.Title,
+			YouTubeURL:   input.YouTubeURL,
+			StartSeconds: input.StartSeconds,
+			EndSeconds:   input.EndSeconds,
+			Notes:        input.Notes,
+			CreatedBy:    sess.AccountID,
+			CreatedAt:    timeNow(),
+		}
+		if err := clip.Validate(); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := clip.ExtractYouTubeID(); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := stores.ClipStore.Save(ctx, clip); err != nil {
+			internalError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(clip)
+		return
+	}
+
+	w.WriteHeader(http.StatusMethodNotAllowed)
+}
+
+// handleClipPromote handles POST /api/clips/promote
+func handleClipPromote(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	sess, ok := middleware.GetSessionFromContext(r.Context())
+	if !ok {
+		http.Error(w, "not authenticated", http.StatusUnauthorized)
+		return
+	}
+	if sess.Role != "admin" && sess.Role != "coach" {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	var input struct {
+		ClipID string `json:"ClipID"`
+	}
+	if err := strictDecode(r, &input); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if input.ClipID == "" {
+		http.Error(w, "ClipID is required", http.StatusBadRequest)
+		return
+	}
+	clip, err := stores.ClipStore.GetByID(r.Context(), input.ClipID)
+	if err != nil {
+		http.Error(w, "clip not found", http.StatusNotFound)
+		return
+	}
+	if err := clip.Promote(sess.AccountID); err != nil {
+		http.Error(w, err.Error(), http.StatusConflict)
+		return
+	}
+	if err := stores.ClipStore.Save(r.Context(), clip); err != nil {
+		internalError(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(clip)
+}
+
+// handleThemesPage handles GET /themes — renders the theme carousel page.
+func handleThemesPage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	sess, ok := middleware.GetSessionFromContext(r.Context())
+	if !ok {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	renderTemplate(w, r, "themes.html", map[string]any{
+		"Email": sess.Email,
+		"Role":  sess.Role,
+	})
+}
+
+// handleLibraryPage handles GET /library — renders the technical library page.
+func handleLibraryPage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	sess, ok := middleware.GetSessionFromContext(r.Context())
+	if !ok {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	renderTemplate(w, r, "library.html", map[string]any{
+		"Email": sess.Email,
+		"Role":  sess.Role,
+	})
 }
