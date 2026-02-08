@@ -29,3 +29,16 @@ tmp/
 *.db
 *.db-shm
 *.db-wal
+
+# Secrets — NEVER commit these
+.env
+.env.*
+*.pem
+*.key
+deploy_key
+*.p12
+
+# Deployment artifacts
+workshop
+workshop.new
+ruleset*.json

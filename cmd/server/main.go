@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"log"
 	"net/http"
+	"os"
 
 	_ "modernc.org/sqlite"
 
@@ -84,8 +85,10 @@ func main() {
 	}
 
 	// Seed default admin account if no accounts exist
+	adminEmail := envOrDefault("WORKSHOP_ADMIN_EMAIL", "admin@workshop.co.nz")
+	adminPassword := envOrDefault("WORKSHOP_ADMIN_PASSWORD", "workshop12345!")
 	seedDeps := orchestrators.CreateAccountDeps{AccountStore: acctStore}
-	if err := orchestrators.ExecuteSeedAdmin(context.Background(), seedDeps, "admin@workshop.co.nz", "workshop12345!"); err != nil {
+	if err := orchestrators.ExecuteSeedAdmin(context.Background(), seedDeps, adminEmail, adminPassword); err != nil {
 		log.Fatalf("failed to seed admin: %v", err)
 	}
 
@@ -95,70 +98,54 @@ func main() {
 		log.Fatalf("failed to seed programs: %v", err)
 	}
 
-	// Seed synthetic data for development
-	adminAcct, err := acctStore.GetByEmail(context.Background(), "admin@workshop.co.nz")
-	if err != nil {
-		log.Fatalf("failed to get admin account for seeding: %v", err)
-	}
-	synDeps := orchestrators.SyntheticSeedDeps{
-		AccountStore:         acctStore,
-		MemberStore:          stores.MemberStore,
-		WaiverStore:          stores.WaiverStore,
-		InjuryStore:          stores.InjuryStore,
-		AttendanceStore:      stores.AttendanceStore,
-		ScheduleStore:        stores.ScheduleStore,
-		TermStore:            stores.TermStore,
-		HolidayStore:         stores.HolidayStore,
-		NoticeStore:          stores.NoticeStore,
-		GradingRecordStore:   stores.GradingRecordStore,
-		GradingConfigStore:   stores.GradingConfigStore,
-		GradingProposalStore: stores.GradingProposalStore,
-		MessageStore:         stores.MessageStore,
-		ObservationStore:     stores.ObservationStore,
-		MilestoneStore:       stores.MilestoneStore,
-		TrainingGoalStore:    stores.TrainingGoalStore,
-		ClassTypeStore:       stores.ClassTypeStore,
-		ThemeStore:           stores.ThemeStore,
-		ClipStore:            stores.ClipStore,
-	}
-	if err := orchestrators.ExecuteSeedSynthetic(context.Background(), synDeps, adminAcct.ID); err != nil {
-		log.Fatalf("failed to seed synthetic data: %v", err)
+	// Seed synthetic data for development only
+	if os.Getenv("WORKSHOP_ENV") != "production" {
+		adminAcct, err := acctStore.GetByEmail(context.Background(), adminEmail)
+		if err != nil {
+			log.Fatalf("failed to get admin account for seeding: %v", err)
+		}
+		synDeps := orchestrators.SyntheticSeedDeps{
+			AccountStore:         acctStore,
+			MemberStore:          stores.MemberStore,
+			WaiverStore:          stores.WaiverStore,
+			InjuryStore:          stores.InjuryStore,
+			AttendanceStore:      stores.AttendanceStore,
+			ScheduleStore:        stores.ScheduleStore,
+			TermStore:            stores.TermStore,
+			HolidayStore:         stores.HolidayStore,
+			NoticeStore:          stores.NoticeStore,
+			GradingRecordStore:   stores.GradingRecordStore,
+			GradingConfigStore:   stores.GradingConfigStore,
+			GradingProposalStore: stores.GradingProposalStore,
+			MessageStore:         stores.MessageStore,
+			ObservationStore:     stores.ObservationStore,
+			MilestoneStore:       stores.MilestoneStore,
+			TrainingGoalStore:    stores.TrainingGoalStore,
+			ClassTypeStore:       stores.ClassTypeStore,
+			ThemeStore:           stores.ThemeStore,
+			ClipStore:            stores.ClipStore,
+		}
+		if err := orchestrators.ExecuteSeedSynthetic(context.Background(), synDeps, adminAcct.ID); err != nil {
+			log.Fatalf("failed to seed synthetic data: %v", err)
+		}
+		log.Println("Synthetic seed data loaded (dev mode)")
 	}
 
 	// Create HTTP handler with middleware
 	mux := web.NewMux("static", stores)
 
 	// Start server
-	log.Println("Layer 1a+1b+2 Core Operations + Engagement + Spine is ready!")
-	log.Println("Server starting on http://localhost:8080")
-	log.Println("\nAvailable endpoints:")
-	log.Println("  GET  /login                 - Login page")
-	log.Println("  POST /login                 - Authenticate")
-	log.Println("  POST /logout                - Log out")
-	log.Println("  POST /members               - Register member")
-	log.Println("  GET  /members               - List members")
-	log.Println("  GET  /members/profile       - Get member profile")
-	log.Println("  POST /checkin               - Check in member")
-	log.Println("  GET  /attendance            - Today's attendance")
-	log.Println("  POST /injuries              - Report injury")
-	log.Println("  POST /waivers               - Sign waiver")
-	log.Println("  GET  /api/members/search    - Search members by name")
-	log.Println("  POST /api/members/archive   - Archive a member")
-	log.Println("  POST /api/members/restore   - Restore archived member")
-	log.Println("  POST /api/guest/checkin     - Guest check-in + waiver")
-	log.Println("  GET  /api/classes/today     - Today's classes")
-	log.Println("  POST /api/kiosk/launch      - Launch kiosk mode")
-	log.Println("  POST /api/kiosk/exit        - Exit kiosk mode")
-	log.Println("  --- Layer 1b: Engagement ---")
-	log.Println("  GET  /api/training-log      - Member training log")
-	log.Println("  GET  /api/members/inactive  - Inactive member radar")
-	log.Println("  *    /api/notices           - Notices (GET/POST)")
-	log.Println("  *    /api/grading/proposals - Grading proposals (GET/POST)")
-	log.Println("  *    /api/messages          - Direct messages (GET/POST)")
-	log.Println("  *    /api/observations      - Coach observations (GET/POST)")
-	log.Println("\nDefault admin: admin@workshop.co.nz / workshop12345!")
+	addr := envOrDefault("WORKSHOP_ADDR", ":8080")
+	log.Printf("Server starting on %s (env=%s)", addr, envOrDefault("WORKSHOP_ENV", "development"))
 
-	if err := http.ListenAndServe(":8080", mux); err != nil {
+	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Fatalf("Server failed: %v", err)
 	}
+}
+
+func envOrDefault(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
 }
