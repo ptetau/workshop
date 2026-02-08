@@ -63,22 +63,24 @@ function loadReadiness() {
     fetch('/api/grading/readiness').then(r=>r.json()).then(data => {
         var el = document.getElementById('readinessList');
         if (!data||data.length===0) { el.innerHTML='<p style="color:#6c757d;font-style:italic;">No members approaching eligibility.</p>'; return; }
-        el.innerHTML='<table style="width:100%;border-collapse:collapse;"><thead><tr style="background:#f8f9fa;border-bottom:2px solid #dee2e6;"><th style="padding:0.5rem;text-align:left;">Member</th><th style="padding:0.5rem;text-align:left;">Belt</th><th style="padding:0.5rem;text-align:left;">Hours</th><th style="padding:0.5rem;text-align:left;">Progress</th></tr></thead><tbody>';
+        var html='<table style="width:100%;border-collapse:collapse;"><thead><tr style="border-bottom:2px solid var(--border);"><th style="padding:0.5rem;text-align:left;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);">Member</th><th style="padding:0.5rem;text-align:left;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);">Belt</th><th style="padding:0.5rem;text-align:left;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);">Hours</th><th style="padding:0.5rem;text-align:left;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);">Progress</th></tr></thead><tbody>';
         data.forEach(m => {
-            el.innerHTML+='<tr style="border-bottom:1px solid #dee2e6;"><td style="padding:0.5rem;font-weight:600;">'+m.MemberName+'</td><td style="padding:0.5rem;">'+m.CurrentBelt+'</td><td style="padding:0.5rem;">'+m.FlightTimeHours+'h</td><td style="padding:0.5rem;">'+m.ProgressPct+'%</td></tr>';
+            html+='<tr style="border-bottom:1px solid var(--border);"><td style="padding:0.5rem;font-weight:600;">'+m.MemberName+'</td><td style="padding:0.5rem;">'+m.CurrentBelt+'</td><td style="padding:0.5rem;">'+m.FlightTimeHours+'h</td><td style="padding:0.5rem;">'+m.ProgressPct+'%</td></tr>';
         });
-        el.innerHTML+='</tbody></table>';
+        html+='</tbody></table>';
+        el.innerHTML=html;
     }).catch(()=>{document.getElementById('readinessList').innerHTML='<p style="color:#6c757d;font-style:italic;">Could not load readiness data.</p>';});
 }
 function loadConfigs() {
     fetch('/api/grading/config').then(r=>r.json()).then(data => {
         var el = document.getElementById('configList');
         if (!data||data.length===0) { el.innerHTML='<p style="color:#6c757d;font-style:italic;">No configs.</p>'; return; }
-        el.innerHTML='<table style="width:100%;border-collapse:collapse;"><thead><tr style="background:#f8f9fa;border-bottom:2px solid #dee2e6;"><th style="padding:0.5rem;text-align:left;">Program</th><th style="padding:0.5rem;text-align:left;">Belt</th><th style="padding:0.5rem;text-align:left;">Flight Time</th><th style="padding:0.5rem;text-align:left;">Stripes</th></tr></thead><tbody>';
+        var html='<table style="width:100%;border-collapse:collapse;"><thead><tr style="border-bottom:2px solid var(--border);"><th style="padding:0.5rem;text-align:left;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);">Program</th><th style="padding:0.5rem;text-align:left;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);">Belt</th><th style="padding:0.5rem;text-align:left;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);">Flight Time</th><th style="padding:0.5rem;text-align:left;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);">Stripes</th></tr></thead><tbody>';
         data.forEach(c => {
-            el.innerHTML+='<tr style="border-bottom:1px solid #dee2e6;"><td style="padding:0.5rem;">'+c.Program+'</td><td style="padding:0.5rem;font-weight:600;">'+c.Belt+'</td><td style="padding:0.5rem;">'+c.FlightTimeHours+'h</td><td style="padding:0.5rem;">'+c.StripeCount+'</td></tr>';
+            html+='<tr style="border-bottom:1px solid var(--border);"><td style="padding:0.5rem;">'+c.Program+'</td><td style="padding:0.5rem;font-weight:600;">'+c.Belt+'</td><td style="padding:0.5rem;">'+c.FlightTimeHours+'h</td><td style="padding:0.5rem;">'+c.StripeCount+'</td></tr>';
         });
-        el.innerHTML+='</tbody></table>';
+        html+='</tbody></table>';
+        el.innerHTML=html;
     });
 }
 function createConfig() {

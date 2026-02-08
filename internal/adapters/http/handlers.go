@@ -71,11 +71,26 @@ func renderTemplate(w http.ResponseWriter, r *http.Request, templateName string,
 		email = sess.Email
 	}
 
+	impersonating := false
+	realRole := ""
+	isRealAdmin := false
+	if ok && sess.IsImpersonating() {
+		impersonating = true
+		realRole = sess.RealRole
+		isRealAdmin = sess.RealRole == "admin"
+	} else if ok {
+		isRealAdmin = sess.Role == "admin"
+	}
+
 	funcMap := template.FuncMap{
-		"currentRole":  func() string { return role },
-		"currentEmail": func() string { return email },
-		"isLoggedIn":   func() bool { return role != "" },
-		"csrfToken":    func() string { return csrf.Token(r) },
+		"currentRole":     func() string { return role },
+		"currentEmail":    func() string { return email },
+		"isLoggedIn":      func() bool { return role != "" },
+		"csrfToken":       func() string { return csrf.Token(r) },
+		"isImpersonating": func() bool { return impersonating },
+		"realRole":        func() string { return realRole },
+		"isRealAdmin":     func() bool { return isRealAdmin },
+		"list":            func(items ...string) []string { return items },
 	}
 
 	layoutPath := filepath.Join(templatesDir, "layout.html")
@@ -2418,4 +2433,134 @@ func handleLibraryPage(w http.ResponseWriter, r *http.Request) {
 		"Email": sess.Email,
 		"Role":  sess.Role,
 	})
+}
+
+// --- DevMode: Admin Impersonation ---
+
+// handleDevModeImpersonate handles POST /api/devmode/impersonate
+func handleDevModeImpersonate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	sess, ok := middleware.GetSessionFromContext(r.Context())
+	if !ok {
+		http.Error(w, "not authenticated", http.StatusUnauthorized)
+		return
+	}
+
+	if !middleware.IsRealAdmin(r.Context()) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Form error", http.StatusBadRequest)
+		return
+	}
+
+	targetRole := r.FormValue("role")
+	input := orchestrators.DevModeImpersonateInput{
+		TargetRole:    targetRole,
+		CurrentRole:   sess.Role,
+		AccountID:     sess.AccountID,
+		Email:         sess.Email,
+		RealAccountID: sess.RealAccountID,
+		RealRole:      sess.RealRole,
+		RealEmail:     sess.RealEmail,
+	}
+
+	result, err := orchestrators.ExecuteDevModeImpersonate(input)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Update session in-place
+	cookie, err := r.Cookie("workshop_session")
+	if err != nil {
+		http.Error(w, "session error", http.StatusInternalServerError)
+		return
+	}
+
+	sess.Role = result.Role
+	sess.RealAccountID = result.RealAccountID
+	sess.RealEmail = result.RealEmail
+	sess.RealRole = result.RealRole
+	// Restore AccountID/Email when switching back to admin
+	if result.RealRole == "" && result.Role == "admin" {
+		if sess.RealAccountID != "" {
+			sess.AccountID = sess.RealAccountID
+			sess.Email = sess.RealEmail
+		}
+		sess.RealAccountID = ""
+		sess.RealEmail = ""
+		sess.RealRole = ""
+	}
+
+	sessions.Update(cookie.Value, sess)
+
+	slog.Info("devmode_event",
+		"event", "impersonate",
+		"admin_account_id", func() string {
+			if result.RealAccountID != "" {
+				return result.RealAccountID
+			}
+			return sess.AccountID
+		}(),
+		"target_role", result.Role,
+	)
+
+	http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
+}
+
+// handleDevModeRestore handles POST /api/devmode/restore
+func handleDevModeRestore(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	sess, ok := middleware.GetSessionFromContext(r.Context())
+	if !ok {
+		http.Error(w, "not authenticated", http.StatusUnauthorized)
+		return
+	}
+
+	input := orchestrators.DevModeRestoreInput{
+		CurrentRole:   sess.Role,
+		RealAccountID: sess.RealAccountID,
+		RealEmail:     sess.RealEmail,
+		RealRole:      sess.RealRole,
+	}
+
+	result, err := orchestrators.ExecuteDevModeRestore(input)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Update session in-place
+	cookie, err := r.Cookie("workshop_session")
+	if err != nil {
+		http.Error(w, "session error", http.StatusInternalServerError)
+		return
+	}
+
+	sess.AccountID = result.AccountID
+	sess.Email = result.Email
+	sess.Role = result.Role
+	sess.RealAccountID = ""
+	sess.RealEmail = ""
+	sess.RealRole = ""
+
+	sessions.Update(cookie.Value, sess)
+
+	slog.Info("devmode_event",
+		"event", "restore",
+		"admin_account_id", result.AccountID,
+	)
+
+	http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
 }

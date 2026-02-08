@@ -85,4 +85,8 @@ func registerRoutes(mux *http.ServeMux) {
 	// Layer 2: Spine pages
 	mux.HandleFunc("/themes", handleThemesPage)
 	mux.HandleFunc("/library", handleLibraryPage)
+
+	// DevMode routes (admin-only impersonation)
+	mux.HandleFunc("/api/devmode/impersonate", handleDevModeImpersonate)
+	mux.HandleFunc("/api/devmode/restore", handleDevModeRestore)
 }

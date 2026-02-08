@@ -22,6 +22,16 @@ type Session struct {
 	Email     string
 	Role      string
 	CreatedAt time.Time
+
+	// DevMode impersonation fields — populated only when an admin is impersonating another role.
+	RealAccountID string
+	RealEmail     string
+	RealRole      string
+}
+
+// IsImpersonating returns true if this session is currently impersonating another role.
+func (s Session) IsImpersonating() bool {
+	return s.RealRole != ""
 }
 
 // SessionStore is an in-memory session store.
@@ -81,6 +91,19 @@ func (ss *SessionStore) Delete(token string) {
 	ss.mu.Lock()
 	defer ss.mu.Unlock()
 	delete(ss.sessions, token)
+}
+
+// Update replaces the session for a given token in-place.
+// PRE: token exists in the store
+// POST: Session is replaced with the new value
+func (ss *SessionStore) Update(token string, session Session) bool {
+	ss.mu.Lock()
+	defer ss.mu.Unlock()
+	if _, ok := ss.sessions[token]; !ok {
+		return false
+	}
+	ss.sessions[token] = session
+	return true
 }
 
 const sessionCookieName = "workshop_session"
@@ -184,6 +207,19 @@ func IsRole(ctx context.Context, roles ...string) bool {
 // IsAdmin checks if the current session is an admin.
 func IsAdmin(ctx context.Context) bool {
 	return IsRole(ctx, domainAccount.RoleAdmin)
+}
+
+// IsRealAdmin checks if the underlying (non-impersonated) identity is an admin.
+// Returns true if the session is admin (not impersonating) or if RealRole is admin (impersonating).
+func IsRealAdmin(ctx context.Context) bool {
+	session, ok := GetSessionFromContext(ctx)
+	if !ok {
+		return false
+	}
+	if session.IsImpersonating() {
+		return session.RealRole == domainAccount.RoleAdmin
+	}
+	return session.Role == domainAccount.RoleAdmin
 }
 
 // IsCoachOrAdmin checks if the current session is a coach or admin.

@@ -19,16 +19,17 @@ function loadInactive() {
     fetch('/api/members/inactive?days='+days).then(r=>r.json()).then(data => {
         var el = document.getElementById('inactiveList');
         if (!data||data.length===0) { el.innerHTML='<p style="color:#F9B232;font-weight:600;">No inactive members for this period.</p>'; return; }
-        el.innerHTML='<table style="width:100%;border-collapse:collapse;"><thead><tr style="background:#f8f9fa;border-bottom:2px solid #dee2e6;"><th style="padding:0.5rem;text-align:left;">Name</th><th style="padding:0.5rem;text-align:left;">Email</th><th style="padding:0.5rem;text-align:left;">Last Check-In</th><th style="padding:0.5rem;text-align:right;">Actions</th></tr></thead><tbody>';
+        var html='<table style="width:100%;border-collapse:collapse;"><thead><tr style="border-bottom:2px solid var(--border);"><th style="padding:0.5rem;text-align:left;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);">Name</th><th style="padding:0.5rem;text-align:left;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);">Email</th><th style="padding:0.5rem;text-align:left;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);">Last Check-In</th><th style="padding:0.5rem;text-align:right;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);">Actions</th></tr></thead><tbody>';
         data.forEach(m => {
             var lastDate = m.LastCheckIn ? m.LastCheckIn.substring(0,10) : 'Never';
-            el.innerHTML+='<tr style="border-bottom:1px solid #dee2e6;">'+
+            html+='<tr style="border-bottom:1px solid var(--border);">'+
                 '<td style="padding:0.5rem;font-weight:600;">'+m.Name+'</td>'+
                 '<td style="padding:0.5rem;">'+m.Email+'</td>'+
                 '<td style="padding:0.5rem;">'+lastDate+'</td>'+
                 '<td style="padding:0.5rem;text-align:right;"><button onclick="archiveMember(\''+m.ID+'\')" style="background:#dc3545;padding:0.25rem 0.75rem;font-size:0.85rem;">Archive</button></td></tr>';
         });
-        el.innerHTML+='</tbody></table>';
+        html+='</tbody></table>';
+        el.innerHTML=html;
     });
 }
 function archiveMember(id) {

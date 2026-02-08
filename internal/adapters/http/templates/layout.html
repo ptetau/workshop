@@ -49,6 +49,32 @@
     </style>
 </head>
 <body>
+    {{ if isRealAdmin }}
+    <div id="devmode-bar" style="background:#2d1b4e;color:#fff;padding:0.4rem 2rem;font-size:0.75rem;display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;border-bottom:3px solid #9b59b6;font-family:'Montserrat',sans-serif;letter-spacing:0.5px;">
+        <span style="font-weight:700;text-transform:uppercase;margin-right:0.5rem;">DevMode</span>
+        {{ if isImpersonating }}
+        <span style="background:rgba(255,255,255,0.15);padding:0.2rem 0.6rem;border-radius:2px;">Viewing as: <strong style="text-transform:uppercase;">{{ currentRole }}</strong></span>
+        {{ end }}
+        {{ $roles := list "admin" "coach" "member" "trial" }}
+        {{ range $roles }}
+        <form method="POST" action="/api/devmode/impersonate" style="display:inline;margin:0;">
+            <input type="hidden" name="gorilla.csrf.Token" value="{{ csrfToken }}">
+            <input type="hidden" name="role" value="{{ . }}">
+            {{ if eq . (currentRole) }}
+            <button type="submit" style="background:#9b59b6;color:#fff;border:2px solid #fff;padding:0.2rem 0.7rem;font-size:0.7rem;font-family:inherit;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;cursor:pointer;border-radius:2px;">{{ . }}</button>
+            {{ else }}
+            <button type="submit" style="background:transparent;color:rgba(255,255,255,0.7);border:1px solid rgba(255,255,255,0.3);padding:0.2rem 0.7rem;font-size:0.7rem;font-family:inherit;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;cursor:pointer;border-radius:2px;">{{ . }}</button>
+            {{ end }}
+        </form>
+        {{ end }}
+        {{ if isImpersonating }}
+        <form method="POST" action="/api/devmode/restore" style="display:inline;margin:0;margin-left:auto;">
+            <input type="hidden" name="gorilla.csrf.Token" value="{{ csrfToken }}">
+            <button type="submit" style="background:#e74c3c;color:#fff;border:none;padding:0.2rem 0.9rem;font-size:0.7rem;font-family:inherit;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;cursor:pointer;border-radius:2px;">Back to Admin</button>
+        </form>
+        {{ end }}
+    </div>
+    {{ end }}
     <header>
         <nav>
             {{ if isLoggedIn }}
