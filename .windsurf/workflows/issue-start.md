@@ -17,7 +17,7 @@ Begin work on a GitHub issue. Creates a feature branch, loads the full requireme
 
 // turbo
    ```powershell
-   gh issue list --state open --limit 20 --json number,title,labels,milestone --jq '.[] | "#\(.number) \(.title) [\(.labels | map(.name) | join(", "))] (\(.milestone.title // "no milestone"))"'
+   gh issue list --state open --limit 20 --json number,title,labels,milestone --template "{{range .}}#{{.number}} | {{.title}} | {{if .milestone}}{{.milestone.title}}{{else}}no milestone{{end}} | {{range .labels}}{{.name}}, {{end}}{{println}}{{end}}"
    ```
 
    Ask the user which issue to work on if not specified.
@@ -73,7 +73,7 @@ Begin work on a GitHub issue. Creates a feature branch, loads the full requireme
 
 // turbo
    ```powershell
-   gh issue list --state open --label "[same-area-label]" --json number,title,state --jq '.[] | "#\(.number) \(.title) [\(.state)]"'
+   gh issue list --state open --label "[same-area-label]" --json number,title,state --template "{{range .}}#{{.number}} | {{.title}} | {{.state}}{{println}}{{end}}"
    ```
 
    - Flag any open issues that are prerequisites

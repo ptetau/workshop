@@ -19,12 +19,7 @@ Display the open issue backlog ordered by implementation priority: milestone pha
 
 // turbo
    ```powershell
-   gh issue list --state open --limit 200 --json number,title,labels,milestone --jq 'sort_by(.milestone.number // 999, .number) | group_by(.milestone.title // "No milestone") | .[] | ["", "### \(.[0].milestone.title // "No milestone")", (.[] | "  #\(.number) \(.title) [\(.labels | map(.name) | join(", "))]")] | .[]'
-   ```
-
-   If the jq grouping is too complex, fall back to a simpler sorted list:
-   ```powershell
-   gh issue list --state open --limit 200 --json number,title,labels,milestone --jq 'sort_by(.milestone.number // 999, .number) | .[] | "#\(.number) \(.title) [\(.labels | map(.name) | join(", "))] (\(.milestone.title // "no milestone"))"'
+   gh issue list --state open --limit 200 --json number,title,labels,milestone --template "{{range .}}#{{.number}} | {{.title}} | {{if .milestone}}{{.milestone.title}}{{else}}No milestone{{end}} | {{range .labels}}{{.name}}, {{end}}{{println}}{{end}}"
    ```
 
 3. **Summarise the backlog** — present a structured overview:

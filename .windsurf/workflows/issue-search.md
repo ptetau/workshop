@@ -19,14 +19,14 @@ Find open issues matching a topic, keyword, or area — sorted from most impactf
 
 // turbo
    ```powershell
-   gh issue list --state open --label "[LABEL]" --limit 100 --json number,title,labels,milestone,body --jq 'sort_by(.milestone.number // 999, .number) | .[] | "#\(.number) \(.title) [M: \(.milestone.title // "none")] [\(.labels | map(.name) | join(", "))]"'
+   gh issue list --state open --label "[LABEL]" --limit 100 --json number,title,labels,milestone --template "{{range .}}#{{.number}} | {{.title}} | {{if .milestone}}{{.milestone.title}}{{else}}none{{end}} | {{range .labels}}{{.name}}, {{end}}{{println}}{{end}}"
    ```
 
 3. **Search by keyword** — if a keyword was identified (always run this even if a label matched, to catch issues outside the label):
 
 // turbo
    ```powershell
-   gh search issues "[KEYWORD]" --repo ptetau/workshop --state open --limit 50 --json number,title,labels,url --jq '.[] | "#\(.number) \(.title) [\(.labels | map(.name) | join(", "))]"'
+   gh search issues "[KEYWORD]" --repo ptetau/workshop --state open --limit 50 --json number,title,labels --template "{{range .}}#{{.number}} | {{.title}} | {{range .labels}}{{.name}}, {{end}}{{println}}{{end}}"
    ```
 
 4. **Merge and deduplicate** — combine results from steps 2 and 3, removing duplicates by issue number.

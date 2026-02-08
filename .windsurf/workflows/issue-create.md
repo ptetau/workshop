@@ -25,7 +25,7 @@ Add new features or requirements as GitHub Issues with domain term consistency, 
 
 // turbo
    ```powershell
-   gh issue list --limit 200 --json number,title,body,labels --jq '.[] | "#\(.number) \(.title) [\(.labels | map(.name) | join(", "))]"'
+   gh issue list --limit 200 --json number,title,labels --template "{{range .}}#{{.number}} | {{.title}} | {{range .labels}}{{.name}}, {{end}}{{println}}{{end}}"
    ```
 
    - Search issue titles and bodies for keywords from the request
