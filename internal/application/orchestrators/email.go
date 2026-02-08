@@ -16,6 +16,7 @@ type EmailStoreForOrchestrator interface {
 	Save(ctx context.Context, e emailDomain.Email) error
 	SaveRecipients(ctx context.Context, emailID string, recipients []emailDomain.Recipient) error
 	GetRecipients(ctx context.Context, emailID string) ([]emailDomain.Recipient, error)
+	GetActiveTemplate(ctx context.Context) (emailDomain.EmailTemplate, error)
 }
 
 // MemberLookup defines the interface for looking up member details for recipient resolution.
@@ -159,6 +160,14 @@ func ExecuteSendEmail(ctx context.Context, input SendEmailInput, deps SendEmailD
 		return emailDomain.Email{}, emailDomain.ErrNoRecipients
 	}
 
+	// Apply active template if one exists
+	htmlBody := em.Body
+	tpl, tplErr := deps.EmailStore.GetActiveTemplate(ctx)
+	if tplErr == nil {
+		htmlBody = tpl.WrapBody(em.Body)
+		em.TemplateVersionID = tpl.ID
+	}
+
 	// Send via provider — one email per recipient for individual delivery
 	var sendReqs []emailAdapter.SendRequest
 	for _, addr := range toAddresses {
@@ -166,7 +175,7 @@ func ExecuteSendEmail(ctx context.Context, input SendEmailInput, deps SendEmailD
 			To:      []string{addr},
 			From:    deps.FromAddress,
 			Subject: em.Subject,
-			HTML:    em.Body,
+			HTML:    htmlBody,
 			ReplyTo: deps.ReplyTo,
 		})
 	}

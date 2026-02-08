@@ -684,6 +684,98 @@ func TestEmail_CancelScheduled(t *testing.T) {
 	}
 }
 
+// TestEmail_TemplateSaveAndPreview tests saving a template and previewing an email with it.
+// Covers #122: Configure email template, #123: Preview email with template.
+func TestEmail_TemplateSaveAndPreview(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping browser test in short mode")
+	}
+
+	app := newTestApp(t)
+	page := app.newPage(t)
+	app.login(t, page)
+
+	// Navigate to template settings
+	_, err := page.Goto(app.BaseURL + "/admin/emails/template")
+	if err != nil {
+		t.Fatalf("failed to navigate to template settings: %v", err)
+	}
+
+	// Fill header and footer
+	if err := page.Locator("#templateHeader").Fill("<div style='text-align:center;padding:1rem;background:#1a1a2e;color:#fff;'><h2>Workshop Jiu-Jitsu</h2></div>"); err != nil {
+		t.Fatalf("failed to fill header: %v", err)
+	}
+	if err := page.Locator("#templateFooter").Fill("<div style='text-align:center;padding:1rem;color:#999;font-size:0.8rem;'><p>123 Main St | (555) 123-4567</p></div>"); err != nil {
+		t.Fatalf("failed to fill footer: %v", err)
+	}
+
+	// Save template
+	if err := page.Locator("#saveTemplateBtn").Click(); err != nil {
+		t.Fatalf("failed to click Save Template: %v", err)
+	}
+
+	// Should show success message
+	err = page.Locator("#templateMsg >> text=Template saved").WaitFor(playwright.LocatorWaitForOptions{
+		Timeout: playwright.Float(5000),
+	})
+	if err != nil {
+		t.Error("template save confirmation not shown")
+	}
+
+	// Version ID should be populated
+	versionText, _ := page.Locator("#templateVersionId").TextContent()
+	if versionText == "" || versionText == "—" {
+		t.Error("template version ID not displayed after save")
+	}
+
+	// Click Preview to verify template wrapping
+	if err := page.Locator("#previewBtn").Click(); err != nil {
+		t.Fatalf("failed to click Preview: %v", err)
+	}
+
+	// Preview area should appear with template content
+	err = page.Locator("#previewArea").WaitFor(playwright.LocatorWaitForOptions{
+		Timeout: playwright.Float(5000),
+	})
+	if err != nil {
+		t.Error("preview area not shown")
+	}
+
+	previewHTML, _ := page.Locator("#previewContent").InnerHTML()
+	if previewHTML == "" {
+		t.Error("preview content is empty")
+	}
+
+	// Now test preview from compose page
+	seedTestMember(t, app, "Preview Tester", "preview@test.com")
+	_, _ = page.Goto(app.BaseURL + "/admin/emails/compose")
+
+	if err := page.Locator("#emailSubject").Fill("Preview Test"); err != nil {
+		t.Fatalf("failed to fill subject: %v", err)
+	}
+	if err := page.Locator("#emailBody").Fill("<p>Check the template wrapping</p>"); err != nil {
+		t.Fatalf("failed to fill body: %v", err)
+	}
+
+	// Click Preview button on compose page
+	if err := page.Locator("button:has-text('Preview')").Click(); err != nil {
+		t.Fatalf("failed to click Preview on compose: %v", err)
+	}
+
+	// Preview modal should appear
+	err = page.Locator("#previewModal").WaitFor(playwright.LocatorWaitForOptions{
+		Timeout: playwright.Float(5000),
+	})
+	if err != nil {
+		t.Error("preview modal not shown on compose page")
+	}
+
+	composePreview, _ := page.Locator("#previewContent").InnerHTML()
+	if composePreview == "" {
+		t.Error("compose preview content is empty")
+	}
+}
+
 // TestEmail_DashboardEmailLink verifies the Emails link appears on the admin dashboard.
 func TestEmail_DashboardEmailLink(t *testing.T) {
 	if testing.Short() {

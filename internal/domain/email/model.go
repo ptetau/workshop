@@ -42,6 +42,22 @@ type Email struct {
 	TemplateVersionID string // Snapshot of template used at send time
 }
 
+// EmailTemplate holds versioned header/footer content for email branding.
+type EmailTemplate struct {
+	ID        string
+	Header    string // HTML header content
+	Footer    string // HTML footer content
+	CreatedAt time.Time
+	Active    bool // Only one template is active at a time
+}
+
+// WrapBody applies the template header and footer around the email body.
+// PRE: body is non-empty
+// POST: Returns the wrapped HTML string
+func (t *EmailTemplate) WrapBody(body string) string {
+	return t.Header + body + t.Footer
+}
+
 // Recipient links an email to a member.
 type Recipient struct {
 	EmailID        string

@@ -1,0 +1,98 @@
+{{ define "content" }}
+<div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem;margin-bottom:1.5rem;">
+        <h1 style="margin:0;">Email Template Settings</h1>
+        <a href="/admin/emails" style="color:var(--orange);text-decoration:none;font-weight:600;">&larr; Back to Emails</a>
+    </div>
+
+    <p style="color:var(--text-muted);font-size:0.9rem;margin-bottom:1.5rem;">
+        Configure the header and footer that wrap every outgoing email. Changes create a new template version &mdash; previously sent emails retain their original template.
+    </p>
+
+    <div style="margin-bottom:1.5rem;">
+        <label for="templateHeader" style="font-weight:600;display:block;margin-bottom:0.25rem;">Header HTML</label>
+        <textarea id="templateHeader" rows="6" style="width:100%;padding:0.5rem;border:1px solid var(--border);border-radius:2px;font-family:monospace;font-size:0.85rem;" placeholder="<div style='text-align:center;padding:1rem;'><img src='...' alt='Logo'><p>Workshop Jiu-Jitsu</p></div>"></textarea>
+    </div>
+
+    <div style="margin-bottom:1.5rem;">
+        <label for="templateFooter" style="font-weight:600;display:block;margin-bottom:0.25rem;">Footer HTML</label>
+        <textarea id="templateFooter" rows="6" style="width:100%;padding:0.5rem;border:1px solid var(--border);border-radius:2px;font-family:monospace;font-size:0.85rem;" placeholder="<div style='text-align:center;padding:1rem;color:#999;font-size:0.8rem;'><p>123 Main St | (555) 123-4567</p></div>"></textarea>
+    </div>
+
+    <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:1.5rem;">
+        <button id="saveTemplateBtn" onclick="saveTemplate()" style="background:var(--orange);color:#fff;padding:0.5rem 1.25rem;border:none;border-radius:2px;cursor:pointer;font-weight:600;">Save Template</button>
+        <button id="previewBtn" onclick="previewTemplate()" style="background:#f8f9fa;color:#333;padding:0.5rem 1.25rem;border:1px solid var(--border);border-radius:2px;cursor:pointer;">Preview</button>
+    </div>
+
+    <div id="templateMsg" style="display:none;padding:0.75rem;border-radius:2px;margin-bottom:1rem;"></div>
+
+    <div id="previewArea" style="display:none;margin-top:1rem;">
+        <h3 style="margin-bottom:0.5rem;">Preview</h3>
+        <div id="previewContent" style="border:1px solid #dee2e6;padding:1rem;border-radius:2px;background:#fff;"></div>
+    </div>
+
+    <div style="margin-top:1.5rem;padding:1rem;background:#f8f9fa;border-radius:2px;">
+        <p style="margin:0;font-size:0.85rem;color:var(--text-muted);">
+            <strong>Version ID:</strong> <span id="templateVersionId">—</span><br>
+            <strong>Last updated:</strong> <span id="templateUpdatedAt">—</span>
+        </p>
+    </div>
+</div>
+
+<script>
+function showMsg(msg, ok) {
+    var el = document.getElementById('templateMsg');
+    el.textContent = msg;
+    el.style.display = 'block';
+    el.style.background = ok ? '#e8f5e9' : '#fce4ec';
+    el.style.color = ok ? '#2e7d32' : '#c62828';
+}
+
+function loadTemplate() {
+    fetch('/api/emails/template').then(function(r){return r.json();}).then(function(data) {
+        document.getElementById('templateHeader').value = data.Header || '';
+        document.getElementById('templateFooter').value = data.Footer || '';
+        if (data.ID) {
+            document.getElementById('templateVersionId').textContent = data.ID;
+            if (data.CreatedAt) {
+                document.getElementById('templateUpdatedAt').textContent = new Date(data.CreatedAt).toLocaleString();
+            }
+        }
+    });
+}
+
+function saveTemplate() {
+    var header = document.getElementById('templateHeader').value;
+    var footer = document.getElementById('templateFooter').value;
+
+    fetch('/api/emails/template', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({Header: header, Footer: footer})
+    }).then(function(r) {
+        if (!r.ok) throw r;
+        return r.json();
+    }).then(function(data) {
+        showMsg('Template saved (version ' + data.ID.substring(0,8) + ')', true);
+        document.getElementById('templateVersionId').textContent = data.ID;
+        document.getElementById('templateUpdatedAt').textContent = new Date(data.CreatedAt).toLocaleString();
+    }).catch(function() {
+        showMsg('Failed to save template', false);
+    });
+}
+
+function previewTemplate() {
+    var body = '<p>This is a sample email body to preview template layout.</p><p>The header and footer will wrap this content in all outgoing emails.</p>';
+    fetch('/api/emails/preview', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({Body: body})
+    }).then(function(r){return r.json();}).then(function(data) {
+        document.getElementById('previewContent').innerHTML = data.HTML;
+        document.getElementById('previewArea').style.display = 'block';
+    });
+}
+
+loadTemplate();
+</script>
+{{ end }}

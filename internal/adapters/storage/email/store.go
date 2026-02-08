@@ -15,6 +15,9 @@ type Store interface {
 	SaveRecipients(ctx context.Context, emailID string, recipients []domain.Recipient) error
 	GetRecipients(ctx context.Context, emailID string) ([]domain.Recipient, error)
 	ListByRecipientMemberID(ctx context.Context, memberID string) ([]domain.Email, error)
+	SaveTemplate(ctx context.Context, t domain.EmailTemplate) error
+	GetActiveTemplate(ctx context.Context) (domain.EmailTemplate, error)
+	GetTemplateByID(ctx context.Context, id string) (domain.EmailTemplate, error)
 }
 
 // ListFilter specifies criteria for listing emails.

@@ -108,4 +108,13 @@ func registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/emails/reschedule", handleEmailReschedule)
 	mux.HandleFunc("/api/emails/recipients/search", handleMemberSearchForEmail)
 	mux.HandleFunc("/api/emails/recipients/filter", handleMemberFilterForEmail)
+	mux.HandleFunc("/admin/emails/template", handleEmailTemplatePage)
+	mux.HandleFunc("/api/emails/template", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" {
+			handleEmailTemplateSave(w, r)
+		} else {
+			handleEmailTemplateGet(w, r)
+		}
+	})
+	mux.HandleFunc("/api/emails/preview", handleEmailPreview)
 }

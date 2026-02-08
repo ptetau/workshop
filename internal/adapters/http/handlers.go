@@ -3196,6 +3196,108 @@ func handleEmailReschedule(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(em)
 }
 
+// handleEmailTemplatePage handles GET /admin/emails/template
+func handleEmailTemplatePage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if _, ok := requireAdmin(w, r); !ok {
+		return
+	}
+	renderTemplate(w, r, "admin_email_template.html", nil)
+}
+
+// handleEmailTemplateGet handles GET /api/emails/template
+func handleEmailTemplateGet(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if _, ok := requireAdmin(w, r); !ok {
+		return
+	}
+
+	t, err := stores.EmailStore.GetActiveTemplate(r.Context())
+	if err != nil {
+		// No template yet — return empty defaults
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"ID": "", "Header": "", "Footer": ""})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(t)
+}
+
+// handleEmailTemplateSave handles POST /api/emails/template
+func handleEmailTemplateSave(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if _, ok := requireAdmin(w, r); !ok {
+		return
+	}
+
+	var input struct {
+		Header string `json:"Header"`
+		Footer string `json:"Footer"`
+	}
+	if err := strictDecode(r, &input); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	t := emailDomain.EmailTemplate{
+		ID:        generateID(),
+		Header:    input.Header,
+		Footer:    input.Footer,
+		CreatedAt: timeNow(),
+		Active:    true,
+	}
+
+	if err := stores.EmailStore.SaveTemplate(r.Context(), t); err != nil {
+		internalError(w, err)
+		return
+	}
+
+	slog.Info("email_event", "event", "template_saved", "template_id", t.ID)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(t)
+}
+
+// handleEmailPreview handles POST /api/emails/preview — wraps body with active template
+func handleEmailPreview(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if _, ok := requireAdmin(w, r); !ok {
+		return
+	}
+
+	var input struct {
+		Body string `json:"Body"`
+	}
+	if err := strictDecode(r, &input); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	t, err := stores.EmailStore.GetActiveTemplate(r.Context())
+	if err != nil {
+		// No template — return body as-is
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"HTML": input.Body})
+		return
+	}
+
+	wrapped := t.WrapBody(input.Body)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"HTML": wrapped})
+}
+
 // handleMemberFilterForEmail handles GET /api/emails/recipients/filter?program=...
 func handleMemberFilterForEmail(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {

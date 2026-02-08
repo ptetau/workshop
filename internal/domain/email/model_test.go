@@ -178,3 +178,25 @@ func TestEmail_StatusChecks(t *testing.T) {
 		}
 	}
 }
+
+// TestEmailTemplate_WrapBody tests that WrapBody correctly wraps content with header and footer.
+func TestEmailTemplate_WrapBody(t *testing.T) {
+	tpl := EmailTemplate{
+		Header: "<div>Header</div>",
+		Footer: "<div>Footer</div>",
+	}
+	result := tpl.WrapBody("<p>Body</p>")
+	expected := "<div>Header</div><p>Body</p><div>Footer</div>"
+	if result != expected {
+		t.Errorf("WrapBody = %q, want %q", result, expected)
+	}
+}
+
+// TestEmailTemplate_WrapBody_Empty tests WrapBody with empty header/footer.
+func TestEmailTemplate_WrapBody_Empty(t *testing.T) {
+	tpl := EmailTemplate{}
+	result := tpl.WrapBody("<p>Body</p>")
+	if result != "<p>Body</p>" {
+		t.Errorf("WrapBody with empty template = %q, want %q", result, "<p>Body</p>")
+	}
+}

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	emailAdapter "workshop/internal/adapters/email"
+	emailStore "workshop/internal/adapters/storage/email"
 	emailDomain "workshop/internal/domain/email"
 )
 
@@ -15,12 +16,14 @@ import (
 type mockEmailStore struct {
 	emails     map[string]emailDomain.Email
 	recipients map[string][]emailDomain.Recipient
+	templates  map[string]emailDomain.EmailTemplate
 }
 
 func newMockEmailStore() *mockEmailStore {
 	return &mockEmailStore{
 		emails:     make(map[string]emailDomain.Email),
 		recipients: make(map[string][]emailDomain.Recipient),
+		templates:  make(map[string]emailDomain.EmailTemplate),
 	}
 }
 
@@ -58,6 +61,63 @@ func (m *mockEmailStore) GetRecipients(_ context.Context, emailID string) ([]ema
 	return m.recipients[emailID], nil
 }
 
+// Delete removes a mock email by ID.
+// PRE: id is non-empty
+// POST: Email removed from map
+func (m *mockEmailStore) Delete(_ context.Context, id string) error {
+	delete(m.emails, id)
+	return nil
+}
+
+// List returns all mock emails.
+// PRE: none
+// POST: Returns all stored emails
+func (m *mockEmailStore) List(_ context.Context, _ emailStore.ListFilter) ([]emailDomain.Email, error) {
+	var result []emailDomain.Email
+	for _, e := range m.emails {
+		result = append(result, e)
+	}
+	return result, nil
+}
+
+// ListByRecipientMemberID returns emails for a member (stub).
+// PRE: memberID is non-empty
+// POST: Returns nil (stub)
+func (m *mockEmailStore) ListByRecipientMemberID(_ context.Context, memberID string) ([]emailDomain.Email, error) {
+	return nil, nil
+}
+
+// SaveTemplate persists a mock template.
+// PRE: t has a valid ID
+// POST: Template stored in map
+func (m *mockEmailStore) SaveTemplate(_ context.Context, t emailDomain.EmailTemplate) error {
+	m.templates[t.ID] = t
+	return nil
+}
+
+// GetActiveTemplate returns the active mock template.
+// PRE: none
+// POST: Returns the active template or error
+func (m *mockEmailStore) GetActiveTemplate(_ context.Context) (emailDomain.EmailTemplate, error) {
+	for _, t := range m.templates {
+		if t.Active {
+			return t, nil
+		}
+	}
+	return emailDomain.EmailTemplate{}, errors.New("no active template")
+}
+
+// GetTemplateByID returns a mock template by ID.
+// PRE: id is non-empty
+// POST: Returns template or error
+func (m *mockEmailStore) GetTemplateByID(_ context.Context, id string) (emailDomain.EmailTemplate, error) {
+	t, ok := m.templates[id]
+	if !ok {
+		return emailDomain.EmailTemplate{}, errors.New("not found")
+	}
+	return t, nil
+}
+
 // --- Mock member lookup ---
 
 type mockMemberLookup struct {
@@ -88,8 +148,9 @@ func (m *mockMemberLookup) GetEmailByMemberID(_ context.Context, memberID string
 // --- Mock email sender ---
 
 type mockEmailSender struct {
-	sent   int
-	failAt int // fail on the Nth send (-1 = never fail)
+	sent     int
+	failAt   int // fail on the Nth send (-1 = never fail)
+	sentReqs []emailAdapter.SendRequest
 }
 
 func newMockEmailSender() *mockEmailSender {
@@ -115,8 +176,9 @@ func (m *mockEmailSender) SendBatch(_ context.Context, reqs []emailAdapter.SendR
 		return nil, errors.New("batch send failed")
 	}
 	var results []emailAdapter.SendResult
-	for range reqs {
+	for _, req := range reqs {
 		m.sent++
+		m.sentReqs = append(m.sentReqs, req)
 		results = append(results, emailAdapter.SendResult{MessageID: "mock-batch-id", SentAt: emailFixedTime})
 	}
 	return results, nil
@@ -551,6 +613,57 @@ func TestRescheduleEmail_Success(t *testing.T) {
 	}
 	if !em.ScheduledAt.Equal(newTime) {
 		t.Errorf("scheduled_at = %v, want %v", em.ScheduledAt, newTime)
+	}
+}
+
+// TestSendEmail_WithTemplate tests that sending applies the active template header/footer.
+func TestSendEmail_WithTemplate(t *testing.T) {
+	store := newMockEmailStore()
+	sender := newMockEmailSender()
+
+	// Seed a draft with recipients
+	store.emails["draft-tpl"] = emailDomain.Email{
+		ID:        "draft-tpl",
+		Subject:   "Newsletter",
+		Body:      "<p>Main content</p>",
+		SenderID:  "admin-1",
+		Status:    emailDomain.StatusDraft,
+		CreatedAt: fixedTime,
+	}
+	store.recipients["draft-tpl"] = []emailDomain.Recipient{
+		{EmailID: "draft-tpl", MemberID: "member-1", MemberName: "Marcus Almeida", MemberEmail: "marcus@email.com"},
+	}
+
+	// Set active template
+	store.templates["tpl-v1"] = emailDomain.EmailTemplate{
+		ID:     "tpl-v1",
+		Header: "<header>Logo</header>",
+		Footer: "<footer>Address</footer>",
+		Active: true,
+	}
+
+	input := SendEmailInput{EmailID: "draft-tpl", SenderID: "admin-1"}
+	deps := SendEmailDeps{
+		EmailStore:  store,
+		EmailSender: sender,
+		Now:         testNow,
+	}
+
+	em, err := ExecuteSendEmail(context.Background(), input, deps)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if em.TemplateVersionID != "tpl-v1" {
+		t.Errorf("TemplateVersionID = %q, want %q", em.TemplateVersionID, "tpl-v1")
+	}
+
+	// Verify the sent HTML included the template wrapper
+	if len(sender.sentReqs) == 0 {
+		t.Fatal("no emails sent")
+	}
+	sentHTML := sender.sentReqs[0].HTML
+	if sentHTML != "<header>Logo</header><p>Main content</p><footer>Address</footer>" {
+		t.Errorf("sent HTML = %q, want wrapped body", sentHTML)
 	}
 }
 

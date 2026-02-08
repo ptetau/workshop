@@ -223,6 +223,71 @@ func scanEmails(rows *sql.Rows) ([]domain.Email, error) {
 	return emails, rows.Err()
 }
 
+// SaveTemplate saves a new template version and deactivates the previous active one.
+// PRE: t has a valid ID and CreatedAt
+// POST: Template persisted; previous active template deactivated
+func (s *SQLiteStore) SaveTemplate(ctx context.Context, t domain.EmailTemplate) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// Deactivate all existing templates
+	if _, err := tx.ExecContext(ctx, `UPDATE email_template SET active = 0 WHERE active = 1`); err != nil {
+		return err
+	}
+
+	active := 0
+	if t.Active {
+		active = 1
+	}
+	_, err = tx.ExecContext(ctx,
+		`INSERT INTO email_template (id, header, footer, created_at, active) VALUES (?, ?, ?, ?, ?)
+		 ON CONFLICT(id) DO UPDATE SET header=excluded.header, footer=excluded.footer, active=excluded.active`,
+		t.ID, t.Header, t.Footer, t.CreatedAt.Format(timeLayout), active)
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// GetActiveTemplate retrieves the currently active email template.
+// PRE: none
+// POST: Returns the active template or error if none exists
+func (s *SQLiteStore) GetActiveTemplate(ctx context.Context) (domain.EmailTemplate, error) {
+	var t domain.EmailTemplate
+	var createdStr string
+	var active int
+	err := s.db.QueryRowContext(ctx,
+		`SELECT id, header, footer, created_at, active FROM email_template WHERE active = 1 LIMIT 1`).
+		Scan(&t.ID, &t.Header, &t.Footer, &createdStr, &active)
+	if err != nil {
+		return domain.EmailTemplate{}, err
+	}
+	t.CreatedAt, _ = time.Parse(timeLayout, createdStr)
+	t.Active = active == 1
+	return t, nil
+}
+
+// GetTemplateByID retrieves a specific template version by ID.
+// PRE: id is non-empty
+// POST: Returns the template or error
+func (s *SQLiteStore) GetTemplateByID(ctx context.Context, id string) (domain.EmailTemplate, error) {
+	var t domain.EmailTemplate
+	var createdStr string
+	var active int
+	err := s.db.QueryRowContext(ctx,
+		`SELECT id, header, footer, created_at, active FROM email_template WHERE id = ?`, id).
+		Scan(&t.ID, &t.Header, &t.Footer, &createdStr, &active)
+	if err != nil {
+		return domain.EmailTemplate{}, err
+	}
+	t.CreatedAt, _ = time.Parse(timeLayout, createdStr)
+	t.Active = active == 1
+	return t, nil
+}
+
 func nullStr(s string) interface{} {
 	if s == "" {
 		return nil
