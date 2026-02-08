@@ -31,8 +31,15 @@ SOC 2's "Security" criteria requires protection against unauthorized access.
 
 **Implementation:**
 - `RequireRole()` middleware on every route (already implemented)
-- `requireAdmin()` helper for admin-only handlers (already implemented)
+- `RequireRole(account.RoleAdmin)` for admin-only handlers (already implemented)
 - No sensitive data in client-side storage (localStorage, sessionStorage)
+
+| Don't | Do |
+|-------|------|
+| Check permissions only in the UI | Enforce `RequireRole()` middleware server-side on every route |
+| Write a custom `requireAdmin()` helper | Use `RequireRole(account.RoleAdmin)` — one pattern for all roles |
+| Store role in localStorage and trust it | Extract role from server-side session via `GetSessionFromContext()` |
+| Let members access other members' data | Scope queries to `session.AccountID` for member-facing routes |
 
 ### 1.3 Audit Logging
 
@@ -67,6 +74,13 @@ AuditLog {
 - Audit log is **append-only** — no updates or deletes
 - Never log passwords, tokens, or full medical details in metadata
 - Retain audit logs for **7 years** (aligned with NZ tax retention)
+
+| Don't | Do |
+|-------|------|
+| Update or delete audit log entries | Audit log is append-only — immutable |
+| Log passwords, session tokens, or medical details | Log actor_id, action, resource_type, resource_id only |
+| Skip audit logging on data mutations | Every orchestrator that mutates data must emit an `audit_event` |
+| Log with `fmt.Println` or unstructured output | Use `slog.Info("audit_event", ...)` with structured key-value pairs |
 
 ---
 
@@ -106,6 +120,13 @@ ConsentRecord {
 - Revoking marketing consent takes effect immediately
 - Revoking waiver consent triggers Admin notification (may affect training eligibility)
 
+| Don't | Do |
+|-------|------|
+| Use a single "I agree to everything" checkbox | Separate granular consent per purpose (ToS, waiver, marketing, photo, injury) |
+| Pre-check the marketing consent checkbox | Marketing is opt-in — default must be unchecked |
+| Silently update waivers | Increment version and re-prompt consent on next login/check-in |
+| Hard-delete consent records on member deletion | Retain consent records as proof of lawful processing |
+
 ### 2.2 Right to be Forgotten (Deletion / Anonymisation)
 
 **When a member requests data deletion:**
@@ -128,6 +149,14 @@ ConsentRecord {
 - Generates a deletion receipt (JSON) stored in audit log
 - Admin confirms deletion with reason
 - 30-day grace period before hard deletion (configurable)
+
+| Don't | Do |
+|-------|------|
+| Hard-delete everything when a member requests deletion | Anonymise PII, hard-delete medical/observations/messages, retain payments 7 years |
+| Delete immediately on request | Enforce 30-day grace period before hard deletion |
+| Forget to generate a deletion receipt | Store a JSON receipt in the audit log with all actions taken |
+| Delete consent records | Retain as proof of lawful processing (legal requirement) |
+| Delete payment records | Retain transaction ID + amount for 7 years (NZ IRD) |
 
 ### 2.3 Data Portability (Export)
 
@@ -165,6 +194,13 @@ Under GDPR, health data requires **higher protection**.
 - Red Flag system: body part + active/inactive toggle. No diagnosis, no treatment details.
 - PAR-Q forms: if collected, store responses only, not the underlying medical conditions
 
+| Don't | Do |
+|-------|------|
+| Store full medical history or diagnoses | Collect only current injuries relevant to training |
+| Show injury details to members beyond body part | Display only "Active injury: [body part]" in member-facing views |
+| Store injuries in the member table | Use a separate `injury` table with coach/admin-only access methods |
+| Log injury details in audit events | Log only that an injury was reported/updated, not the medical content |
+
 ### 3.3 Waiver Versioning
 
 | Field | Description |
@@ -192,9 +228,15 @@ Under GDPR, health data requires **higher protection**.
 
 ### 4.2 Data Sovereignty
 
-- Host on cloud providers with **Sydney (ap-southeast-2)** or **Auckland** regions
+- **Preferred:** Host on cloud providers with **Sydney (ap-southeast-2)** or **Auckland** regions
 - If using SQLite locally: data stays on-premises (strongest sovereignty)
+- **Current state:** VPS hosted at OVH Gravelines (France, EU). GDPR-compliant region. Plan migration to AU/NZ region when load requires it.
 - Document where data is stored in the privacy policy
+
+| Don't | Do |
+|-------|------|
+| Host in regions with weak data protection laws | Host in EU (GDPR) or AU/NZ regions |
+| Forget to document the hosting location | State hosting region in the privacy policy |
 
 ### 4.3 IRD Tax Retention
 
@@ -219,9 +261,10 @@ Under GDPR, health data requires **higher protection**.
 | **Data deletion** | Anonymise PII, hard-delete medical, retain payments | ⬜ TODO |
 | **Waiver versioning** | Version + content hash + re-prompt | ⬜ TODO |
 | **Medical segregation** | Injuries in separate table with strict access | ✅ Implemented |
-| **TLS** | HTTPS in production (reverse proxy) | ⬜ TODO (infra) |
+| **TLS** | HTTPS in production (Caddy reverse proxy, auto Let's Encrypt) | ✅ Implemented |
 | **Encrypted backups** | Tested monthly | ⬜ TODO (infra) |
 | **MFA** | For Admin accounts | ⬜ TODO |
+| **Forced password change** | Seeded admin must change password on first login | ✅ Implemented |
 | **Synthetic test data** | No production data in dev/test | ✅ Implemented |
 | **Payment tokens** | Store Stripe/GoCardless token only, never raw card numbers | ⬜ TODO (when payment integrated) |
 | **Breach response plan** | Document and test incident response | ⬜ TODO |

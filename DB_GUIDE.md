@@ -2,6 +2,8 @@
 
 This guide covers the "Golden Path" for the application's persistence layer, ensuring robustness, high concurrency, and alignment with our [Architecture Guidelines](GUIDELINES.md).
 
+---
+
 ## 1. Directory Structure
 
 We separate database logic into **Adapters**, respecting the [Storage Isolation](GUIDELINES.md#storage-interface) rule.
@@ -10,96 +12,109 @@ We separate database logic into **Adapters**, respecting the [Storage Isolation]
 /internal/
   └── adapters/
       └── storage/
-          ├── db.go                # Global Connection setup & configuration
-          ├── migrations/          # SQL files for schema changes
-          │   ├── 001_init.sql
-          │   └── 002_add_views.sql
-          ├── member/              # Concept-specific storage
-          │   └── store.go         # Implementation of domain.MemberStore
-          └── attendance/          # Concept-specific storage
-              └── store.go         # Implementation of domain.AttendanceStore
+          ├── db.go                  # Schema (CREATE TABLE IF NOT EXISTS) + connection setup
+          ├── account/
+          │   ├── store.go           # Store interface (GetByID, Save, Delete, List, Count)
+          │   └── sqlite_store.go    # SQLite implementation of Store
+          ├── member/
+          │   ├── store.go
+          │   └── sqlite_store.go
+          └── attendance/
+              ├── store.go
+              └── sqlite_store.go
 ```
+
+| Don't | Do |
+|-------|------|
+| Put schema in separate SQL migration files | Define schema inline in `db.go` with `CREATE TABLE IF NOT EXISTS` |
+| Combine interface and implementation in one file | Split into `store.go` (interface) and `sqlite_store.go` (implementation) |
+| Share a store across multiple concepts | One `store.go` + `sqlite_store.go` per concept |
 
 ---
 
 ## 2. Configuration (`internal/adapters/storage/db.go`)
 
-This is the "engine room." We use the `mattn/go-sqlite3` driver with strict pragmas to ensure high concurrency and data safety.
+This is the "engine room." We use the `modernc.org/sqlite` driver (pure Go, no CGO required) with strict pragmas to ensure high concurrency and data safety.
 
 **Key Settings Applied:**
 
 *   **`WAL Mode`**: Allows simultaneous readers and one writer.
-*   **`Busy Timeout`**: Prevents "database locked" errors during high traffic.
+*   **`Busy Timeout`**: 5000ms — prevents "database locked" errors during high traffic.
 *   **`Foreign Keys`**: Enforces data integrity at the DB level.
+*   **`Synchronous = NORMAL`**: Balance of speed and safety for WAL mode.
 
 ```go
-package storage
+package main
 
 import (
 	"database/sql"
 	"log"
-	"time"
 
 	_ "modernc.org/sqlite"
 )
 
-func Init(dbPath string) *sql.DB {
-	// 1. Connection String (The "Secret Sauce")
-	// - **Driver**: `modernc.org/sqlite` (Pure Go, no CGO required).
-	// - **Mode**: WAL (`?_journal_mode=WAL`).
-	// - **Foreign Keys**: ON (`?_foreign_keys=on`).
-	// - **Busy Timeout**: 5000ms.
-	// - **Synchronous**: NORMAL (balance of speed/safety for WAL).
-	dsn := dbPath + "?_journal_mode=WAL&_busy_timeout=5000&_foreign_keys=on&_synchronous=NORMAL"
+// DSN uses _pragma() syntax for modernc.org/sqlite
+dsn := "workshop.db?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(ON)&_pragma=synchronous(NORMAL)"
 
-	db, err := sql.Open("sqlite", dsn)
-	if err != nil {
-		log.Fatalf("Fatal: Could not open DB: %v", err)
-	}
+db, err := sql.Open("sqlite", dsn)
+if err != nil {
+	log.Fatalf("failed to open database: %v", err)
+}
 
-	// 2. Connection Pool Settings
-	// Since we are in WAL mode, we can allow multiple open connections.
-	db.SetMaxOpenConns(25)
-	db.SetMaxIdleConns(25)
-	db.SetConnMaxLifetime(1 * time.Hour)
+// Connection pool for WAL mode
+db.SetMaxOpenConns(25)
+db.SetMaxIdleConns(25)
 
-	// 3. Health Check
-	if err := db.Ping(); err != nil {
-		log.Fatalf("Fatal: Database unreachable: %v", err)
-	}
-
-	log.Println("Database initialized successfully in WAL mode.")
-	return db
+// Health check
+if err := db.Ping(); err != nil {
+	log.Fatalf("database unreachable: %v", err)
 }
 ```
 
+| Don't | Do |
+|-------|------|
+| Use `mattn/go-sqlite3` (requires CGO) | Use `modernc.org/sqlite` (pure Go, cross-compiles) |
+| Use `?_journal_mode=WAL` query string syntax | Use `?_pragma=journal_mode(WAL)` syntax for modernc driver |
+| Skip the busy timeout | Always set `_pragma=busy_timeout(5000)` to avoid "database is locked" errors |
+| Set `SetMaxOpenConns(1)` | Set `SetMaxOpenConns(25)` — WAL mode supports concurrent readers |
+| Forget to enable foreign keys | Always set `_pragma=foreign_keys(ON)` in the DSN |
+
 ---
 
-## 3. Schema & Migrations
+## 3. Schema
 
-We use **Migrations** to manage schema changes. Each Concept owns its tables.
+All tables are defined in `db.go` using `CREATE TABLE IF NOT EXISTS`. The schema runs on every startup — idempotent by design.
 
-**Example `001_init.sql`:**
-
-```sql
--- 1. Concept Tables (Isolated)
-CREATE TABLE members (
+```go
+// internal/adapters/storage/db.go
+schema := `
+CREATE TABLE IF NOT EXISTS member (
     id TEXT PRIMARY KEY,
     email TEXT NOT NULL UNIQUE,
-    status TEXT DEFAULT 'active',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    name TEXT NOT NULL,
+    program TEXT NOT NULL,
+    status TEXT NOT NULL
 );
 
-CREATE TABLE attendance (
+CREATE TABLE IF NOT EXISTS attendance (
     id TEXT PRIMARY KEY,
     member_id TEXT NOT NULL,
-    checked_in_at DATETIME,
-    FOREIGN KEY(member_id) REFERENCES members(id)
+    check_in_time TEXT NOT NULL,
+    schedule_id TEXT,
+    class_date TEXT,
+    FOREIGN KEY (member_id) REFERENCES member(id)
 );
-
--- 2. Performance Indexes (For Projections)
-CREATE INDEX idx_attendance_member ON attendance(member_id);
+`
 ```
+
+| Don't | Do |
+|-------|------|
+| Use `DATETIME` or `INTEGER` for timestamps | Use `TEXT NOT NULL` and store as RFC3339 strings (`2006-01-02T15:04:05Z07:00`) |
+| Use `AUTOINCREMENT` integer IDs | Use `TEXT PRIMARY KEY` with UUID strings |
+| Omit `NOT NULL` on required fields | Always add `NOT NULL` constraints |
+| Forget foreign key declarations | Always declare `FOREIGN KEY (col) REFERENCES table(id)` |
+| Put restricted data (injuries, observations) in the member table | Store in separate tables with stricter access methods |
+| Skip performance indexes | Add `CREATE INDEX` for frequently queried columns (foreign keys, dates) |
 
 ---
 
@@ -107,55 +122,68 @@ CREATE INDEX idx_attendance_member ON attendance(member_id);
 
 ### A. Reading (Projections)
 
-Projections are the **only** place where cross-concept data is combined. They can read from multiple tables (or Views) to build a result.
+Projections are the **only** place where cross-concept data is combined. They can JOIN across tables.
 
 ```go
 // internal/application/projections/member_summary.go
 
-func QueryMemberSummary(ctx context.Context, db *sql.DB, memberID string) (*MemberSummary, error) {
-    // Projections can JOIN tables for efficiency
+func QueryMemberSummary(ctx context.Context, db *sql.DB, memberID string) (MemberSummary, error) {
     query := `
         SELECT m.id, m.email, COUNT(a.id) as total_attendance
-        FROM members m
+        FROM member m
         LEFT JOIN attendance a ON m.id = a.member_id
         WHERE m.id = ?
         GROUP BY m.id`
     
     var s MemberSummary
     err := db.QueryRowContext(ctx, query, memberID).Scan(&s.ID, &s.Email, &s.TotalAttendance)
-    return &s, err
+    return s, err
 }
 ```
 
+| Don't | Do |
+|-------|------|
+| Mutate data in a projection | Projections are read-only — use orchestrators for writes |
+| Use `db.QueryRow()` without context | Always use `db.QueryRowContext(ctx, ...)` |
+| Return pointer types from projections | Return value types: `(MemberSummary, error)` not `(*MemberSummary, error)` |
+| `SELECT *` | List columns explicitly — resilient to schema changes |
+
 ### B. Writing (Concept Stores)
 
-**Rule:** Writes are isolated to a single Concept. Complex workflows across concepts are coordinated by **Orchestrators**, not by giant transactions.
+**Rule:** Writes are isolated to a single concept. Complex workflows across concepts are coordinated by **Orchestrators**, not by giant transactions.
 
 ```go
-// internal/adapters/storage/member/store.go
+// internal/adapters/storage/member/sqlite_store.go
 
-func (s *SQLiteStore) Save(ctx context.Context, m *member.Member) error {
-    // 1. Transactions are for ATOMIC updates within ONE concept
+func (s *SQLiteStore) Save(ctx context.Context, entity domain.Member) error {
     tx, err := s.db.BeginTx(ctx, nil)
     if err != nil {
         return err
     }
     defer tx.Rollback()
 
-    // 2. Upsert Logic
     query := `
-        INSERT INTO members (id, email, status) VALUES (?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET email=excluded.email, status=excluded.status`
+        INSERT INTO member (id, email, name, program, status) VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET email=excluded.email, name=excluded.name,
+        program=excluded.program, status=excluded.status`
     
-    _, err = tx.ExecContext(ctx, query, m.ID, m.Email, m.Status)
+    _, err = tx.ExecContext(ctx, query, entity.ID, entity.Email, entity.Name, entity.Program, entity.Status)
     if err != nil {
-        return err // e.g., constraint violation
+        return err
     }
 
-    // 3. Commit
     return tx.Commit()
 }
 ```
+
+| Don't | Do |
+|-------|------|
+| Accept pointer types: `Save(ctx, m *member.Member)` | Accept value types: `Save(ctx, entity domain.Member)` |
+| Write to multiple concept tables in one transaction | One transaction per concept — orchestrators coordinate across concepts |
+| Use `db.Exec()` for writes | Always wrap writes in `BeginTx` + `defer tx.Rollback()` + `tx.Commit()` |
+| Use `INSERT OR REPLACE` (deletes then re-inserts) | Use `INSERT ... ON CONFLICT(id) DO UPDATE SET` (true upsert) |
+| Build SQL with `fmt.Sprintf` and user input | Always use `?` parameterized placeholders |
+| Put business logic in the store | Stores are pure data access — business logic goes in concept methods or orchestrators |
 
 ---
 
@@ -163,25 +191,28 @@ func (s *SQLiteStore) Save(ctx context.Context, m *member.Member) error {
 
 ### Managing "The File"
 
-Because SQLite is just a file (`app.db`), you must treat it differently than a server-based DB.
+Because SQLite is just a file (`workshop.db`), you must treat it differently than a server-based DB.
 
 1.  **Never delete the `.db-wal` or `.db-shm` files** while the app is running. These contain unwritten data.
-2.  **Backups:** You cannot just copy/paste the `.db` file while the app is running (you might get a corrupted half-written file).
+2.  **Backups:** You cannot just `cp` the `.db` file while the app is running — you'll get a corrupted half-written file.
+
+| Don't | Do |
+|-------|------|
+| `cp workshop.db backup.db` while app is running | Use `VACUUM INTO 'backup.db'` or Litestream for safe backups |
+| Delete `.db-wal` or `.db-shm` while app is running | Stop the app first, or let SQLite manage these files |
+| Store the DB in a temp directory | Store in a persistent path with proper permissions (`/opt/workshop/`) |
 
 ### The Recommended Backup Tool: Litestream
 
-For a Go app, use [Litestream](https://litestream.io/). It runs as a sidecar process and streams changes to S3 (or Google Cloud Storage) in real-time.
-
-**Example `litestream.yml`:**
+For continuous replication, use [Litestream](https://litestream.io/). It runs as a sidecar and streams WAL changes to S3 in real-time.
 
 ```yaml
+# litestream.yml
 dbs:
-  - path: /data/app.db
+  - path: /opt/workshop/workshop.db
     replicas:
-      - url: s3://my-bucket/db-backup
+      - url: s3://my-bucket/workshop-backup
 ```
-
-*This gives you "Point-in-Time Recovery" (you can restore your DB to the state it was in at exactly 2:43 PM yesterday).*
 
 ---
 
@@ -189,6 +220,8 @@ dbs:
 
 | Symptom | Cause | Solution |
 | --- | --- | --- |
-| **"database is locked"** | A writer is taking too long or transactions aren't closing. | Ensure all `tx` have `defer tx.Rollback()`. Check your `_busy_timeout` config. |
-| **"no such table"** | Migrations didn't run or path is wrong. | Check the file path to your DB. If using relative paths, standard working dir rules apply. |
-| **Performance is slow** | Missing indexes. | Run `EXPLAIN QUERY PLAN SELECT...` in a SQL tool to see if you are scanning full tables. |
+| **"database is locked"** | Writer taking too long or transactions not closing | Ensure all `tx` have `defer tx.Rollback()`. Verify `_pragma=busy_timeout(5000)` in DSN. |
+| **"no such table"** | Schema didn't run or wrong DB path | Check that `storage.InitDB(db)` runs before any queries. Verify the DSN file path. |
+| **Performance is slow** | Missing indexes | Run `EXPLAIN QUERY PLAN SELECT...` to check for full table scans. Add indexes on foreign keys and date columns. |
+| **"foreign key mismatch"** | `_pragma=foreign_keys(ON)` not set | Ensure foreign keys are enabled in the DSN. Without it, FK constraints are silently ignored. |
+| **Data loss after crash** | Deleted `.db-wal` while app was running | Never touch WAL/SHM files manually. Use `VACUUM INTO` for safe backups. |

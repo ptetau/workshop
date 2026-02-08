@@ -129,14 +129,20 @@ Orchestrators coordinate workflows across concepts. They validate inputs and han
 
 ```go
 // internal/application/orchestrators/cancel_order.go
-func ExecuteCancelOrder(ctx context.Context, input CancelOrderInput) error {
+
+type CancelOrderDeps struct {
+    OrderStore     OrderStoreForCancel
+    InventoryStore InventoryStoreForCancel
+}
+
+func ExecuteCancelOrder(ctx context.Context, input CancelOrderInput, deps CancelOrderDeps) error {
     // Validate input
     if input.OrderID == "" {
         return ErrMissingOrderID
     }
     
     // Coordinate concepts
-    order, err := orderStore.GetByID(ctx, input.OrderID)
+    order, err := deps.OrderStore.GetByID(ctx, input.OrderID)
     if err != nil {
         return fmt.Errorf("order not found: %w", err)
     }
@@ -147,12 +153,12 @@ func ExecuteCancelOrder(ctx context.Context, input CancelOrderInput) error {
         }
         return err
     }
-    orderStore.Save(ctx, order)
+    deps.OrderStore.Save(ctx, order)
     
     // Coordinate with other concepts
-    inventory, _ := inventoryStore.GetByID(ctx, order.InventoryID)
+    inventory, _ := deps.InventoryStore.GetByID(ctx, order.InventoryID)
     inventory.Release(order.Quantity)
-    inventoryStore.Save(ctx, inventory)
+    deps.InventoryStore.Save(ctx, inventory)
     
     return nil
 }
@@ -163,6 +169,7 @@ func ExecuteCancelOrder(ctx context.Context, input CancelOrderInput) error {
 | Put workflow logic in concepts | Coordinate in orchestrators |
 | Use cross-concept transactions | Design compensating actions |
 | Ignore partial failures | Define compensation per step |
+| Use global store variables | Use a deps struct with store interfaces (dependency injection) |
 
 ---
 
@@ -267,7 +274,8 @@ All symbols must be explicit. No abbreviations.
 ### Consistency
 - Cross-concept consistency is **eventual**
 - Orchestrators use **compensating actions** for partial failures
-- Concepts own their **migrations**; projections can be rebuilt
+- Schema is defined in `db.go` with `CREATE TABLE IF NOT EXISTS` (idempotent on startup)
+- Projections can be rebuilt from concept state
 
 ---
 
