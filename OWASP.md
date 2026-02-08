@@ -18,15 +18,22 @@ Concrete implementation steps for meeting the OWASP Top 10 2025 (Release Candida
 - [ ] **Context-Based Checks:** Extract user roles from the request context
 
 ```go
-func AdminOnly(next http.Handler) http.Handler {
-    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        user := GetUserFromContext(r.Context())
-        if user.Role != "admin" {
-            http.Error(w, "Forbidden", http.StatusForbidden)
-            return
-        }
-        next.ServeHTTP(w, r)
-    })
+// Centralized role check — use RequireRole() middleware, not per-handler checks
+func RequireRole(roles ...string) func(http.Handler) http.Handler {
+    roleSet := make(map[string]bool, len(roles))
+    for _, r := range roles {
+        roleSet[r] = true
+    }
+    return func(next http.Handler) http.Handler {
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            session, ok := GetSessionFromContext(r.Context())
+            if !ok || !roleSet[session.Role] {
+                http.Error(w, "Forbidden", http.StatusForbidden)
+                return
+            }
+            next.ServeHTTP(w, r)
+        })
+    }
 }
 ```
 
@@ -100,23 +107,19 @@ tmpl.Execute(w, data)
 | Trust all internal services | Apply zero-trust between services |
 
 - [ ] **Threat Modeling:** Document threats during design phase
-- [ ] **Rate Limiting:** Use `golang.org/x/time/rate` for critical endpoints
+- [ ] **Rate Limiting:** Per-IP rate limiter on all endpoints (10 req/sec)
 - [ ] **Defense in Depth:** Validate at every layer (routes, orchestrators, concepts)
 
 ```go
-import "golang.org/x/time/rate"
+// Per-IP rate limiter applied as middleware (middleware.NewRateLimiter)
+limiter := middleware.NewRateLimiter(10, time.Second) // 10 req/sec per IP
 
-var limiter = rate.NewLimiter(rate.Every(time.Second), 10) // 10 req/sec
-
-func RateLimitMiddleware(next http.Handler) http.Handler {
-    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        if !limiter.Allow() {
-            http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
-            return
-        }
-        next.ServeHTTP(w, r)
-    })
-}
+return middleware.Chain(mux,
+    middleware.SecurityHeaders,
+    middleware.CSRF(csrfKey),
+    middleware.Auth(sessions),
+    middleware.RateLimit(limiter),
+)
 ```
 
 ---
@@ -129,7 +132,7 @@ func RateLimitMiddleware(next http.Handler) http.Handler {
 |-------|------|
 | Run with debug mode in production | Disable debug; use environment flags |
 | Expose stack traces to users | Log internally; return generic errors |
-| Leave default credentials | Require configuration on first run |
+| Leave default credentials unchanged | Seed with `PasswordChangeRequired=true` to force change on first login |
 
 - [ ] **Error Handling:** Never expose internal errors to clients
 - [ ] **Security Headers:** Set CSP, X-Frame-Options, X-Content-Type-Options
@@ -188,13 +191,13 @@ govulncheck ./...
 
 ```go
 http.SetCookie(w, &http.Cookie{
-    Name:     "session",
-    Value:    sessionToken,
+    Name:     "workshop_session",
+    Value:    token,            // 32-byte cryptographically random hex
     HttpOnly: true,
-    Secure:   true,
+    Secure:   true,             // HTTPS only (Caddy handles TLS)
     SameSite: http.SameSiteStrictMode,
     Path:     "/",
-    MaxAge:   3600,
+    MaxAge:   86400,            // 24 hours — matches server-side session expiry
 })
 ```
 
@@ -243,14 +246,12 @@ if err := decoder.Decode(&input); err != nil {
 ```go
 import "log/slog"
 
-func LogAuthEvent(userID string, event string, success bool) {
-    slog.Info("auth_event",
-        "user_id", userID,
-        "event", event,
-        "success", success,
-        "ip", GetClientIP(r),
-    )
-}
+// Auth events use the "auth_event" key
+slog.Info("auth_event", "event", "login_success", "email", input.Email, "role", acct.Role)
+slog.Info("auth_event", "event", "login_failed", "email", input.Email, "reason", "wrong_password")
+
+// Data mutations use the "audit_event" key
+slog.Info("audit_event", "actor_id", actorID, "action", "member.update", "resource_id", memberID)
 ```
 
 ---
