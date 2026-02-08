@@ -1,7 +1,11 @@
 package web
 
 import (
+	"crypto/rand"
+	"encoding/hex"
+	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"workshop/internal/adapters/http/middleware"
@@ -49,6 +53,27 @@ type Stores struct {
 	ClipStore            clipStore.Store
 }
 
+// loadCSRFKey reads the CSRF secret from WORKSHOP_CSRF_KEY (hex-encoded, 32 bytes).
+// In production, the key MUST be set. In development, a random key is generated per startup.
+func loadCSRFKey() []byte {
+	if keyHex := os.Getenv("WORKSHOP_CSRF_KEY"); keyHex != "" {
+		key, err := hex.DecodeString(keyHex)
+		if err != nil || len(key) != 32 {
+			log.Fatal("WORKSHOP_CSRF_KEY must be 64 hex characters (32 bytes)")
+		}
+		return key
+	}
+	if os.Getenv("WORKSHOP_ENV") == "production" {
+		log.Fatal("WORKSHOP_CSRF_KEY is required in production")
+	}
+	key := make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		log.Fatalf("failed to generate CSRF key: %v", err)
+	}
+	log.Println("WARNING: using random CSRF key (sessions won't survive restart). Set WORKSHOP_CSRF_KEY for production.")
+	return key
+}
+
 // Global stores instance (set by NewMux)
 var stores *Stores
 
@@ -64,8 +89,8 @@ func NewMux(staticDir string, s *Stores) http.Handler {
 	mux.Handle("/", http.FileServer(http.Dir(staticDir)))
 	registerRoutes(mux)
 
-	// Create CSRF protection (key should be env var in prod)
-	csrfKey := []byte("01234567890123456789012345678901") // 32 bytes
+	// CSRF key: 32-byte hex-encoded secret from env var
+	csrfKey := loadCSRFKey()
 
 	// Rate limiter: 10 requests per second per IP (OWASP A04)
 	limiter := middleware.NewRateLimiter(10, time.Second)

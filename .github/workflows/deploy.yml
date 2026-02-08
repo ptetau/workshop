@@ -19,10 +19,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: go.mod
           cache: true
@@ -32,7 +32,7 @@ jobs:
 
       - name: Build binary
         run: |
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o workshop ./cmd/server
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -trimpath -o workshop ./cmd/server
         env:
           CGO_ENABLED: "0"
           GOOS: linux
@@ -47,7 +47,7 @@ jobs:
 
       - name: Deploy to VPS
         run: |
-          SSH_OPTS="-i ~/.ssh/deploy_key -o StrictHostKeyChecking=no"
+          SSH_OPTS="-i ~/.ssh/deploy_key"
           VPS_USER="${{ secrets.VPS_USER }}"
           VPS_HOST="${{ secrets.VPS_HOST }}"
           DEPLOY_DIR="/opt/workshop"
@@ -79,5 +79,13 @@ jobs:
             # Wait a moment and check it started
             sleep 2
             sudo systemctl is-active workshop
-            echo "Deploy complete!"
+            # HTTP health check — verify app actually responds
+            sleep 1
+            if curl -sf http://127.0.0.1:8080/login > /dev/null 2>&1; then
+              echo "Deploy complete! Health check passed."
+            else
+              echo "WARNING: Service is active but HTTP health check failed!"
+              sudo journalctl -u workshop -n 20 --no-pager
+              exit 1
+            fi
           ENDSSH

@@ -14,14 +14,61 @@ StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=workshop
 
-# Environment
+# Environment — production config
 Environment=WORKSHOP_ENV=production
+Environment=WORKSHOP_ADDR=127.0.0.1:8080
+# WORKSHOP_CSRF_KEY must be set — generate with: openssl rand -hex 32
+# WORKSHOP_ADMIN_EMAIL and WORKSHOP_ADMIN_PASSWORD should be set on first run
+# For secrets, prefer EnvironmentFile over inline Environment:
+#   EnvironmentFile=/opt/workshop/.env
 
-# Security hardening
+# --- Security Hardening (systemd sandbox) ---
+
+# Prevent privilege escalation
 NoNewPrivileges=true
+
+# Filesystem isolation
 ProtectSystem=strict
 ProtectHome=true
 ReadWritePaths=/opt/workshop
+PrivateTmp=true
+PrivateDevices=true
+
+# Kernel protection
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+
+# Restrict capabilities (drop all, the app needs none)
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+# Restrict system calls to a safe subset
+SystemCallFilter=@system-service
+SystemCallArchitectures=native
+
+# Prevent SUID/SGID
+RestrictSUIDSGID=true
+
+# Prevent writing to executable memory (anti-exploit)
+MemoryDenyWriteExecute=true
+
+# Restrict namespace creation
+RestrictNamespaces=true
+
+# Restrict realtime scheduling
+RestrictRealtime=true
+
+# Lock personality to Linux (prevent compat modes)
+LockPersonality=true
+
+# Prevent access to /proc (this process doesn't need it)
+ProcSubset=pid
+ProtectProc=invisible
+
+# Remove all filesystem access except what's explicitly allowed
+UMask=0077
 
 [Install]
 WantedBy=multi-user.target

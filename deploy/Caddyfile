@@ -6,18 +6,40 @@
 
 YOUR_DOMAIN {
 	reverse_proxy localhost:8080
+
 	encode gzip
 
 	header {
-		# Security headers
+		# HSTS — tell browsers to always use HTTPS (2 years, include subdomains)
+		Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+
+		# Prevent MIME sniffing
 		X-Content-Type-Options "nosniff"
+
+		# Prevent framing (clickjacking)
 		X-Frame-Options "DENY"
+
+		# Control referrer leakage
 		Referrer-Policy "strict-origin-when-cross-origin"
+
+		# Disable browser features we don't use
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=()"
+
+		# Remove server identity
 		-Server
+		-X-Powered-By
+	}
+
+	# Limit request body size (10MB — prevents abuse)
+	request_body {
+		max_size 10MB
 	}
 
 	log {
-		output file /var/log/caddy/workshop.log
+		output file /var/log/caddy/workshop.log {
+			roll_size 50MiB
+			roll_keep 5
+		}
 		format json
 	}
 }
