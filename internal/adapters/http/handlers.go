@@ -29,7 +29,6 @@ import (
 	messageDomain "workshop/internal/domain/message"
 	milestoneDomain "workshop/internal/domain/milestone"
 	noticeDomain "workshop/internal/domain/notice"
-	observationDomain "workshop/internal/domain/observation"
 	scheduleDomain "workshop/internal/domain/schedule"
 	termDomain "workshop/internal/domain/term"
 	themeDomain "workshop/internal/domain/theme"
@@ -1110,19 +1109,17 @@ func handleObservations(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "invalid JSON", http.StatusBadRequest)
 			return
 		}
-		obs := observationDomain.Observation{
-			ID:        generateID(),
-			MemberID:  input.MemberID,
-			AuthorID:  sess.AccountID,
-			Content:   input.Content,
-			CreatedAt: timeNow(),
-		}
-		if err := obs.Validate(); err != nil {
+		obs, err := orchestrators.ExecuteCreateObservation(ctx, orchestrators.CreateObservationInput{
+			MemberID: input.MemberID,
+			Content:  input.Content,
+			AuthorID: sess.AccountID,
+		}, orchestrators.CreateObservationDeps{
+			ObservationStore: stores.ObservationStore,
+			GenerateID:       generateID,
+			Now:              timeNow,
+		})
+		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		if err := stores.ObservationStore.Save(ctx, obs); err != nil {
-			internalError(w, err)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
