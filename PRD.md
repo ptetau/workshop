@@ -14,7 +14,7 @@ All features are gated by role. Every account belongs to exactly one role.
 |------|-------------|
 | **Admin** | Gym owner/operator. Full system access including schedule, billing, grading, and user management. |
 | **Coach** | Instructor. Can manage check-ins, view attendance, manage kiosk mode, propose gradings, curate content, and control curriculum rotors. |
-| **Member** | Active paying student. Can check in, flag injuries, view schedule, track flight time, request themes, set personal goals, and access study tools. |
+| **Member** | Active paying student. Can check in, flag injuries, view schedule, track mat hours, vote on topics, set personal goals, and access study tools. |
 | **Trial** | Prospective student. Can check in, sign waiver, and view schedule. No hard visit limit — Admin manually converts to Member when ready. |
 | **Guest** | Drop-in visitor. A lightweight account (name + email) is created during the waiver flow. If they return, they are recognised and prompted to convert to Trial or Member. |
 
@@ -26,26 +26,42 @@ All features are gated by role. Every account belongs to exactly one role.
 | **Inactive** | Has stopped checking in (flagged after a configurable number of days). Still visible in member lists with an "inactive" indicator. |
 | **Archived** | Manually archived by Admin. Hidden from all active views and kiosk search. All data preserved. Can be restored to Active at any time. |
 
-### 1.3 Programs & Schedule
+### 1.3 Programs, Classes & Schedule
 
-Workshop runs multiple programs, each of which can have its own independent curriculum rotor (see §5). Programs are extensible by Admin.
+The system uses a **three-tier hierarchy**:
 
-| Program | Description | Duration | Audience |
-|---------|-------------|----------|----------|
-| **Nuts & Bolts** | Beginner skills development (Gi) | 60 min | Adults — all levels welcome |
-| **Gi Express** | All-levels skills development and sparring (Gi) | 60 min | Adults — all levels |
-| **NoGi Express** | All-levels skills development and sparring (NoGi) | 60 min | Adults — all levels |
-| **Feet-to-Floor** | Skills for taking the match to the ground | 60 min | Adults — all levels |
-| **NoGi Long Games** | Specific sparring and competition prep (NoGi) | 60 min | Adults — experience required |
-| **BYO Task Based Games** | Practice game design and specific skills (Gi or NoGi) | 60 min | Adults — experience recommended |
-| **Open Mat** | Gi or NoGi sparring | 60–180 min | Adults — experience required |
-| **Workshop Kids** | Kids program | 45 min | Ages 6–11, runs during NZ school terms |
-| **Workshop Youth** | Youth program | 45–60 min | Ages 12–16, runs during NZ school terms |
+```
+Program (Adults, Kids, Youth)
+  └── Class (Gi Express, Nuts & Bolts, Workshop Kids, etc.)
+       └── Session (a specific occurrence on a given day + time)
+```
+
+**Programs** are audience groups. Every member belongs to exactly one program. Programs determine which classes a member sees by default, which term structure applies, and which communications they receive. As kids and youth age up, Admin updates their program assignment.
+
+| Program | Audience | Term-Aligned |
+|---------|----------|:------------:|
+| **Adults** | 18+ years | No |
+| **Kids** | Ages 6–11 | Yes (NZ school terms) |
+| **Youth** | Ages 12–16 | Yes (NZ school terms) |
+
+**Classes** are named session types within a program. Each class can have its own curriculum rotor (see §5). Classes are extensible by Admin.
+
+| Class | Program | Description | Duration |
+|-------|---------|-------------|----------|
+| **Nuts & Bolts** | Adults | Beginner skills development (Gi) | 60 min |
+| **Gi Express** | Adults | All-levels skills development and sparring (Gi) | 60 min |
+| **NoGi Express** | Adults | All-levels skills development and sparring (NoGi) | 60 min |
+| **Feet-to-Floor** | Adults | Skills for taking the match to the ground | 60 min |
+| **NoGi Long Games** | Adults | Specific sparring and competition prep (NoGi) | 60 min |
+| **BYO Task Based Games** | Adults | Practice game design and specific skills (Gi or NoGi) | 60 min |
+| **Open Mat** | Adults | Gi or NoGi sparring | 60–180 min |
+| **Workshop Kids** | Kids | Kids program | 45 min |
+| **Workshop Youth** | Youth | Youth program | 45–60 min |
 
 **Default Weekly Timetable (from workshopjiujitsu.co.nz):**
 
-| Day | Time | Session | Duration |
-|-----|------|---------|----------|
+| Day | Time | Class | Duration |
+|-----|------|-------|----------|
 | Monday | 12:00 PM | Gi Express | 60 min |
 | Monday | 6:00 PM | Nuts & Bolts | 60 min |
 | Monday | 7:15 PM | Feet-to-Floor | 60 min |
@@ -62,6 +78,8 @@ Workshop runs multiple programs, each of which can have its own independent curr
 | Friday | 12:00 PM | Gi Sparring | 60 min |
 | Saturday | 9:00 AM | Workshop Kids | 45 min |
 | Saturday | 10:00 AM | Open Mat | 180 min |
+
+Members see classes from their own program by default. Admin can grant visibility to additional classes (e.g., a Youth member allowed in some Adults classes).
 
 **NZ School Terms (default suggestions):**
 
@@ -80,14 +98,16 @@ Kids and Youth programs are term-aligned. The system suggests NZ school term dat
 
 | Term | Definition |
 |------|-----------|
-| **Flight time** | Total accumulated mat hours for a member — the canonical metric for adult grading. Includes recorded hours (from check-ins) and estimated hours (admin/self-submitted). |
-| **Session** | A specific class time-slot on a given day (e.g., "Monday 6 PM Nuts & Bolts"). Resolved on-the-fly from Schedule + Terms − Holidays. |
-| **Program** | A named class type that appears on the timetable (Gi Express, Kids, etc.). Each program can have its own rotor. |
-| **Rotor** | A cycling curriculum of themes assigned to a program. Coaches advance the rotor manually. |
-| **Theme** | A technical block within a rotor with a configurable duration (days or weeks). Contains topics. |
-| **Topic** | A specific technique or drill within a theme, with a frequency weight. |
-| **Promotion** | The act of advancing a member to a new belt. Proposed by Coach, approved by Admin. |
-| **Stripe** | A progress marker within a belt level (0–4). For adults, inferred automatically from flight time. |
+| **Mat hours** | Total accumulated training hours for a member — the canonical metric for adult belt progression. Includes recorded hours (from check-ins) and estimated hours (admin/self-submitted). Displayed to members as **"flight time"** in the UI. |
+| **Flight time** | Member-facing display name for mat hours. Used in dashboards and training logs. The underlying data model uses `mat_hours`. |
+| **Program** | An audience group: Adults, Kids, or Youth. Every member belongs to exactly one program. Determines default class visibility, term structure, and communications targeting. |
+| **Class** | A named session type within a program (Gi Express, Nuts & Bolts, Workshop Kids, etc.). Each class can have its own curriculum rotor. |
+| **Session** | A specific occurrence of a class on a given day and time (e.g., "Monday 6 PM Nuts & Bolts"). Resolved on-the-fly from Schedule + Terms − Holidays. |
+| **Rotor** | A versioned curriculum structure assigned to a class. Contains N concurrent theme categories, each with its own topic queue. Coaches advance topic queues; the rotor auto-advances by default when a topic's duration expires. |
+| **Theme** | A positional/tactical category within a rotor (e.g., Standing, Guard, Pinning, In-Between Game). Multiple themes run concurrently each week. |
+| **Topic** | A specific technique or drill within a theme's rotating queue. One topic per theme is scheduled each week; members can vote to bump the scheduled topic. |
+| **Promotion** | The act of advancing a member to a new belt. Proposed by Coach, approved by Admin. The ceremony is handled outside the system. |
+| **Stripe** | A progress marker within a belt level (0–4). For adults, inferred automatically from mat hours. |
 
 ---
 
@@ -241,18 +261,18 @@ As a Member, I should only be able to un-check-in from today's sessions so that 
 
 ### 3.1 Attendance Records
 
-Each check-in creates an attendance record linking a member to a resolved session (program + date + time). Flight time is calculated from the session's configured duration.
+Each check-in creates an attendance record linking a member to a resolved session (class + date + time). Mat hours are calculated from the session's configured duration. **All session types count equally by default** (1 hour = 1 mat hour). Admin can optionally configure a weighting multiplier per class (e.g., Open Mat = 0.5× because it's unstructured, Competition Prep = 1.5×).
 
 **Access:** Admin ✓ (view all) | Coach ✓ (view all) | Member ✓ (own) | Trial ✓ (own) | Guest —
 
 #### User Stories
 
-**US-3.1.1: Attendance creates flight time**
-As a Member, I want my check-in to automatically add the session's duration to my flight time so that my training hours are tracked.
+**US-3.1.1: Attendance creates mat hours**
+As a Member, I want my check-in to automatically add the session's duration to my mat hours so that my training is tracked.
 
 - *Given* I check into "6:00 PM Nuts & Bolts" (60 min)
 - *When* the attendance record is created
-- *Then* 1 hour is added to my recorded flight time
+- *Then* 1 hour is added to my recorded mat hours
 
 **US-3.1.2: Coach views today's attendance**
 As a Coach, I want to see who has checked in for today's sessions so that I know who is on the mat.
@@ -286,7 +306,7 @@ As a Coach, I want a prominent "Back to Today" button so that I can quickly retu
 
 ### 3.3 Training Log
 
-A member-facing projection of their attendance data: classes attended, flight time (split into recorded and estimated), streaks, belt/stripe icon, and grading progress.
+A member-facing projection of their attendance data: classes attended, mat hours displayed as "flight time" (split into recorded and estimated), streaks, belt/stripe icon, and belt progression progress.
 
 **Access:** Admin — | Coach — | Member ✓ | Trial ✓ | Guest —
 
@@ -297,7 +317,7 @@ As a Member, I want to see my training log so that I know how much I've trained 
 
 - *Given* I have attended 47 classes this year
 - *When* I open my training log
-- *Then* I see: 47 classes, 120 flight time hours (108 recorded + 12 estimated), current 3-week streak, Blue belt with 2 inferred stripes, and a progress bar toward Purple eligibility
+- *Then* I see: 47 classes, 120 mat hours shown as "flight time" (108 recorded + 12 estimated), current 3-week streak, Blue belt with 2 inferred stripes, and a progress bar toward Purple eligibility
 
 **US-3.3.2: Milestone achievement**
 As a Member, I want to earn milestone badges so that I feel rewarded for consistent training.
@@ -312,23 +332,23 @@ As an Admin, I want to configure milestone thresholds so that the club can celeb
 
 - *Given* I navigate to milestone configuration
 - *When* I create a new milestone: "200 mat hours"
-- *Then* any member who reaches 200 flight time hours will receive the badge
+- *Then* any member who reaches 200 mat hours will receive the badge
 
 ### 3.4 Estimated Training Hours
 
-For members with incomplete records, Admin or Coach can bulk-add estimated flight time by selecting a date range and entering estimated weekly hours. Overlaps with existing recorded training are handled explicitly.
+For members with incomplete records, Admin or Coach can bulk-add estimated mat hours by selecting a date range and entering estimated weekly hours. Overlaps with existing recorded training are handled explicitly.
 
 **Access:** Admin ✓ | Coach ✓ | Member — (see §3.5 for self-estimates)
 
 #### User Stories
 
 **US-3.4.1: Bulk-add estimated hours**
-As a Coach, I want to add estimated training hours for a member who hasn't been checking in so that their flight time reflects reality.
+As a Coach, I want to add estimated training hours for a member who hasn't been checking in so that their mat hours reflect reality.
 
 - *Given* a member trained Jan–Mar without checking in
 - *When* I select the member, set the date range to Jan 1 – Mar 31, and enter "3 hours/week"
 - *Then* the system calculates 13 weeks × 3 hours = 39 estimated hours
-- *And* adds them to the member's flight time, tagged as `source: estimate`
+- *And* adds them to the member's mat hours, tagged as `source: estimate`
 
 **US-3.4.2: Overlap warning — replace**
 As an Admin, I want to be warned about overlapping training data so that I can choose how to handle it.
@@ -355,12 +375,12 @@ Members can submit their own estimated training periods. Self-estimates require 
 #### User Stories
 
 **US-3.5.1: Submit self-estimate**
-As a Member who trained elsewhere while travelling, I want to submit an estimated training period so that my flight time stays accurate.
+As a Member who trained elsewhere while travelling, I want to submit an estimated training period so that my mat hours stay accurate.
 
 - *Given* I trained 3×/week for 6 weeks at a partner gym in São Paulo
 - *When* I submit an estimate: date range, "3 hours/week", note: "Trained at Checkmat SP while travelling"
 - *Then* the estimate appears in Admin's review queue with status "pending"
-- *And* it is **not** added to my flight time until approved
+- *And* it is **not** added to my mat hours until approved
 
 **US-3.5.2: Admin reviews self-estimate**
 As an Admin, I want to review member-submitted estimates so that I can verify their accuracy.
@@ -374,7 +394,7 @@ As an Admin, I want to review member-submitted estimates so that I can verify th
 As an Admin, I want approved self-estimates to be clearly marked so that they are distinguishable from recorded hours.
 
 - *Given* I approve a self-estimate
-- *When* the hours are added to the member's flight time
+- *When* the hours are added to the member's mat hours
 - *Then* they are tagged as `source: self_estimate` and appear separately in the training log
 
 ---
@@ -387,7 +407,7 @@ Tracks each member's current belt and progress toward their next grade. IBJJF-al
 
 **Adults (18+ years):** White → Blue → Purple → Brown → Black. 4 stripes per belt before promotion eligibility. Black belt has degrees per IBJJF.
 
-| Belt | Min. Time at Belt | Stripes | Default Flight Time Threshold |
+| Belt | Min. Time at Belt | Stripes | Default Mat Hours Threshold |
 |------|-------------------|---------|-------------------------------|
 | White → Blue | 2 years | 4 | 150 hours |
 | Blue → Purple | 1.5 years | 4 | 300 hours |
@@ -422,11 +442,11 @@ As a Member, I want to understand the grading criteria so that I know what's exp
 
 - *Given* I view my grading progress
 - *When* I look at the progress section
-- *Then* a note is displayed: *"Grading requires minimum flight time. Exceptions may apply for active competitors."*
+- *Then* a note is displayed: *"Belt progression requires minimum mat hours. Exceptions may apply for active competitors at Admin's discretion."*
 
 ### 4.2 Stripe Inference (Adults)
 
-Stripes are automatically inferred by pro-rating accumulated flight time across the configured threshold. No manual stripe awards needed — the system calculates stripe count from hours.
+Stripes are automatically inferred by pro-rating accumulated mat hours across the configured threshold. No manual stripe awards needed — the system calculates stripe count from hours.
 
 Formula: `stripe = floor(hours / (threshold / stripe_count))`
 
@@ -441,9 +461,9 @@ Formula: `stripe = floor(hours / (threshold / stripe_count))`
 #### User Stories
 
 **US-4.2.1: Stripes inferred automatically**
-As a Member, I want my stripes to be calculated automatically from my flight time so that I always see my current progress.
+As a Member, I want my stripes to be calculated automatically from my mat hours so that I always see my current progress.
 
-- *Given* I am a Blue belt with a 150h threshold and I have 85 flight time hours
+- *Given* I am a Blue belt with a 150h threshold and I have 85 mat hours
 - *When* I view my profile or training log
 - *Then* my belt icon shows 2 stripes (floor(85 / 37.5) = 2)
 - *And* no manual stripe award was needed
@@ -452,7 +472,7 @@ As a Member, I want my stripes to be calculated automatically from my flight tim
 As a Member, I want my stripe count to update automatically when I train more so that my progress is always current.
 
 - *Given* I have 74 hours (Stripe 1) and I check into a 1-hour session
-- *When* my flight time reaches 75 hours
+- *When* my mat hours reach 75
 - *Then* my stripe count updates to Stripe 2 across all views (training log, profile, attendance)
 
 ### 4.3 Term-Based Grading (Kids/Youth)
@@ -462,9 +482,9 @@ For term-based programs, Admin can toggle the grading metric between sessions at
 | Mode | Metric | Example |
 |------|--------|---------|
 | **Sessions** (default for kids) | Sessions attended in the current term | "24 of 30 sessions this term" |
-| **Hours** | Accumulated flight time (same as adults) | "45 hours since last promotion" |
+| **Hours** | Accumulated mat hours (same as adults) | "45 hours since last promotion" |
 
-**Sessions mode**: eligibility is based on **% of term attendance** — the system counts total available sessions in the current NZ school term, divides by attendance, and compares to admin-configured thresholds.
+**Sessions mode**: eligibility is based on **% of term attendance** — the system counts total available sessions in the current NZ school term, divides by attendance, and compares to admin-configured thresholds. Attendance resets each term. Admin has ultimate discretion over all kids/youth promotions.
 
 **Access:** Admin ✓ (configure) | Coach ✓ (view) | Member ✓ (view own) | Trial — | Guest —
 
@@ -483,7 +503,7 @@ As an Admin, I want to toggle a specific child's grading metric from sessions to
 
 - *Given* a child trains at Workshop and another gym
 - *When* I toggle their grading metric to Hours mode
-- *Then* their eligibility is based on accumulated flight time instead of term attendance %
+- *Then* their eligibility is based on accumulated mat hours instead of term attendance %
 - *And* estimated hours from the other gym can be added to their record
 
 **US-4.3.3: Term attendance counts reset**
@@ -540,9 +560,9 @@ Auto-generated list of members approaching promotion eligibility. Shows belt ico
 **US-4.5.1: View readiness list**
 As a Coach, I want to see which members are approaching promotion eligibility so that I can prepare for the next grading day.
 
-- *Given* several members are within 80% of their flight time threshold
+- *Given* several members are within 80% of their mat hours threshold
 - *When* I open the grading readiness list
-- *Then* I see each member's name, belt/stripe icon, flight time progress (or term attendance %), and any grading notes
+- *Then* I see each member's name, belt/stripe icon, mat hours progress (or term attendance %), and any grading notes
 - *And* the list is sorted by proximity to eligibility
 
 **US-4.5.2: Add grading notes**
@@ -555,14 +575,14 @@ As a Coach, I want to add notes to a member's grading readiness entry so that I 
 **US-4.5.3: Propose promotion from readiness list**
 As a Coach, I want to propose a promotion directly from the readiness list so that I don't have to navigate elsewhere.
 
-- *Given* Sarah has 155 hours at Blue belt (threshold: 150h)
+- *Given* Sarah has 155 mat hours at Blue belt (threshold: 150h)
 - *When* I click "Propose Promotion" and confirm "Blue → Purple"
-- *Then* a grading proposal is created with status "pending"
+- *Then* a promotion proposal is created with status "pending"
 - *And* Admin receives a notification to review the proposal
 
 ### 4.6 Grading Proposals & Promotions
 
-Coaches propose promotions; Admin approves to make them official. The workflow prevents unilateral promotions.
+Coaches propose promotions; Admin approves to make them official. The workflow prevents unilateral promotions. The promotion ceremony (belt presentation) is handled outside the system — the system only tracks the record.
 
 **Access:** Admin ✓ (approve/reject) | Coach ✓ (propose) | Member — | Trial — | Guest —
 
@@ -600,12 +620,12 @@ Admin can bypass normal grading thresholds for special circumstances.
 
 #### User Stories
 
-**US-4.7.1: Add flight time credit**
-As an Admin, I want to add flight time credit to a competitor's record so that they aren't sandbagging.
+**US-4.7.1: Add mat hours credit**
+As an Admin, I want to add mat hours credit to a competitor's record so that they aren't sandbagging.
 
 - *Given* a member is competing at Blue belt but dominating their division
-- *When* I add 20 hours of flight time credit to their record
-- *Then* their flight time increases, pushing them closer to Purple eligibility
+- *When* I add 20 hours of mat hours credit to their record
+- *Then* their mat hours increase, pushing them closer to Purple eligibility
 - *And* the credit is logged with my Admin ID and a reason
 
 **US-4.7.2: Force immediate promotion**
@@ -617,290 +637,301 @@ As an Admin, I want to force a promotion bypassing thresholds so that I can hand
 - *And* the grading record shows method: "override" with my notes
 
 **US-4.7.3: Adjust individual thresholds**
-As an Admin, I want to adjust grading thresholds for a specific member so that competitors can be fast-tracked.
+As an Admin, I want to adjust belt progression thresholds for a specific member so that competitors can be fast-tracked.
 
 - *Given* a member is actively competing and training at a higher level
-- *When* I reduce their flight time threshold from 150h to 120h for Blue → Purple
-- *Then* their grading progress recalculates using the new threshold
+- *When* I reduce their mat hours threshold from 150h to 120h for Blue → Purple
+- *Then* their belt progression recalculates using the new threshold
 - *And* the override is logged
 
 ---
 
 ## 5. Curriculum Rotor System
 
-### 5.1 Program Rotors
+### 5.1 Rotor Structure
 
-Each program can have its own independent **rotor** — a cycling curriculum of themes. Admin creates rotors; coaches control advancement.
+Each class can have its own **rotor** — a versioned curriculum structure containing **N concurrent theme categories**. All themes run simultaneously each week, each with its own rotating queue of topics.
 
 **Structure:**
 
 ```
-Program (e.g., "Gi Express")
-  └── Rotor
-       ├── Theme 1: "Leg Lasso Series" (2 weeks, visible)
-       │    ├── Topic A: "Leg Lasso Entry from DLR" (F=1)
-       │    ├── Topic B: "Leg Lasso Sweep to Mount" (F=2)
-       │    └── Topic C: "Leg Lasso → Omoplata" (F=1)
-       ├── Theme 2: "Half Guard Sweeps" (2 weeks, visible)
-       │    ├── Topic A: "Underhook Recovery" (F=1)
-       │    └── Topic B: "Lucas Leite Sweep" (F=2)
-       ├── Theme 3: "★ SURPRISE ★" (1 day, hidden)
-       │    └── Topic A: "Sumo Games" (F=1)
-       └── Theme 4: "Closed Guard Attacks" (2 weeks, visible)
-            ├── Topic A: "Cross-Collar Choke" (F=1)
-            ├── Topic B: "Armbar from Guard" (F=1)
-            └── Topic C: "Triangle Setup" (F=1)
+Class (e.g., "Gi Express")
+  └── Rotor (v2 — active)
+       ├── Theme: "Standing" ──── Topic Queue ──→ [Single Leg] → [Double Leg] → [Arm Drag] → ...
+       ├── Theme: "Guard"    ──── Topic Queue ──→ [Closed Guard Attacks] → [DLR Sweeps] → ...
+       ├── Theme: "Pinning"  ──── Topic Queue ──→ [Side Control Subs] → [Mount Attacks] → ...
+       └── Theme: "In-Between Game" ─ Topic Queue ─→ [Turtle Escapes] → [Scrambles] → ...
 ```
 
-**Access:** Admin ✓ (create/manage) | Coach ✓ (control advancement) | Member ✓ (view if preview on) | Trial — | Guest —
+Each week, one topic per theme is scheduled. Topics auto-advance when their duration expires (default: 1 week). Coaches can override to extend, skip, or manually advance. Members can vote to bump the scheduled topic (see §6).
+
+**Rotor Versioning:** Rotors are versioned. Admin or Coach can draft a new version of a rotor (adding/removing themes, reordering topics) without affecting the currently active version. When ready, the draft is activated and becomes the new live rotor. Previous versions are preserved for history.
+
+**Coach Ownership:** Coaches can edit and advance the rotors for the classes they are assigned to. Admin can override everything.
+
+**Access:** Admin ✓ (create/manage/override) | Coach ✓ (edit/advance for own classes) | Member ✓ (view if preview on) | Trial — | Guest —
 
 #### User Stories
 
-**US-5.1.1: Create rotor for a program**
-As an Admin, I want to create a rotor for a program so that I can define its curriculum cycle.
+**US-5.1.1: Create rotor for a class**
+As an Admin, I want to create a rotor for a class so that I can define its curriculum structure.
 
-- *Given* the "NoGi Long Games" program has no rotor
-- *When* I create a new rotor with 6 themes, each 2 weeks long
-- *Then* the rotor is saved and attached to "NoGi Long Games"
-- *And* coaches can begin managing advancement
+- *Given* the "Gi Express" class has no rotor
+- *When* I create a new rotor with 4 theme categories: Standing, Guard, Pinning, In-Between Game
+- *Then* the rotor is saved as v1 and attached to "Gi Express"
+- *And* I can add topics to each theme category
 
-**US-5.1.2: View current theme**
-As a Member, I want to see the current theme for a program so that I can prepare my mind before class.
+**US-5.1.2: View this week's curriculum**
+As a Member, I want to see what topics are scheduled this week so that I can prepare before class.
 
-- *Given* the Gi Express rotor is on Theme 1
-- *When* I view the Gi Express program page
-- *Then* I see "Leg Lasso Series — Week 2 of 2"
-- *And* the topics for this theme are listed below
+- *Given* the Gi Express rotor has 4 themes, each with a currently scheduled topic
+- *When* I view the Gi Express class page
+- *Then* I see: Standing: "Single Leg Takedown", Guard: "Closed Guard Attacks", Pinning: "Side Control Submissions", In-Between: "Turtle Escapes"
 
-**US-5.1.3: Rotor cycles back**
-As a Coach, I want the rotor to wrap back to the first theme after the last one so that the curriculum repeats.
+**US-5.1.3: Topic queues cycle**
+As a Coach, I want topic queues to wrap around so that the curriculum repeats.
 
-- *Given* the rotor has 4 themes and I am on Theme 4
-- *When* I advance the rotor
-- *Then* the active theme becomes Theme 1
-- *And* the cycle continues
+- *Given* the "Standing" theme has 6 topics and I am on the last one
+- *When* the topic auto-advances
+- *Then* the queue cycles back to the first topic
 
-### 5.2 Themes
+### 5.2 Themes (Concurrent Categories)
 
-A theme is a technical block within a rotor. Duration is configurable per theme as either **D days** or **W weeks**.
+Themes are positional or tactical categories that run **concurrently** within a rotor. Every week, all themes are active — each with its own currently scheduled topic.
 
-- **Short themes** (1–3 days): fun/surprise content, focused workshops
-- **Standard themes** (1–4 weeks): deep technical blocks
+Example categories: **Standing** (takedowns, clinch work), **Guard** (bottom game, sweeps), **Pinning** (top control, submissions from top), **In-Between Game** (transitions, scrambles, turtle).
+
+Admin defines the theme categories per rotor. Themes are extensible — Admin can add, rename, or remove categories.
 
 #### User Stories
 
-**US-5.2.1: Create a theme**
-As an Admin, I want to create a theme within a rotor so that I can define the curriculum content.
+**US-5.2.1: Add a theme category**
+As an Admin, I want to add a new theme category to a rotor so that the curriculum covers a new area.
 
-- *Given* I am editing the Gi Express rotor
-- *When* I create a new theme: name "Closed Guard Attacks", duration "2 weeks", visible
-- *Then* the theme is added to the rotor in the specified position
-- *And* I can add topics to it
+- *Given* the Gi Express rotor has 4 themes
+- *When* I add a 5th theme: "Submission Defense"
+- *Then* the rotor now has 5 concurrent themes and I can populate its topic queue
 
-**US-5.2.2: Theme with day duration**
-As a Coach, I want to create a short theme lasting only 1 day so that I can schedule a focused workshop.
+**US-5.2.2: Hidden / surprise theme**
+As a Coach, I want to mark a theme category as hidden so that members don't see it in previews.
 
-- *Given* I am editing the Kids rotor
-- *When* I create a theme: "Takedown Day", duration "1 day", visible
-- *Then* the theme occupies a single day in the rotor cycle
+- *Given* I add a special "Fun Day" theme to the Kids rotor
+- *When* I mark it as hidden
+- *Then* it does not appear in member previews and is only revealed when active
 
-### 5.3 Topics & Frequency
+### 5.3 Topics & Topic Queues
 
-Each theme contains topics (specific techniques or drills). Each topic has a **frequency weight F** controlling how often it appears within the theme's rotation.
+Each theme has an ordered queue of topics. One topic is scheduled per theme per week (or configurable period). Topics auto-advance when their duration expires.
 
-- **F=1** (default): covered once per cycle through the theme's topics
-- **F=2**: high priority — covered twice as often (appears twice in the rotation)
+Each topic has:
+- **Name**: the technique or drill (e.g., "Single Leg Takedown")
+- **Duration**: how long it stays scheduled (default: 1 week, configurable per topic)
+- **Description**: optional notes for the coach
 
 #### User Stories
 
 **US-5.3.1: Add topics to a theme**
-As a Coach, I want to add topics to a theme so that the daily class content is defined.
+As a Coach, I want to populate a theme's topic queue so that the weekly curriculum is defined.
 
-- *Given* I am editing the "Leg Lasso Series" theme
-- *When* I add three topics: "Entry from DLR" (F=1), "Sweep to Mount" (F=2), "Lasso → Omoplata" (F=1)
-- *Then* the theme has 3 topics, with "Sweep to Mount" appearing twice as often in the daily rotation
+- *Given* I am editing the "Standing" theme in the Gi Express rotor
+- *When* I add 6 topics: "Single Leg", "Double Leg", "Arm Drag to Back", "Collar Drag", "Snap Down", "Clinch Takedowns"
+- *Then* the topic queue is populated and the first topic is scheduled for this week
 
-**US-5.3.2: Set topic frequency**
-As a Coach, I want to set a topic's frequency to 2 so that the most important technique gets drilled more.
+**US-5.3.2: Reorder topic queue**
+As a Coach, I want to reorder the topic queue so that I can control the curriculum sequence.
 
-- *Given* "Leg Lasso Entry from DLR" has frequency F=1
-- *When* I change it to F=2
-- *Then* this topic appears twice as often in the rotation compared to F=1 topics
+- *Given* the Standing theme has 6 topics
+- *When* I drag "Arm Drag to Back" to position 2
+- *Then* it will be the second topic scheduled in the rotation
 
-**US-5.3.3: Member views topics**
-As a Member, I want to see the topics for the current theme so that I know what we'll be covering in class.
+**US-5.3.3: Member views scheduled topics**
+As a Member, I want to see the topics scheduled for each theme this week so that I know what class will cover.
 
-- *Given* the active theme is "Leg Lasso Series" with 3 topics
-- *When* I view the program page (and preview is enabled)
-- *Then* I see the list of topics for the current theme
+- *Given* Gi Express has 4 themes, each with a currently scheduled topic
+- *When* I view the class page (and preview is enabled)
+- *Then* I see all 4 themes with their current topic
+
+**US-5.3.4: Custom topic duration**
+As a Coach, I want to set a topic's duration to 2 weeks so that complex techniques get more time.
+
+- *Given* "Leg Lasso Series" is a complex topic
+- *When* I set its duration to 2 weeks
+- *Then* it stays as the scheduled topic for 2 weeks before auto-advancing
 
 ### 5.4 Rotor Advancement
 
-Coaches control when the rotor advances to the next theme via a manual "advance" action. The theme's configured duration is a guideline shown in the UI, not enforced automatically.
+Topics **auto-advance by default** when their configured duration expires. Coaches can override: extend a topic, skip to the next, or manually advance early.
 
-**Access:** Admin ✓ | Coach ✓ | Member — | Trial — | Guest —
-
-#### User Stories
-
-**US-5.4.1: Advance rotor**
-As a Coach, I want to advance the rotor to the next theme so that the curriculum progresses.
-
-- *Given* the Feet-to-Floor rotor is on "Wrestling Shots" (2 weeks, and 2 weeks have passed)
-- *When* I tap "Advance Rotor"
-- *Then* the active theme changes to "Clinch Takedowns"
-- *And* the calendar view updates to show the new theme
-
-**US-5.4.2: Extend a theme**
-As a Coach, I want to keep a theme running longer than its configured duration if the class needs more time.
-
-- *Given* "Wrestling Shots" is configured for 2 weeks but I want to run it for 3
-- *When* I simply don't advance the rotor for an extra week
-- *Then* the theme remains active until I manually advance it
-
-### 5.5 Hidden / Surprise Themes
-
-Themes can be marked as **hidden** by Admin or Coach. Hidden themes do not appear in member rotor previews. They are revealed only when they become the active theme.
-
-**Access:** Admin ✓ (create) | Coach ✓ (create) | Member — | Trial — | Guest —
+**Access:** Admin ✓ (override all) | Coach ✓ (for classes they own) | Member — | Trial — | Guest —
 
 #### User Stories
 
-**US-5.5.1: Create hidden theme**
-As a Coach, I want to create a hidden theme so that it's a surprise for the class.
+**US-5.4.1: Auto-advance**
+As a Coach, I want topics to auto-advance when their duration expires so that the curriculum progresses without manual intervention.
 
-- *Given* I am editing the Kids rotor
-- *When* I create a theme: "Dodgeball Day", duration "1 day", marked as hidden
-- *Then* the theme does not appear in the kids' rotor preview
-- *And* it is only revealed when I advance the rotor to it
+- *Given* "Single Leg Takedown" in the Standing theme has a 1-week duration
+- *When* the week ends
+- *Then* the next topic in the queue ("Double Leg") automatically becomes the scheduled topic
 
-**US-5.5.2: Surprise reveal**
-As a Member, I want to be surprised by a hidden theme so that training stays fun.
+**US-5.4.2: Extend a topic**
+As a Coach, I want to extend a topic beyond its configured duration so that the class can spend more time on it.
 
-- *Given* the rotor preview shows "Half Guard" next week
-- *When* Monday arrives and the coach has advanced to a hidden theme instead
-- *Then* I see "★ Sumo Games ★" as the active theme — it wasn't on the preview
+- *Given* "Single Leg" was configured for 1 week but the class needs more time
+- *When* I click "Extend" and add 1 more week
+- *Then* the topic stays scheduled for a total of 2 weeks before auto-advancing
+
+**US-5.4.3: Skip a topic**
+As a Coach, I want to skip the next topic in the queue so that I can jump to something more relevant.
+
+- *Given* "Double Leg" is next in the Standing queue but I want to skip to "Arm Drag"
+- *When* I skip "Double Leg"
+- *Then* "Arm Drag to Back" becomes the next scheduled topic
+- *And* "Double Leg" moves to its normal position in the next rotation cycle
+
+**US-5.4.4: Coach can only advance own classes**
+As a Coach, I should only be able to advance rotors for classes I'm assigned to.
+
+- *Given* I am assigned to Monday 6 PM Nuts & Bolts and Wednesday 6 PM Nuts & Bolts
+- *When* I try to advance the rotor for Thursday NoGi Express (not my class)
+- *Then* the system denies the action
+- *And* only Admin can override
+
+### 5.5 Rotor Versioning
+
+Rotors are versioned to support drafting improvements without disrupting the live curriculum.
+
+**Access:** Admin ✓ | Coach ✓ (for own classes) | Member — | Trial — | Guest —
+
+#### User Stories
+
+**US-5.5.1: Draft a new rotor version**
+As a Coach, I want to create a draft version of a rotor so that I can plan curriculum changes without affecting the live schedule.
+
+- *Given* the Gi Express rotor is on v2 (active)
+- *When* I create a new draft (v3) and add a "Submission Defense" theme with 4 topics
+- *Then* v2 remains active and members see no change
+- *And* v3 is saved as a draft that I can continue editing
+
+**US-5.5.2: Activate a draft rotor**
+As an Admin, I want to activate a draft rotor version so that the new curriculum goes live.
+
+- *Given* v3 of the Gi Express rotor is ready
+- *When* I activate v3
+- *Then* v3 becomes the active rotor and members see the updated themes/topics
+- *And* v2 is preserved in version history
+
+**US-5.5.3: View rotor history**
+As an Admin, I want to see previous rotor versions so that I can review curriculum evolution.
+
+- *Given* the Gi Express rotor has versions v1, v2, v3
+- *When* I view rotor history
+- *Then* I see all three versions with their themes, topics, and activation dates
 
 ### 5.6 Member Rotor Preview
 
-Admin can toggle whether members can see the upcoming rotor schedule for each program.
+Admin can toggle whether members can see the upcoming topic schedule for each class.
 
-- **Preview on**: members see the full sequence of upcoming themes
-- **Preview off**: members only see the current active theme
+- **Preview on**: members see the full topic queues across all themes
+- **Preview off**: members only see the currently scheduled topics
+
+Hidden themes are never shown in previews regardless of the toggle.
 
 **Access:** Admin ✓ (toggle) | Coach ✓ (view) | Member ✓ (view if enabled) | Trial — | Guest —
 
 #### User Stories
 
 **US-5.6.1: Toggle preview off**
-As an Admin, I want to disable rotor preview for the Kids program so that the schedule is always a surprise.
+As an Admin, I want to disable rotor preview for Kids classes so that the schedule is always a surprise.
 
-- *Given* the Kids rotor preview is currently enabled
+- *Given* the Workshop Kids rotor preview is enabled
 - *When* I toggle it off
-- *Then* kids can only see the current theme, not upcoming ones
+- *Then* kids can only see the current topics, not upcoming ones
 
-**US-5.6.2: View rotor preview**
-As a Member, I want to see the upcoming themes for NoGi Express so that I can plan my training.
+**US-5.6.2: View upcoming topics**
+As a Member, I want to see what topics are coming up so that I can plan my training.
 
-- *Given* the NoGi Express rotor has preview enabled
-- *When* I view the NoGi Express program page
-- *Then* I see the next 4 upcoming themes in order
+- *Given* the Gi Express rotor has preview enabled
+- *When* I view the Gi Express class page
+- *Then* I see each theme's current topic and the next 3–4 upcoming topics in each queue
 
 ---
 
-## 6. Theme Requests & Voting
+## 6. Topic Voting
 
-### 6.1 Requestable Item Menu
+Members can vote on topics within a theme category to influence the curriculum. If a voted topic wins, it **bumps the currently scheduled topic** — the bumped topic stays in place in the queue and will run on the next rotation.
 
-Admin configures a menu of items that members can request. Items are categorised as:
+### 6.1 Viewing & Voting on Topics
 
-| Category | Description | Example |
-|----------|-------------|---------|
-| **Connection** | A positional relationship or guard/position | "K-Guard → SLX", "Closed Guard", "Half Guard — Deep Half" |
-| **Action** | A transition, entry, attack, defense, or escape | "Leg Lasso Entry", "Arm Drag to Back Take", "Guillotine Defense" |
+Members can see each theme's topic queue (if preview is enabled) and vote for a topic they'd like to see next. One vote per member per topic per rotation cycle.
 
-Each item tracks: **last covered date**, **request count**, and **vote count**.
+Each topic in the queue shows:
+- **Name** and description
+- **Last covered date** (when it was last the scheduled topic)
+- **Current vote count**
 
-**Access:** Admin ✓ (configure) | Coach ✓ (view) | Member ✓ (view) | Trial — | Guest —
-
-#### User Stories
-
-**US-6.1.1: Configure request menu**
-As an Admin, I want to add items to the request menu so that members have a curated list of topics they can ask for.
-
-- *Given* I navigate to the request menu configuration
-- *When* I add "Heel Hook Defense" categorised as an Action
-- *Then* the item appears in the member-facing request menu
-- *And* its "last covered" date is empty until it runs for the first time
-
-**US-6.1.2: Browse request menu**
-As a Member, I want to browse the request menu so that I can see what's available to request.
-
-- *Given* the menu has 20 items across Connections and Actions
-- *When* I open the request menu and filter by "Connection"
-- *Then* I see only Connection items, each showing when it was last covered
-
-### 6.2 Member Requests & Voting
-
-Members can request items (one per member per item) and vote on other members' requests (one vote per member per request).
-
-**Access:** Admin ✓ (triage) | Coach ✓ (triage) | Member ✓ | Trial — | Guest —
+**Access:** Admin ✓ (view/override) | Coach ✓ (view/triage) | Member ✓ (vote) | Trial — | Guest —
 
 #### User Stories
 
-**US-6.2.1: Request a theme**
-As a Member, I want to request a theme from the menu so that the coaches know what I want to work on.
+**US-6.1.1: Vote for a topic**
+As a Member, I want to vote for an upcoming topic so that the class covers what I want to work on.
 
-- *Given* "De La Riva Guard" was last covered 6 weeks ago
-- *When* I tap "Request" on that item
-- *Then* my request is recorded (one request per member per item)
-- *And* the item's request count increases by 1
+- *Given* the "Guard" theme's topic queue shows: [1. Closed Guard Attacks ←scheduled] → [2. DLR Sweeps] → [3. Leg Lasso Series] → [4. Half Guard]
+- *When* I vote for "Leg Lasso Series" (currently position 3)
+- *Then* my vote is recorded and the topic's vote count increases by 1
+- *And* I cannot vote for "Leg Lasso Series" again until the next rotation cycle
 
-**US-6.2.2: Vote on a request**
-As a Member, I want to vote on another member's request so that popular topics rise to the top.
+**US-6.1.2: View vote rankings**
+As a Member, I want to see which topics have the most votes so that I know what's popular.
 
-- *Given* another member requested "Arm Drag Series" and it has 7 votes
-- *When* I vote on it
-- *Then* it now has 8 votes
-- *And* I cannot vote on this request again (one vote per member per request)
+- *Given* several members have voted on topics in the "Guard" theme
+- *When* I view the topic queue
+- *Then* I see each topic's vote count alongside its queue position
 
-**US-6.2.3: View vote rankings**
-As a Member, I want to see the current vote rankings so that I know what's popular.
+**US-6.1.3: See last covered date**
+As a Member, I want to see when a topic was last covered so that I can vote for things we haven't done recently.
 
-- *Given* several items have been requested and voted on
-- *When* I view the request board
-- *Then* I see items sorted by vote count, with the most popular at the top
+- *Given* "DLR Sweeps" was last covered 6 weeks ago and "Leg Lasso" 2 weeks ago
+- *When* I view the topic queue
+- *Then* I see the last-covered dates and can make an informed vote
 
-### 6.3 Vote-Driven Scheduling
+### 6.2 Vote-Driven Topic Bump
 
-When Admin or Coach chooses to run a voted theme, it is **brought forward** in the rotor. The displaced theme is inserted immediately after the voted theme, preserving the rest of the rotor order.
+When a topic accumulates enough votes (or Coach/Admin decides to honour the vote), it is **inserted before** the currently scheduled topic. The scheduled topic remains in its queue position and runs on the next rotation.
 
-**Access:** Admin ✓ | Coach ✓ | Member — | Trial — | Guest —
+**Access:** Admin ✓ (override) | Coach ✓ (for own classes) | Member — | Trial — | Guest —
 
 #### User Stories
 
-**US-6.3.1: Bring forward a voted theme**
-As a Coach, I want to bring forward a popular request so that the class covers what members want.
+**US-6.2.1: Bump the scheduled topic**
+As a Coach, I want to bring forward a voted topic so that the class covers what members requested.
 
-- *Given* "De La Riva Guard" has 12 votes and the rotor's next theme is "Half Guard Sweeps"
-- *When* I choose to bring forward "De La Riva Guard"
-- *Then* Admin creates a theme for "De La Riva Guard" and inserts it as the next active theme
-- *And* "Half Guard Sweeps" is pushed to the slot immediately after
+- *Given* "Leg Lasso Series" has 12 votes in the Guard theme, and "DLR Sweeps" is the next scheduled topic
+- *When* I choose to bring forward "Leg Lasso Series"
+- *Then* "Leg Lasso Series" is inserted as the current scheduled topic
+- *And* "DLR Sweeps" stays in its queue position and will run on the next rotation
 
-**US-6.3.2: Request marked as scheduled**
-As a Member, I want to see that my request has been scheduled so that I know it's coming.
+**US-6.2.2: Bumped topic not lost**
+As a Coach, I want the bumped topic to remain in the queue so that it still gets covered.
 
-- *Given* I requested "De La Riva Guard" and it was brought forward
-- *When* I view the request board
-- *Then* "De La Riva Guard" shows status "Scheduled"
-- *And* its "last covered" date will update when the theme runs
+- *Given* "DLR Sweeps" was bumped by "Leg Lasso Series"
+- *When* the rotor completes the current cycle and returns to this position
+- *Then* "DLR Sweeps" runs as originally planned
 
-**US-6.3.3: Admin triages requests**
-As an Admin, I want to view requests sorted by vote count so that I can prioritise what the gym wants.
+**US-6.2.3: Vote counts reset after bump**
+As a Member, I want vote counts to reset after a topic is brought forward so that voting starts fresh.
 
-- *Given* 15 members voted for "De La Riva Guard" and 3 voted for "Rubber Guard"
-- *When* I view the triage queue
-- *Then* "De La Riva Guard" is at the top with 15 votes
-- *And* I can choose to bring it forward or dismiss it
+- *Given* "Leg Lasso Series" was brought forward with 12 votes
+- *When* it finishes its scheduled run
+- *Then* all vote counts for that theme's topics reset to 0
+- *And* members can vote again for the next cycle
+
+**US-6.2.4: Admin overrides vote**
+As an Admin, I want to override the vote and bring forward any topic regardless of vote count.
+
+- *Given* "Rubber Guard" has only 2 votes but I want to schedule it
+- *When* I override and bring it forward
+- *Then* it becomes the scheduled topic, same bump mechanics apply
 
 ---
 
@@ -908,7 +939,7 @@ As an Admin, I want to view requests sorted by vote count so that I can prioriti
 
 ### 7.1 Clipping Tool
 
-Paste a YouTube link, set start/end timestamps to create a single looping clip. Clips are associated with a theme.
+Paste a YouTube link, set start/end timestamps to create a single looping clip. Clips can be cross-linked from the curriculum schedule so that members can study relevant techniques offline. The schedule and clips are not hard-coupled — clips exist independently in the library but can be linked to topics.
 
 **Access:** Admin ✓ | Coach ✓ | Member ✓ | Trial — | Guest —
 
@@ -1124,7 +1155,13 @@ As a Coach, I want to see red flag icons on the attendance list so that I can ac
 
 ### 9.3 Member List
 
-All members split by program, with manual "Fee" and "Frequency" fields, injury indicators, waiver status, and member status.
+All members split by program, with manual "Fee" and "Frequency" fields, injury indicators, waiver status, member status, and sizing information.
+
+**Member Profile Sizes:** Each member profile includes optional sizing fields to assist with belt promotions and merchandising:
+- **Belt size**
+- **Gi size**
+- **Rash top size**
+- **T-shirt size**
 
 **Access:** Admin ✓ (full) | Coach ✓ (view) | Member — | Trial — | Guest —
 
@@ -1433,22 +1470,7 @@ As a Member, I want to read the coach's advice on ADCC rules so that I don't giv
 - *When* I open the Advice Repository
 - *Then* I can read the guide
 
-### 12.2 Extra Session RSVP
-
-Minimalist booking system for high-intensity or "Comp-Only" mat times.
-
-**Access:** Admin ✓ | Coach ✓ | Member ✓ | Trial — | Guest —
-
-#### User Stories
-
-**US-12.2.1: RSVP for extra session**
-As a Member, I want to RSVP for a competition prep session so that the coach knows how many are coming.
-
-- *Given* there is a "Comp Prep — Saturday 2 PM" extra session
-- *When* I tap "RSVP"
-- *Then* I am registered and the coach sees the headcount
-
-### 12.3 Scouting Pipeline
+### 12.2 Scouting Pipeline
 
 Members submit rival clips; Admin vets and publishes as official "Advice."
 
@@ -1532,74 +1554,70 @@ ROI = (α × Attendance + β × Study) / DaysSinceLastCheckIn
 | Concept | Section | Storage | Description |
 |---------|---------|---------|-------------|
 | `Account` | §1 | accounts | User identity with role and password hash |
-| `Member` | §1 | members | Profile: name, email, program, fee, frequency, status |
-| `Waiver` | §9.1 | waivers | Risk acknowledgement, valid 1 year |
-| `Injury` | §9.2 | injuries | Red Flag body-part toggle, active 7 days |
-| `Attendance` | §3.1 | attendance | Check-in record: member + session + date + time. Supports multi-session and un-check-in (soft delete) |
-| `Program` | §1.3 | programs | Named class type (Gi Express, Kids, etc.). Determines term structure, billing, and rotor assignment |
-| `Schedule` | §9.7 | schedules | Recurring weekly entry: day, time, program, coach, duration |
+| `Member` | §1 | members | Profile: name, email, program_id, fee, frequency, status, belt_size, gi_size, rash_top_size, tshirt_size |
+| `Program` | §1.3 | programs | Audience group: Adults, Kids, Youth. Determines class visibility, term structure, and comms targeting |
+| `Class` | §1.3 | classes | Named session type within a program (Gi Express, Nuts & Bolts, etc.). Has duration and optional mat_hours_weight (default 1.0) |
+| `Schedule` | §9.7 | schedules | Recurring weekly entry: day, time, class_id, coach_id, duration |
 | `Term` | §1.3 | terms | NZ school term date ranges with manual confirmation |
 | `Holiday` | §9.7 | holidays | Date ranges overriding schedule; auto-generates Notice |
+| `Waiver` | §9.1 | waivers | Risk acknowledgement, valid 1 year |
+| `Injury` | §9.2 | injuries | Red Flag body-part toggle, active 7 days |
+| `Attendance` | §3.1 | attendance | Check-in record: member_id + class_id + date + time. Supports multi-session and un-check-in (soft delete). Mat hours = duration × class weight |
 | `Notice` | §8.1 | notices | Unified notification: type (school_wide / class_specific / holiday), status (draft / published) |
 | `Message` | §8.2 | messages | Direct in-app message from Admin to member |
-| `GradingRecord` | §4.6 | grading_records | Promotion history: belt, stripe, date, proposed_by, approved_by, method |
-| `GradingConfig` | §4.1 | grading_config | Per-belt thresholds: flight time or attendance %, stripe count, grading mode toggle |
-| `GradingProposal` | §4.6 | grading_proposals | Coach-proposed promotion: member, target belt, notes, status |
-| `EstimatedHours` | §3.4 | estimated_hours | Bulk-estimated flight time: date range, weekly hours, source, status, overlap mode, note |
-| `Goal` | §10.3 | goals | Member target: description, target, unit, period, progress. Covers both recurring cadence and bounded targets |
+| `GradingRecord` | §4.6 | grading_records | Promotion history: belt, stripe, date, proposed_by, approved_by, method (standard/override). Ceremony handled outside system |
+| `GradingConfig` | §4.1 | grading_config | Per-belt thresholds: mat hours (adults) or attendance % (kids), stripe count, grading mode toggle |
+| `GradingProposal` | §4.6 | grading_proposals | Coach-proposed promotion: member, target belt, notes, status (pending/approved/rejected) |
+| `EstimatedHours` | §3.4 | estimated_hours | Bulk-estimated mat hours: date range, weekly hours, source (estimate/self_estimate), status, overlap mode, note |
+| `Goal` | §10.3 | goals | Member target: description, target, unit (submissions/hours/sessions), period, progress |
 | `Milestone` | §3.3 | milestones | Admin-configured achievement (e.g., "100 classes") |
 | `CoachObservation` | §8.3 | coach_observations | Private per-member notes from Coach or Admin |
-| `BeltConfig` | §4.4 | belt_config | Belt/stripe icon config: belt_name, colour, stripe_count, sort_order, age_range |
-| `Rotor` | §5.1 | rotors | Curriculum cycle: program_id, name, current_theme_index, preview_enabled, created_by |
-| `Theme` | §5.2 | themes | Technical block: rotor_id, name, duration_value, duration_unit, sort_order, hidden, created_by |
-| `Topic` | §5.3 | topics | Technique within a theme: theme_id, name, frequency, sort_order |
-| `ThemeRequestItem` | §6.1 | theme_request_items | Requestable item: name, category (connection/action), last_covered_date |
-| `ThemeRequest` | §6.2 | theme_requests | Member request: item_id, member_id, status (open/scheduled/closed) |
-| `ThemeVote` | §6.2 | theme_votes | Vote on a request: request_id, member_id. One per member per request |
-| `Clip` | §7.1 | clips | YouTube timestamp loop associated with a theme |
-| `Tag` | §11.1 | tags | Action/Connection metadata for clips |
+| `BeltConfig` | §4.4 | belt_config | Belt/stripe icon config: belt_name, colour (hex or split pair), stripe_count, sort_order, age_range |
+| `Rotor` | §5.1 | rotors | Versioned curriculum for a class: class_id, version, status (draft/active/archived), preview_enabled, created_by |
+| `Theme` | §5.2 | themes | Concurrent category within a rotor: rotor_id, name (Standing/Guard/Pinning/etc.), hidden, sort_order |
+| `Topic` | §5.3 | topics | Technique in a theme's queue: theme_id, name, description, duration (default 1 week), sort_order, last_covered_date |
+| `TopicVote` | §6.1 | topic_votes | Member vote on a topic: topic_id, member_id, rotation_cycle. One per member per topic per cycle |
+| `Clip` | §7.1 | clips | YouTube timestamp loop. Can be cross-linked to topics (not hard-coupled) |
+| `ClipTopicLink` | §7.1 | clip_topic_links | Optional link from a clip to a topic for offline study |
+| `Tag` | §11.1 | tags | Action/Connection metadata for clips (independent taxonomy from rotor themes) |
 | `ResearchEntry` | §11.4 | research_entries | Private research journal notes from 4-Up mode |
 | `CalendarEvent` | §10.1 | calendar_events | Club event or competition: title, type, dates, registration_url |
 | `Advice` | §12.1 | advice | Coach-curated strategy guides |
-| `ExtraSession` | §12.2 | extra_sessions | Extra mat-time bookings |
 | `Payment` | §13.1 | payments | Reconciled bank transactions |
 
 ---
 
 ## Appendix B: Implementation Priority
 
-1. **§2–§3** — Kiosk, check-in (auto-select, multi-session, un-check-in), attendance, training log, estimated hours, historical attendance
-2. **§4** — Grading (stripe inference, term-based toggle, belt/stripe icons, proposals, overrides)
-3. **§9** — Member management (waiver, red flags, member list, inactive radar, archive, schedule/holiday management)
-4. **§8** — Communication (notices, messaging, coach observations)
-5. **§5–§6** — Curriculum engine (rotors, themes, topics, requests, voting, hidden themes)
-6. **§7** — Technical library & clips
+1. **§2–§3** — Kiosk, check-in (auto-select, multi-session, un-check-in), attendance, training log, mat hours (with weighting), estimated hours, historical attendance
+2. **§4** — Belt progression (stripe inference, term-based grading with per-term reset, belt/stripe icons, proposals, admin overrides)
+3. **§9** — Member management (waiver, red flags, member list with sizes, inactive radar, archive, schedule/holiday management, program assignment)
+4. **§8** — Communication (notices with program targeting, messaging, coach observations)
+5. **§5–§6** — Curriculum engine (versioned rotors with concurrent themes, topic queues, auto-advance, coach ownership, topic voting)
+6. **§7** — Technical library & clips (cross-linked to topics, not hard-coupled)
 7. **§10** — Calendar (events, competitions, rotor views, personal goals)
 8. **§13** — Business operations (Xero, ROI dashboard, digital wallet)
 9. **§11–§12** — Advanced study & competition tools
 
 ---
 
-## Appendix C: Open Questions
+## Appendix C: Resolved Design Decisions
 
-The following terminology and design decisions need resolution. Each is numbered with suggested answers lettered.
+The following decisions were resolved during PRD review.
 
-**Q1: Does all mat time count equally toward flight time?**
-- (a) All equal — 1 hour = 1 hour regardless of session type
-- (b) Weighted by session type — Admin configures multipliers
-- (c) Capped at scheduled duration — no more, no less
-
-**Q2: Should the rotor support 1:N (multiple rotors per program)?**
-- (a) 1:1 — one rotor per program, keep it simple
-- (b) 1:N — allow parallel rotors (e.g., technique + sparring focus)
-- (c) 1:1 now, extensible to 1:N later
-
-**Q3: Connection/Action taxonomy — shared between theme requests (§6) and clip tags (§11)?**
-- (a) Same taxonomy, shared data — tags and requestable items draw from one list
-- (b) Same terminology, separate data — independent lists
-- (c) Different concepts — curriculum categories vs technique-level metadata
-
-**Q4: Kids term grading — per-term or cumulative?**
-- (a) Per-term — must hit threshold each term, resets each term
-- (b) Cumulative since last promotion — terms are scheduling only
-- (c) Per-term with carry-over — need N qualifying terms for eligibility
+| # | Question | Decision | Notes |
+|---|----------|----------|-------|
+| 1 | Program hierarchy | **Three-tier: Program (Adults/Kids/Youth) → Class → Session.** Members belong to one program. Classes show by default to members in that program. Kids/Youth age up via Admin reassignment. | §1.3 updated |
+| 2 | "Session" term overload | **"Session" = time-slot only.** "Attendance count" for kids grading. Extra Session feature removed. | §1.4, §12 updated |
+| 3 | Mat hours terminology | **"Mat hours" is canonical.** "Flight time" is the member-facing display name. Data model uses `mat_hours`. | §1.4 updated, refs throughout |
+| 4 | Student vs Member | **Standardise on "Member" everywhere.** | §1.1 |
+| 5 | Rotor model / voting scope | **Concurrent theme categories** (Standing, Guard, Pinning, In-Between Game) with topic queues. **Members vote on topics**, not themes. Successful vote bumps the scheduled topic; bumped topic stays in queue for next rotation. | §5, §6 rewritten |
+| 6 | TrainingGoal vs PersonalGoal | **Merged into single "Goal" concept.** | §10.3, Appendix A |
+| 7 | Kids term grading | **Per-term with reset.** Must hit threshold each term. Admin has ultimate discretion. | §4.3 updated |
+| 8 | Rotor cardinality | **1:N with versioning.** Multiple rotor versions per class for drafting improvements. One active at a time. | §5.5 |
+| 9 | Connection/Action taxonomy sharing | **Separate data, same terminology.** Clip tags (§11) and rotor themes (§5) are independent. Cross-links from schedule to clips for offline study, but not hard-coupled. | §7.1, Appendix A |
+| 10 | Mat time weighting | **Equal by default (1.0×), Admin can configure per-class multipliers.** | §3.1 |
+| 11 | Rotor advancement | **Auto-advance by default** when topic duration expires. Coaches can extend, skip, or manually advance. | §5.4 |
+| 12 | Grading vs Promotion terminology | **"Belt Progression" = the system.** "Promotion" = the result. Ceremony handled outside the system. Added belt size, gi size, rash top size, t-shirt size to member profiles. | §4, §9.3 |
+| 13 | Who can advance rotors | **Coaches edit/advance for classes they own.** Admin can override everything. | §5.4 |
+| 14 | Displaced (bumped) topic | **Voted topic inserted before scheduled topic.** Bumped topic stays in its queue position for next rotation cycle. | §6.2 |
