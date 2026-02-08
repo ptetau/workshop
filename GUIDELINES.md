@@ -346,6 +346,65 @@ func TestCancelOrder_ReleasesInventory(t *testing.T) {
 
 ---
 
+## Privacy & Compliance
+
+All code must comply with **GDPR**, **NZ Privacy Act 2020**, and **SOC 2** requirements. Full guidance in `PRIVACY.md`.
+
+### Data Handling Rules
+
+| Don't | Do |
+|-------|------|
+| Store raw credit card numbers | Store payment processor tokens only |
+| Use a single "I agree" checkbox | Separate granular consent per purpose |
+| Hard-delete everything on member deletion | Anonymise PII, hard-delete medical, retain financials 7 years |
+| Log passwords, tokens, or medical details | Redact sensitive fields from audit logs |
+| Use production data in dev/test | Use synthetic seeded data (already implemented) |
+| Store medical history | Collect only current injuries relevant to training |
+
+### Audit Logging
+
+Every state-changing orchestrator and security-relevant event must emit an audit log entry.
+
+```go
+// In orchestrators that mutate member data:
+slog.Info("audit_event",
+    "actor_id", actorID,
+    "actor_role", actorRole,
+    "action", "member.profile.update",
+    "resource_type", "member",
+    "resource_id", memberID,
+)
+```
+
+| Layer | Audit Responsibility |
+|-------|---------------------|
+| Routes | Log authentication events (login, logout, lockout) |
+| Orchestrators | Log all data mutations with actor context |
+| Projections | Log sensitive data access (profile views, exports) |
+
+### Consent & Deletion
+
+| Requirement | Architecture Layer |
+|-------------|-------------------|
+| Consent records (versioned, granular) | Concept: `ConsentRecord` |
+| Waiver re-signing on version change | Orchestrator: check version at login/check-in |
+| Data deletion (anonymise + hard-delete) | Orchestrator: `ExecuteDeleteMember` |
+| Data export (JSON/CSV) | Projection: `QueryMemberDataExport` |
+| Deletion grace period (30 days) | Orchestrator: scheduled execution |
+
+### Data Classification
+
+Storage adapters must enforce access controls matching data classification:
+
+| Classification | Storage Rule |
+|---------------|-------------|
+| **Restricted** (injuries, observations) | Separate tables, coach/admin-only access methods |
+| **Confidential** (PII, sizes) | Standard member table, anonymisable |
+| **Financial** (payments) | Admin-only access, 7-year retention |
+| **Public** (schedules, programs) | No access restriction |
+
+---
+
 ## Corollaries
 
 Quick reference for common decisions:
@@ -362,3 +421,7 @@ Quick reference for common decisions:
 | What if an orchestrator fails mid-workflow? | Compensating actions. |
 | Is LineItem a concept? | No. No independent lifecycle. Embed. |
 | Is Inventory a concept? | Yes. Independent lifecycle + referenced by ID. |
+| Where do I log audit events? | Orchestrators (mutations) and routes (auth events). |
+| Can I store medical history? | No. Current injuries only, in separate restricted table. |
+| How do I delete a member? | Anonymise PII, hard-delete medical, retain payments 7 years. |
+| Can I use production data in tests? | No. Use synthetic seeded data only. |

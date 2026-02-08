@@ -1549,6 +1549,129 @@ ROI = (α × Attendance + β × Study) / DaysSinceLastCheckIn
 
 ---
 
+## 14. Data Privacy & Compliance
+
+Workshop operates as both **Controller** and **Processor** under GDPR / NZ Privacy Act 2020. Full guidance in `PRIVACY.md`.
+
+### 14.1 Audit Logging
+
+Every security-relevant and data-access event is logged to an immutable, append-only audit log. See `PRIVACY.md §1.3` for the full event list.
+
+**Access:** Admin ✓ (view) | Coach — | Member — | Trial — | Guest —
+
+#### User Stories
+
+**US-14.1.1: View audit trail**
+As an Admin, I want to view the audit trail so that I can investigate security events and demonstrate compliance.
+
+- *Given* a member's profile was updated yesterday
+- *When* I search the audit log for that member
+- *Then* I see who viewed/updated the profile, when, and what changed
+
+**US-14.1.2: Audit DevMode impersonation**
+As an Admin, I want all DevMode impersonation events logged so that there is accountability for actions taken while impersonating.
+
+- *Given* I impersonate a coach role
+- *When* I perform actions as coach
+- *Then* the audit log records both my real admin identity and the impersonated role
+
+### 14.2 Consent Management
+
+Granular, versioned consent records. No single "I agree to everything" checkbox.
+
+**Access:** Admin ✓ (view all) | Coach — | Member ✓ (own, manage) | Trial ✓ (own) | Guest ✓ (waiver only)
+
+| Consent Type | Required | Default |
+|-------------|----------|---------|
+| Terms of Service | Yes | Must accept |
+| Liability Waiver | Yes | Must sign |
+| Marketing Emails | No | **Unchecked** (opt-in) |
+| Photo/Video Usage | No | **Unchecked** (opt-in) |
+| Injury Data Collection | Yes | Must accept |
+
+#### User Stories
+
+**US-14.2.1: Granular consent at registration**
+As a new Member, I want to give consent separately for each purpose so that I control how my data is used.
+
+- *Given* I am registering
+- *When* I reach the consent step
+- *Then* I see separate checkboxes for ToS (required), waiver (required), marketing (optional, unchecked), and photo/video (optional, unchecked)
+
+**US-14.2.2: Revoke marketing consent**
+As a Member, I want to revoke my marketing consent at any time so that I stop receiving promotional emails.
+
+- *Given* I previously opted into marketing
+- *When* I toggle marketing consent off in my profile
+- *Then* my consent record is updated with a `revoked_at` timestamp and takes effect immediately
+
+**US-14.2.3: Re-consent on waiver update**
+As a Member, I want to be prompted to re-sign the waiver when it changes so that my consent is always current.
+
+- *Given* Admin updated the waiver from v1.0 to v2.0
+- *When* I next log in or check in
+- *Then* I am prompted to review and sign the new waiver before proceeding
+
+### 14.3 Right to be Forgotten (Data Deletion)
+
+Members can request deletion of their personal data. Admin processes the request.
+
+**Access:** Admin ✓ (execute) | Coach — | Member ✓ (request) | Trial — | Guest —
+
+#### User Stories
+
+**US-14.3.1: Request data deletion**
+As a Member, I want to request deletion of my personal data so that my right to be forgotten is respected.
+
+- *Given* I no longer train at Workshop
+- *When* I submit a data deletion request from my profile
+- *Then* Admin receives a notification and has 30 days to process it
+
+**US-14.3.2: Process deletion request**
+As an Admin, I want to process a deletion request so that we comply with privacy law.
+
+- *Given* a member has requested data deletion
+- *When* I approve the request
+- *Then* PII (name, email, phone, sizes) is anonymised, medical/injury data is hard deleted, attendance records are anonymised, payment records are retained for 7 years (IRD), and the deletion is logged in the audit trail
+
+**US-14.3.3: Grace period**
+As an Admin, I want a 30-day grace period before hard deletion so that accidental requests can be reversed.
+
+- *Given* a deletion request was approved
+- *When* 30 days have not yet passed
+- *Then* the member is marked as "pending deletion" and data is still recoverable
+- *And* after 30 days, anonymisation/deletion executes automatically
+
+### 14.4 Data Export (Portability)
+
+Members can export their own data at any time.
+
+**Access:** Admin — | Coach — | Member ✓ | Trial — | Guest —
+
+#### User Stories
+
+**US-14.4.1: Export my data**
+As a Member, I want to export all my data so that I can take it with me if I leave.
+
+- *Given* I have been training for 2 years
+- *When* I click "Export My Data" in my profile
+- *Then* I receive a JSON or CSV file containing my profile, attendance history, training log, belt progression, consent records, and messages
+- *And* the export is logged in the audit trail
+
+### 14.5 Data Classification
+
+All data in the system is classified by sensitivity level.
+
+| Classification | Examples | Access | Retention |
+|---------------|----------|--------|-----------|
+| **Public** | Class schedule, program names | Anyone | Indefinite |
+| **Internal** | Attendance counts, rotor themes | Coach, Admin | Indefinite |
+| **Confidential** | Member name, email, belt, sizes | Member (own), Coach, Admin | Until deletion + 30 days |
+| **Restricted** | Injuries, medical notes, observations | Coach, Admin only | Until deletion (hard delete) |
+| **Financial** | Payment records, fee amounts | Admin only | 7 years (IRD) |
+
+---
+
 ## Appendix A: Data Model
 
 | Concept | Section | Storage | Description |
@@ -1560,7 +1683,7 @@ ROI = (α × Attendance + β × Study) / DaysSinceLastCheckIn
 | `Schedule` | §9.7 | schedules | Recurring weekly entry: day, time, class_id, coach_id, duration |
 | `Term` | §1.3 | terms | NZ school term date ranges with manual confirmation |
 | `Holiday` | §9.7 | holidays | Date ranges overriding schedule; auto-generates Notice |
-| `Waiver` | §9.1 | waivers | Risk acknowledgement, valid 1 year |
+| `Waiver` | §9.1 | waivers | Risk acknowledgement: member_id, version, content_hash, signed_at, ip_address. Re-prompt on version change |
 | `Injury` | §9.2 | injuries | Red Flag body-part toggle, active 7 days |
 | `Attendance` | §3.1 | attendance | Check-in record: member_id + class_id + date + time. Supports multi-session and un-check-in (soft delete). Mat hours = duration × class weight |
 | `Notice` | §8.1 | notices | Unified notification: type (school_wide / class_specific / holiday), status (draft / published) |
@@ -1583,7 +1706,10 @@ ROI = (α × Attendance + β × Study) / DaysSinceLastCheckIn
 | `ResearchEntry` | §11.4 | research_entries | Private research journal notes from 4-Up mode |
 | `CalendarEvent` | §10.1 | calendar_events | Club event or competition: title, type, dates, registration_url |
 | `Advice` | §12.1 | advice | Coach-curated strategy guides |
-| `Payment` | §13.1 | payments | Reconciled bank transactions |
+| `Payment` | §13.1 | payments | Reconciled bank transactions. Retained 7 years (IRD). Never store raw card numbers — token only |
+| `AuditLog` | §14.1 | audit_logs | Immutable, append-only event log: actor_id, actor_role, action, resource_type, resource_id, metadata (JSON), timestamp (UTC). No updates or deletes |
+| `ConsentRecord` | §14.2 | consent_records | Granular consent: member_id, consent_type (terms/waiver/marketing/photo_video/injury_data), granted, granted_at, revoked_at, version, ip_address |
+| `DeletionRequest` | §14.3 | deletion_requests | Member data deletion request: member_id, requested_at, approved_at, executed_at, status (pending/approved/executed/cancelled), approved_by |
 
 ---
 
@@ -1598,6 +1724,7 @@ ROI = (α × Attendance + β × Study) / DaysSinceLastCheckIn
 7. **§10** — Calendar (events, competitions, rotor views, personal goals)
 8. **§13** — Business operations (Xero, ROI dashboard, digital wallet)
 9. **§11–§12** — Advanced study & competition tools
+10. **§14** — Data privacy & compliance (audit log table, consent management, deletion/anonymisation, data export) — *cross-cutting: audit logging and consent checks should be woven into §2–§9 as they are built*
 
 ---
 
