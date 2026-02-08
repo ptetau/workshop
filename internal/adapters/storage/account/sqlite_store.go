@@ -107,8 +107,18 @@ func (s *SQLiteStore) Save(ctx context.Context, entity domain.Account) error {
 // PRE: id is non-empty
 // POST: Entity with given id is removed
 func (s *SQLiteStore) Delete(ctx context.Context, id string) error {
-	_, err := s.db.ExecContext(ctx, "DELETE FROM account WHERE id = ?", id)
-	return err
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	_, err = tx.ExecContext(ctx, "DELETE FROM account WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
 }
 
 // List retrieves Accounts based on the filter.

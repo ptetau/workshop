@@ -26,8 +26,9 @@ type ChangePasswordDeps struct {
 }
 
 var (
-	ErrCurrentPasswordWrong = errors.New("current password is incorrect")
-	ErrNewPasswordSame      = errors.New("new password must be different from current password")
+	ErrChangePasswordFieldsRequired = errors.New("all fields are required")
+	ErrCurrentPasswordWrong         = errors.New("current password is incorrect")
+	ErrNewPasswordSame              = errors.New("new password must be different from current password")
 )
 
 // ExecuteChangePassword validates the current password and updates to the new one.
@@ -35,12 +36,12 @@ var (
 // POST: Password is updated, PasswordChangeRequired is cleared
 func ExecuteChangePassword(ctx context.Context, input ChangePasswordInput, deps ChangePasswordDeps) error {
 	if input.AccountID == "" || input.CurrentPassword == "" || input.NewPassword == "" {
-		return errors.New("all fields are required")
+		return ErrChangePasswordFieldsRequired
 	}
 
 	acct, err := deps.AccountStore.GetByID(ctx, input.AccountID)
 	if err != nil {
-		return errors.New("account not found")
+		return ErrCurrentPasswordWrong
 	}
 
 	// Verify current password
