@@ -30,6 +30,7 @@ type Session struct {
 }
 
 // IsImpersonating returns true if this session is currently impersonating another role.
+// INVARIANT: Session fields are not mutated
 func (s Session) IsImpersonating() bool {
 	return s.RealRole != ""
 }

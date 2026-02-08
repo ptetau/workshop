@@ -829,39 +829,33 @@ func handleNotices(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "invalid JSON", http.StatusBadRequest)
 			return
 		}
-		color := input.Color
-		if color == "" {
-			color = noticeDomain.ColorOrange
-		}
-		n := noticeDomain.Notice{
-			ID:         generateID(),
+		orchInput := orchestrators.CreateNoticeInput{
 			Type:       input.Type,
-			Status:     noticeDomain.StatusDraft,
 			Title:      input.Title,
 			Content:    input.Content,
-			CreatedBy:  sess.AccountID,
 			TargetID:   input.TargetID,
 			AuthorName: input.AuthorName,
 			ShowAuthor: input.ShowAuthor,
-			Color:      color,
-			CreatedAt:  timeNow(),
+			Color:      input.Color,
+			CreatedBy:  sess.AccountID,
 		}
 		if input.VisibleFrom != "" {
 			if t, err := time.Parse(time.RFC3339, input.VisibleFrom); err == nil {
-				n.VisibleFrom = t
+				orchInput.VisibleFrom = t
 			}
 		}
 		if input.VisibleUntil != "" {
 			if t, err := time.Parse(time.RFC3339, input.VisibleUntil); err == nil {
-				n.VisibleUntil = t
+				orchInput.VisibleUntil = t
 			}
 		}
-		if err := n.Validate(); err != nil {
+		n, err := orchestrators.ExecuteCreateNotice(ctx, orchInput, orchestrators.CreateNoticeDeps{
+			NoticeStore: stores.NoticeStore,
+			GenerateID:  generateID,
+			Now:         timeNow,
+		})
+		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		if err := stores.NoticeStore.Save(ctx, n); err != nil {
-			internalError(w, err)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -1500,31 +1494,22 @@ func handleNoticePublish(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid JSON", http.StatusBadRequest)
 		return
 	}
-	if input.NoticeID == "" {
-		http.Error(w, "NoticeID is required", http.StatusBadRequest)
-		return
-	}
-	notice, err := stores.NoticeStore.GetByID(r.Context(), input.NoticeID)
+	n, err := orchestrators.ExecutePublishNotice(r.Context(), orchestrators.PublishNoticeInput{
+		NoticeID:    input.NoticeID,
+		PublisherID: sess.AccountID,
+	}, orchestrators.PublishNoticeDeps{
+		NoticeStore: stores.NoticeStore,
+		Now:         timeNow,
+	})
 	if err != nil {
-		http.Error(w, "notice not found", http.StatusNotFound)
-		return
-	}
-	if err := notice.Publish(sess.AccountID, timeNow()); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if err := stores.NoticeStore.Save(r.Context(), notice); err != nil {
-		internalError(w, err)
-		return
-	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(notice)
+	json.NewEncoder(w).Encode(n)
 }
 
 // handleNoticeEdit handles POST /api/notices/edit
-// Partial-update semantics:
-//   - Title, Content, Type, Color: only updated when the input value is non-empty (cannot be cleared).
-//   - AuthorName, ShowAuthor, VisibleFrom, VisibleUntil: always overwritten (can be cleared by sending zero-values).
 func handleNoticeEdit(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
@@ -1548,48 +1533,31 @@ func handleNoticeEdit(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid JSON", http.StatusBadRequest)
 		return
 	}
-	if input.NoticeID == "" {
-		http.Error(w, "NoticeID is required", http.StatusBadRequest)
-		return
+	orchInput := orchestrators.EditNoticeInput{
+		NoticeID:   input.NoticeID,
+		Title:      input.Title,
+		Content:    input.Content,
+		Type:       input.Type,
+		AuthorName: input.AuthorName,
+		ShowAuthor: input.ShowAuthor,
+		Color:      input.Color,
 	}
-	n, err := stores.NoticeStore.GetByID(r.Context(), input.NoticeID)
-	if err != nil {
-		http.Error(w, "notice not found", http.StatusNotFound)
-		return
-	}
-	if input.Title != "" {
-		n.Title = input.Title
-	}
-	if input.Content != "" {
-		n.Content = input.Content
-	}
-	if input.Type != "" {
-		n.Type = input.Type
-	}
-	n.AuthorName = input.AuthorName
-	n.ShowAuthor = input.ShowAuthor
-	if input.Color != "" {
-		n.Color = input.Color
-	}
-	n.VisibleFrom = time.Time{}
-	n.VisibleUntil = time.Time{}
 	if input.VisibleFrom != "" {
 		if t, err := time.Parse(time.RFC3339, input.VisibleFrom); err == nil {
-			n.VisibleFrom = t
+			orchInput.VisibleFrom = t
 		}
 	}
 	if input.VisibleUntil != "" {
 		if t, err := time.Parse(time.RFC3339, input.VisibleUntil); err == nil {
-			n.VisibleUntil = t
+			orchInput.VisibleUntil = t
 		}
 	}
-	n.UpdatedAt = timeNow()
-	if err := n.Validate(); err != nil {
+	n, err := orchestrators.ExecuteEditNotice(r.Context(), orchInput, orchestrators.EditNoticeDeps{
+		NoticeStore: stores.NoticeStore,
+		Now:         timeNow,
+	})
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	if err := stores.NoticeStore.Save(r.Context(), n); err != nil {
-		internalError(w, err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -1613,29 +1581,15 @@ func handleNoticePin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid JSON", http.StatusBadRequest)
 		return
 	}
-	if input.NoticeID == "" {
-		http.Error(w, "NoticeID is required", http.StatusBadRequest)
-		return
-	}
-	n, err := stores.NoticeStore.GetByID(r.Context(), input.NoticeID)
+	n, err := orchestrators.ExecutePinNotice(r.Context(), orchestrators.PinNoticeInput{
+		NoticeID: input.NoticeID,
+		Pinned:   input.Pinned,
+	}, orchestrators.PinNoticeDeps{
+		NoticeStore: stores.NoticeStore,
+		Now:         timeNow,
+	})
 	if err != nil {
-		http.Error(w, "notice not found", http.StatusNotFound)
-		return
-	}
-	if input.Pinned {
-		if err := n.Pin(timeNow()); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-	} else {
-		if err := n.Unpin(); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-	}
-	n.UpdatedAt = timeNow()
-	if err := stores.NoticeStore.Save(r.Context(), n); err != nil {
-		internalError(w, err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")

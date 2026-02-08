@@ -6,6 +6,7 @@ import (
 	"workshop/internal/domain/account"
 )
 
+// TestExecuteDevModeImpersonate_ValidRole tests impersonation with a valid target role.
 func TestExecuteDevModeImpersonate_ValidRole(t *testing.T) {
 	input := DevModeImpersonateInput{
 		TargetRole:  account.RoleCoach,
@@ -32,6 +33,7 @@ func TestExecuteDevModeImpersonate_ValidRole(t *testing.T) {
 	}
 }
 
+// TestExecuteDevModeImpersonate_InvalidRole tests impersonation with an invalid target role.
 func TestExecuteDevModeImpersonate_InvalidRole(t *testing.T) {
 	input := DevModeImpersonateInput{
 		TargetRole:  "superuser",
@@ -46,6 +48,7 @@ func TestExecuteDevModeImpersonate_InvalidRole(t *testing.T) {
 	}
 }
 
+// TestExecuteDevModeImpersonate_NonAdminCaller tests that non-admin callers are rejected.
 func TestExecuteDevModeImpersonate_NonAdminCaller(t *testing.T) {
 	input := DevModeImpersonateInput{
 		TargetRole:  account.RoleCoach,
@@ -60,6 +63,7 @@ func TestExecuteDevModeImpersonate_NonAdminCaller(t *testing.T) {
 	}
 }
 
+// TestExecuteDevModeImpersonate_SwitchBackToAdmin tests switching back to admin from impersonation.
 func TestExecuteDevModeImpersonate_SwitchBackToAdmin(t *testing.T) {
 	input := DevModeImpersonateInput{
 		TargetRole:    account.RoleAdmin,
@@ -86,6 +90,7 @@ func TestExecuteDevModeImpersonate_SwitchBackToAdmin(t *testing.T) {
 	}
 }
 
+// TestExecuteDevModeImpersonate_AlreadyImpersonating_SwitchRole tests switching roles while already impersonating.
 func TestExecuteDevModeImpersonate_AlreadyImpersonating_SwitchRole(t *testing.T) {
 	input := DevModeImpersonateInput{
 		TargetRole:    account.RoleMember,
@@ -109,6 +114,7 @@ func TestExecuteDevModeImpersonate_AlreadyImpersonating_SwitchRole(t *testing.T)
 	}
 }
 
+// TestExecuteDevModeRestore_Success tests successful restore from impersonation.
 func TestExecuteDevModeRestore_Success(t *testing.T) {
 	input := DevModeRestoreInput{
 		CurrentRole:   account.RoleCoach,
@@ -132,6 +138,7 @@ func TestExecuteDevModeRestore_Success(t *testing.T) {
 	}
 }
 
+// TestExecuteDevModeRestore_NotImpersonating tests restore when not impersonating.
 func TestExecuteDevModeRestore_NotImpersonating(t *testing.T) {
 	input := DevModeRestoreInput{
 		CurrentRole: account.RoleAdmin,
@@ -143,6 +150,7 @@ func TestExecuteDevModeRestore_NotImpersonating(t *testing.T) {
 	}
 }
 
+// TestExecuteDevModeRestore_NonAdminRealRole tests restore when real role is not admin.
 func TestExecuteDevModeRestore_NonAdminRealRole(t *testing.T) {
 	input := DevModeRestoreInput{
 		CurrentRole:   account.RoleMember,

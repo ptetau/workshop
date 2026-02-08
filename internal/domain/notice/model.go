@@ -108,6 +108,9 @@ func (n *Notice) Validate() error {
 }
 
 // EffectiveColor returns the color hex value, defaulting to orange.
+// PRE: Notice struct is populated
+// POST: Returns a valid hex color string
+// INVARIANT: Color field is not mutated
 func (n *Notice) EffectiveColor() string {
 	if n.Color == "" {
 		return ColorHex[ColorOrange]
