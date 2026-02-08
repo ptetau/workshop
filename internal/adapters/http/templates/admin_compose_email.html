@@ -37,9 +37,18 @@
         <div id="selectedRecipients" style="display:flex;flex-wrap:wrap;gap:0.4rem;margin-top:0.5rem;"></div>
     </div>
 
+    <div class="form-group" style="margin-top:1rem;">
+        <label>Schedule (optional)</label>
+        <div style="display:flex;gap:0.5rem;align-items:center;">
+            <input type="datetime-local" id="scheduleAt" style="padding:0.5rem;border:1px solid var(--border);border-radius:2px;">
+            <button id="scheduleBtn" onclick="scheduleEmail()" style="background:#8e44ad;color:#fff;padding:0.5rem 1.25rem;border:none;border-radius:2px;cursor:pointer;font-weight:600;">Schedule</button>
+        </div>
+    </div>
+
     <div style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;margin-top:1.5rem;">
         <button onclick="saveDraft()" style="background:#2980b9;color:#fff;padding:0.5rem 1.25rem;border:none;border-radius:2px;cursor:pointer;font-weight:600;">Save Draft</button>
         <button onclick="sendEmail()" style="background:var(--green,#27ae60);color:#fff;padding:0.5rem 1.25rem;border:none;border-radius:2px;cursor:pointer;font-weight:600;">Send Now</button>
+        <button id="cancelScheduleBtn" onclick="cancelScheduledEmail()" style="background:#c0392b;color:#fff;padding:0.5rem 1.25rem;border:none;border-radius:2px;cursor:pointer;font-weight:600;display:none;">Cancel Schedule</button>
         <a href="/admin/emails" style="color:var(--text-muted);text-decoration:none;font-weight:600;">Cancel</a>
         <span id="formMsg" style="margin-left:0.5rem;color:var(--orange);font-weight:600;"></span>
     </div>
@@ -178,6 +187,66 @@ function clearFilter() {
     filteredMembers = [];
 }
 
+function scheduleEmail() {
+    var dt = document.getElementById('scheduleAt').value;
+    if (!dt) { showMsg('Please select a date and time', '#c62828'); return; }
+
+    var emailID = document.getElementById('emailID').value;
+    var scheduledAt = new Date(dt).toISOString();
+
+    function doSchedule(id) {
+        fetch('/api/emails/schedule',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({EmailID:id,ScheduledAt:scheduledAt})})
+        .then(function(r){if(!r.ok) return r.text().then(function(t){throw new Error(t);}); return r.json();})
+        .then(function() {
+            showMsg('Email scheduled!', '#8e44ad');
+            setTimeout(function(){window.location.href='/admin/emails';}, 1500);
+        })
+        .catch(function(e){showMsg(e.message || 'Schedule failed','#c62828');});
+    }
+
+    if (!emailID) {
+        // Save draft first then schedule
+        var body = {
+            Subject: document.getElementById('emailSubject').value,
+            Body: document.getElementById('emailBody').value,
+            MemberIDs: getSelectedMemberIDs()
+        };
+        fetch('/api/emails/compose',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+        .then(function(r){if(!r.ok) return r.text().then(function(t){throw new Error(t);}); return r.json();})
+        .then(function(em) {
+            document.getElementById('emailID').value = em.ID;
+            doSchedule(em.ID);
+        })
+        .catch(function(e){showMsg(e.message || 'Error saving draft','#c62828');});
+    } else {
+        // Update draft then schedule
+        var body = {
+            EmailID: emailID,
+            Subject: document.getElementById('emailSubject').value,
+            Body: document.getElementById('emailBody').value,
+            MemberIDs: getSelectedMemberIDs()
+        };
+        fetch('/api/emails/compose',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+        .then(function(r){if(!r.ok) return r.text().then(function(t){throw new Error(t);}); return r.json();})
+        .then(function(em) { doSchedule(em.ID); })
+        .catch(function(e){showMsg(e.message || 'Error','#c62828');});
+    }
+}
+
+function cancelScheduledEmail() {
+    var emailID = document.getElementById('emailID').value;
+    if (!emailID) { showMsg('No email to cancel', '#c62828'); return; }
+
+    fetch('/api/emails/cancel',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({EmailID:emailID})})
+    .then(function(r){if(!r.ok) return r.text().then(function(t){throw new Error(t);}); return r.json();})
+    .then(function() {
+        showMsg('Schedule cancelled', '#c0392b');
+        document.getElementById('cancelScheduleBtn').style.display = 'none';
+        setTimeout(function(){window.location.href='/admin/emails';}, 1500);
+    })
+    .catch(function(e){showMsg(e.message || 'Cancel failed','#c62828');});
+}
+
 function showMsg(text, color) {
     var el = document.getElementById('formMsg');
     el.textContent = text;
@@ -248,12 +317,11 @@ function doSend(id) {
     .catch(function(e){showMsg(e.message || 'Send failed','#c62828');});
 }
 
-// Load existing draft if editing
+// Load existing draft/scheduled email if editing
 (function() {
     var params = new URLSearchParams(window.location.search);
     var id = params.get('id');
     if (id) {
-        document.getElementById('pageTitle').textContent = 'Edit Draft';
         fetch('/api/emails/detail?id='+encodeURIComponent(id))
         .then(function(r){return r.json();})
         .then(function(data) {
@@ -266,6 +334,18 @@ function doSend(id) {
                 selectedMembers[r.MemberID] = {Name: r.MemberName, Email: r.MemberEmail};
             });
             renderSelected();
+
+            if (em.Status === 'scheduled') {
+                document.getElementById('pageTitle').textContent = 'Scheduled Email';
+                document.getElementById('cancelScheduleBtn').style.display = 'inline-block';
+                if (em.ScheduledAt) {
+                    var d = new Date(em.ScheduledAt);
+                    var local = new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,16);
+                    document.getElementById('scheduleAt').value = local;
+                }
+            } else {
+                document.getElementById('pageTitle').textContent = 'Edit Draft';
+            }
         });
     }
 })();

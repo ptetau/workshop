@@ -193,6 +193,134 @@ func ExecuteSendEmail(ctx context.Context, input SendEmailInput, deps SendEmailD
 	return em, nil
 }
 
+// --- Schedule Email ---
+
+// ScheduleEmailInput carries input for scheduling an email.
+type ScheduleEmailInput struct {
+	EmailID     string
+	ScheduledAt time.Time
+}
+
+// ScheduleEmailDeps holds dependencies for ScheduleEmail.
+type ScheduleEmailDeps struct {
+	EmailStore EmailStoreForOrchestrator
+	Now        func() time.Time
+}
+
+// ExecuteScheduleEmail schedules a draft email for future delivery.
+// PRE: EmailID exists and is in draft status; ScheduledAt is in the future
+// POST: Email status set to scheduled with ScheduledAt time
+func ExecuteScheduleEmail(ctx context.Context, input ScheduleEmailInput, deps ScheduleEmailDeps) (emailDomain.Email, error) {
+	if input.EmailID == "" {
+		return emailDomain.Email{}, errors.New("email ID is required")
+	}
+
+	em, err := deps.EmailStore.GetByID(ctx, input.EmailID)
+	if err != nil {
+		return emailDomain.Email{}, err
+	}
+
+	// Validate recipients exist
+	recipients, err := deps.EmailStore.GetRecipients(ctx, input.EmailID)
+	if err != nil {
+		return emailDomain.Email{}, err
+	}
+	if len(recipients) == 0 {
+		return emailDomain.Email{}, emailDomain.ErrNoRecipients
+	}
+
+	if err := em.Schedule(input.ScheduledAt); err != nil {
+		return emailDomain.Email{}, err
+	}
+	em.UpdatedAt = deps.Now()
+
+	if err := deps.EmailStore.Save(ctx, em); err != nil {
+		return emailDomain.Email{}, err
+	}
+
+	slog.Info("email_event", "event", "email_scheduled", "email_id", em.ID, "scheduled_at", input.ScheduledAt)
+	return em, nil
+}
+
+// --- Cancel Email ---
+
+// CancelEmailInput carries input for cancelling a scheduled email.
+type CancelEmailInput struct {
+	EmailID string
+}
+
+// CancelEmailDeps holds dependencies for CancelEmail.
+type CancelEmailDeps struct {
+	EmailStore EmailStoreForOrchestrator
+	Now        func() time.Time
+}
+
+// ExecuteCancelEmail cancels a scheduled or draft email.
+// PRE: EmailID exists and is in scheduled or draft status
+// POST: Email status set to cancelled
+func ExecuteCancelEmail(ctx context.Context, input CancelEmailInput, deps CancelEmailDeps) (emailDomain.Email, error) {
+	if input.EmailID == "" {
+		return emailDomain.Email{}, errors.New("email ID is required")
+	}
+
+	em, err := deps.EmailStore.GetByID(ctx, input.EmailID)
+	if err != nil {
+		return emailDomain.Email{}, err
+	}
+
+	if err := em.Cancel(); err != nil {
+		return emailDomain.Email{}, err
+	}
+	em.UpdatedAt = deps.Now()
+
+	if err := deps.EmailStore.Save(ctx, em); err != nil {
+		return emailDomain.Email{}, err
+	}
+
+	slog.Info("email_event", "event", "email_cancelled", "email_id", em.ID)
+	return em, nil
+}
+
+// --- Reschedule Email ---
+
+// RescheduleEmailInput carries input for rescheduling an email.
+type RescheduleEmailInput struct {
+	EmailID     string
+	ScheduledAt time.Time
+}
+
+// RescheduleEmailDeps holds dependencies for RescheduleEmail.
+type RescheduleEmailDeps struct {
+	EmailStore EmailStoreForOrchestrator
+	Now        func() time.Time
+}
+
+// ExecuteRescheduleEmail changes the scheduled delivery time of an email.
+// PRE: EmailID exists and is in scheduled status; ScheduledAt is in the future
+// POST: ScheduledAt is updated
+func ExecuteRescheduleEmail(ctx context.Context, input RescheduleEmailInput, deps RescheduleEmailDeps) (emailDomain.Email, error) {
+	if input.EmailID == "" {
+		return emailDomain.Email{}, errors.New("email ID is required")
+	}
+
+	em, err := deps.EmailStore.GetByID(ctx, input.EmailID)
+	if err != nil {
+		return emailDomain.Email{}, err
+	}
+
+	if err := em.Reschedule(input.ScheduledAt); err != nil {
+		return emailDomain.Email{}, err
+	}
+	em.UpdatedAt = deps.Now()
+
+	if err := deps.EmailStore.Save(ctx, em); err != nil {
+		return emailDomain.Email{}, err
+	}
+
+	slog.Info("email_event", "event", "email_rescheduled", "email_id", em.ID, "scheduled_at", input.ScheduledAt)
+	return em, nil
+}
+
 // resolveRecipients looks up member names and emails from member IDs.
 func resolveRecipients(ctx context.Context, emailID string, memberIDs []string, lookup MemberLookup) ([]emailDomain.Recipient, error) {
 	var recipients []emailDomain.Recipient

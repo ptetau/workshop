@@ -415,3 +415,158 @@ func TestSendEmail_MissingEmailID(t *testing.T) {
 		t.Error("expected error for missing email ID")
 	}
 }
+
+// --- Schedule Tests ---
+
+// TestScheduleEmail_Success tests scheduling a draft email for future delivery.
+func TestScheduleEmail_Success(t *testing.T) {
+	store := newMockEmailStore()
+	store.emails["draft-1"] = emailDomain.Email{
+		ID:        "draft-1",
+		Subject:   "Grading Day",
+		Body:      "<p>Grading on Saturday</p>",
+		SenderID:  "admin-1",
+		Status:    emailDomain.StatusDraft,
+		CreatedAt: fixedTime,
+	}
+	store.recipients["draft-1"] = []emailDomain.Recipient{
+		{EmailID: "draft-1", MemberID: "member-1", MemberName: "Marcus", MemberEmail: "marcus@email.com"},
+	}
+
+	scheduledAt := fixedTime.Add(24 * time.Hour)
+	input := ScheduleEmailInput{EmailID: "draft-1", ScheduledAt: scheduledAt}
+	deps := ScheduleEmailDeps{EmailStore: store, Now: testNow}
+
+	em, err := ExecuteScheduleEmail(context.Background(), input, deps)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if em.Status != emailDomain.StatusScheduled {
+		t.Errorf("status = %q, want %q", em.Status, emailDomain.StatusScheduled)
+	}
+	if !em.ScheduledAt.Equal(scheduledAt) {
+		t.Errorf("scheduled_at = %v, want %v", em.ScheduledAt, scheduledAt)
+	}
+}
+
+// TestScheduleEmail_NoRecipients tests that scheduling without recipients fails.
+func TestScheduleEmail_NoRecipients(t *testing.T) {
+	store := newMockEmailStore()
+	store.emails["draft-1"] = emailDomain.Email{
+		ID:       "draft-1",
+		Subject:  "Test",
+		Body:     "body",
+		SenderID: "admin-1",
+		Status:   emailDomain.StatusDraft,
+	}
+	// No recipients
+
+	input := ScheduleEmailInput{EmailID: "draft-1", ScheduledAt: fixedTime.Add(time.Hour)}
+	deps := ScheduleEmailDeps{EmailStore: store, Now: testNow}
+
+	_, err := ExecuteScheduleEmail(context.Background(), input, deps)
+	if err != emailDomain.ErrNoRecipients {
+		t.Errorf("expected ErrNoRecipients, got: %v", err)
+	}
+}
+
+// TestScheduleEmail_AlreadySent tests that sent emails cannot be scheduled.
+func TestScheduleEmail_AlreadySent(t *testing.T) {
+	store := newMockEmailStore()
+	store.emails["sent-1"] = emailDomain.Email{
+		ID:     "sent-1",
+		Status: emailDomain.StatusSent,
+	}
+	store.recipients["sent-1"] = []emailDomain.Recipient{
+		{EmailID: "sent-1", MemberID: "m1", MemberEmail: "a@b.com"},
+	}
+
+	input := ScheduleEmailInput{EmailID: "sent-1", ScheduledAt: fixedTime.Add(time.Hour)}
+	deps := ScheduleEmailDeps{EmailStore: store, Now: testNow}
+
+	_, err := ExecuteScheduleEmail(context.Background(), input, deps)
+	if err != emailDomain.ErrNotDraft {
+		t.Errorf("expected ErrNotDraft, got: %v", err)
+	}
+}
+
+// --- Cancel Tests ---
+
+// TestCancelEmail_Scheduled tests cancelling a scheduled email.
+func TestCancelEmail_Scheduled(t *testing.T) {
+	store := newMockEmailStore()
+	store.emails["sched-1"] = emailDomain.Email{
+		ID:          "sched-1",
+		Status:      emailDomain.StatusScheduled,
+		ScheduledAt: fixedTime.Add(24 * time.Hour),
+	}
+
+	input := CancelEmailInput{EmailID: "sched-1"}
+	deps := CancelEmailDeps{EmailStore: store, Now: testNow}
+
+	em, err := ExecuteCancelEmail(context.Background(), input, deps)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if em.Status != emailDomain.StatusCancelled {
+		t.Errorf("status = %q, want %q", em.Status, emailDomain.StatusCancelled)
+	}
+}
+
+// TestCancelEmail_AlreadySent tests that sent emails cannot be cancelled.
+func TestCancelEmail_AlreadySent(t *testing.T) {
+	store := newMockEmailStore()
+	store.emails["sent-1"] = emailDomain.Email{
+		ID:     "sent-1",
+		Status: emailDomain.StatusSent,
+	}
+
+	input := CancelEmailInput{EmailID: "sent-1"}
+	deps := CancelEmailDeps{EmailStore: store, Now: testNow}
+
+	_, err := ExecuteCancelEmail(context.Background(), input, deps)
+	if err != emailDomain.ErrNotCancellable {
+		t.Errorf("expected ErrNotCancellable, got: %v", err)
+	}
+}
+
+// --- Reschedule Tests ---
+
+// TestRescheduleEmail_Success tests rescheduling a scheduled email.
+func TestRescheduleEmail_Success(t *testing.T) {
+	store := newMockEmailStore()
+	store.emails["sched-1"] = emailDomain.Email{
+		ID:          "sched-1",
+		Status:      emailDomain.StatusScheduled,
+		ScheduledAt: fixedTime.Add(24 * time.Hour),
+	}
+
+	newTime := fixedTime.Add(48 * time.Hour)
+	input := RescheduleEmailInput{EmailID: "sched-1", ScheduledAt: newTime}
+	deps := RescheduleEmailDeps{EmailStore: store, Now: testNow}
+
+	em, err := ExecuteRescheduleEmail(context.Background(), input, deps)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !em.ScheduledAt.Equal(newTime) {
+		t.Errorf("scheduled_at = %v, want %v", em.ScheduledAt, newTime)
+	}
+}
+
+// TestRescheduleEmail_NotScheduled tests that non-scheduled emails cannot be rescheduled.
+func TestRescheduleEmail_NotScheduled(t *testing.T) {
+	store := newMockEmailStore()
+	store.emails["draft-1"] = emailDomain.Email{
+		ID:     "draft-1",
+		Status: emailDomain.StatusDraft,
+	}
+
+	input := RescheduleEmailInput{EmailID: "draft-1", ScheduledAt: fixedTime.Add(time.Hour)}
+	deps := RescheduleEmailDeps{EmailStore: store, Now: testNow}
+
+	_, err := ExecuteRescheduleEmail(context.Background(), input, deps)
+	if err != emailDomain.ErrNotScheduled {
+		t.Errorf("expected ErrNotScheduled, got: %v", err)
+	}
+}

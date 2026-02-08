@@ -2998,6 +2998,135 @@ func handleEmailDelete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// handleEmailSchedule handles POST /api/emails/schedule
+func handleEmailSchedule(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	sess, ok := requireAdmin(w, r)
+	if !ok {
+		return
+	}
+
+	var input struct {
+		EmailID     string `json:"EmailID"`
+		ScheduledAt string `json:"ScheduledAt"` // RFC3339
+	}
+	if err := strictDecode(r, &input); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if input.EmailID == "" || input.ScheduledAt == "" {
+		http.Error(w, "EmailID and ScheduledAt are required", http.StatusBadRequest)
+		return
+	}
+
+	scheduledAt, err := time.Parse(time.RFC3339, input.ScheduledAt)
+	if err != nil {
+		http.Error(w, "ScheduledAt must be in RFC3339 format", http.StatusBadRequest)
+		return
+	}
+
+	_ = sess // sender verified via requireAdmin
+	em, err := orchestrators.ExecuteScheduleEmail(r.Context(), orchestrators.ScheduleEmailInput{
+		EmailID:     input.EmailID,
+		ScheduledAt: scheduledAt,
+	}, orchestrators.ScheduleEmailDeps{
+		EmailStore: stores.EmailStore,
+		Now:        timeNow,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(em)
+}
+
+// handleEmailCancel handles POST /api/emails/cancel
+func handleEmailCancel(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if _, ok := requireAdmin(w, r); !ok {
+		return
+	}
+
+	var input struct {
+		EmailID string `json:"EmailID"`
+	}
+	if err := strictDecode(r, &input); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if input.EmailID == "" {
+		http.Error(w, "EmailID is required", http.StatusBadRequest)
+		return
+	}
+
+	em, err := orchestrators.ExecuteCancelEmail(r.Context(), orchestrators.CancelEmailInput{
+		EmailID: input.EmailID,
+	}, orchestrators.CancelEmailDeps{
+		EmailStore: stores.EmailStore,
+		Now:        timeNow,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(em)
+}
+
+// handleEmailReschedule handles POST /api/emails/reschedule
+func handleEmailReschedule(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if _, ok := requireAdmin(w, r); !ok {
+		return
+	}
+
+	var input struct {
+		EmailID     string `json:"EmailID"`
+		ScheduledAt string `json:"ScheduledAt"` // RFC3339
+	}
+	if err := strictDecode(r, &input); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if input.EmailID == "" || input.ScheduledAt == "" {
+		http.Error(w, "EmailID and ScheduledAt are required", http.StatusBadRequest)
+		return
+	}
+
+	scheduledAt, err := time.Parse(time.RFC3339, input.ScheduledAt)
+	if err != nil {
+		http.Error(w, "ScheduledAt must be in RFC3339 format", http.StatusBadRequest)
+		return
+	}
+
+	em, err := orchestrators.ExecuteRescheduleEmail(r.Context(), orchestrators.RescheduleEmailInput{
+		EmailID:     input.EmailID,
+		ScheduledAt: scheduledAt,
+	}, orchestrators.RescheduleEmailDeps{
+		EmailStore: stores.EmailStore,
+		Now:        timeNow,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(em)
+}
+
 // handleMemberFilterForEmail handles GET /api/emails/recipients/filter?program=...
 func handleMemberFilterForEmail(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {

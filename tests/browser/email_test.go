@@ -502,6 +502,188 @@ func TestEmail_InvertSelection(t *testing.T) {
 	}
 }
 
+// TestEmail_ScheduleEmail tests scheduling an email for future delivery.
+// Covers #116: Admin can schedule an email for a specific time.
+func TestEmail_ScheduleEmail(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping browser test in short mode")
+	}
+
+	app := newTestApp(t)
+	seedTestMember(t, app, "Keenan Cornelius", "keenan@test.com")
+
+	page := app.newPage(t)
+	app.login(t, page)
+
+	_, err := page.Goto(app.BaseURL + "/admin/emails/compose")
+	if err != nil {
+		t.Fatalf("failed to navigate to compose: %v", err)
+	}
+
+	// Fill subject and body
+	if err := page.Locator("#emailSubject").Fill("Seminar Announcement"); err != nil {
+		t.Fatalf("failed to fill subject: %v", err)
+	}
+	if err := page.Locator("#emailBody").Fill("Guest instructor seminar next month."); err != nil {
+		t.Fatalf("failed to fill body: %v", err)
+	}
+
+	// Add recipient
+	if err := page.Locator("#recipientSearch").Fill("Keenan"); err != nil {
+		t.Fatalf("failed to fill search: %v", err)
+	}
+	err = page.Locator("#searchResults >> text=Keenan Cornelius").WaitFor(playwright.LocatorWaitForOptions{
+		Timeout: playwright.Float(5000),
+	})
+	if err != nil {
+		t.Fatalf("Keenan not found in search: %v", err)
+	}
+	if err := page.Locator("#searchResults >> text=Keenan Cornelius").Click(); err != nil {
+		t.Fatalf("failed to select Keenan: %v", err)
+	}
+
+	// Set schedule time to tomorrow
+	if err := page.Locator("#scheduleAt").Fill("2026-03-15T17:00"); err != nil {
+		t.Fatalf("failed to set schedule time: %v", err)
+	}
+
+	// Click Schedule
+	if err := page.Locator("#scheduleBtn").Click(); err != nil {
+		t.Fatalf("failed to click Schedule: %v", err)
+	}
+
+	// Should show success and redirect
+	err = page.Locator("#formMsg >> text=Email scheduled").WaitFor(playwright.LocatorWaitForOptions{
+		Timeout: playwright.Float(5000),
+	})
+	if err != nil {
+		t.Error("schedule confirmation message not shown")
+	}
+
+	// Wait for redirect then check email list
+	time.Sleep(2 * time.Second)
+	_, _ = page.Goto(app.BaseURL + "/admin/emails")
+
+	err = page.Locator("#emailList >> text=Seminar Announcement").WaitFor(playwright.LocatorWaitForOptions{
+		Timeout: playwright.Float(5000),
+	})
+	if err != nil {
+		t.Error("scheduled email not found in email list")
+	}
+
+	err = page.Locator("#emailList >> text=scheduled").WaitFor(playwright.LocatorWaitForOptions{
+		Timeout: playwright.Float(3000),
+	})
+	if err != nil {
+		t.Error("scheduled status badge not visible")
+	}
+}
+
+// TestEmail_CancelScheduled tests cancelling a scheduled email.
+// Covers #117: Admin can cancel a scheduled email before it's sent.
+func TestEmail_CancelScheduled(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping browser test in short mode")
+	}
+
+	app := newTestApp(t)
+	seedTestMember(t, app, "Leandro Lo", "leandro@test.com")
+
+	page := app.newPage(t)
+	app.login(t, page)
+
+	// First create and schedule an email
+	_, err := page.Goto(app.BaseURL + "/admin/emails/compose")
+	if err != nil {
+		t.Fatalf("failed to navigate to compose: %v", err)
+	}
+
+	if err := page.Locator("#emailSubject").Fill("Cancelled Event"); err != nil {
+		t.Fatalf("failed to fill subject: %v", err)
+	}
+	if err := page.Locator("#emailBody").Fill("This event is cancelled."); err != nil {
+		t.Fatalf("failed to fill body: %v", err)
+	}
+
+	if err := page.Locator("#recipientSearch").Fill("Leandro"); err != nil {
+		t.Fatalf("failed to fill search: %v", err)
+	}
+	err = page.Locator("#searchResults >> text=Leandro Lo").WaitFor(playwright.LocatorWaitForOptions{
+		Timeout: playwright.Float(5000),
+	})
+	if err != nil {
+		t.Fatalf("Leandro not found in search: %v", err)
+	}
+	if err := page.Locator("#searchResults >> text=Leandro Lo").Click(); err != nil {
+		t.Fatalf("failed to select Leandro: %v", err)
+	}
+
+	if err := page.Locator("#scheduleAt").Fill("2026-03-20T09:00"); err != nil {
+		t.Fatalf("failed to set schedule time: %v", err)
+	}
+	if err := page.Locator("#scheduleBtn").Click(); err != nil {
+		t.Fatalf("failed to click Schedule: %v", err)
+	}
+
+	// Wait for redirect to email list
+	time.Sleep(2 * time.Second)
+	_, _ = page.Goto(app.BaseURL + "/admin/emails")
+
+	// Click Edit on the scheduled email to open it
+	err = page.Locator("#emailList >> text=Cancelled Event").WaitFor(playwright.LocatorWaitForOptions{
+		Timeout: playwright.Float(5000),
+	})
+	if err != nil {
+		t.Fatalf("scheduled email not found: %v", err)
+	}
+
+	// Find the edit link for this email
+	editLink := page.Locator("a:has-text('Edit')").First()
+	if err := editLink.Click(); err != nil {
+		t.Fatalf("failed to click Edit: %v", err)
+	}
+
+	// Should see "Cancel Schedule" button for scheduled emails
+	err = page.Locator("#cancelScheduleBtn").WaitFor(playwright.LocatorWaitForOptions{
+		Timeout: playwright.Float(5000),
+	})
+	if err != nil {
+		t.Fatalf("Cancel Schedule button not visible: %v", err)
+	}
+
+	if err := page.Locator("#cancelScheduleBtn").Click(); err != nil {
+		t.Fatalf("failed to click Cancel Schedule: %v", err)
+	}
+
+	// Should show cancellation message
+	err = page.Locator("#formMsg >> text=cancelled").WaitFor(playwright.LocatorWaitForOptions{
+		Timeout: playwright.Float(5000),
+	})
+	if err != nil {
+		t.Error("cancellation confirmation not shown")
+	}
+
+	// JS redirects to /admin/emails after 1.5s — wait for it
+	err = page.WaitForURL("**/admin/emails", playwright.PageWaitForURLOptions{
+		Timeout: playwright.Float(5000),
+	})
+	if err != nil {
+		// Fallback: navigate manually
+		_, _ = page.Goto(app.BaseURL + "/admin/emails")
+	}
+
+	// Wait for the email list JS to load and render
+	time.Sleep(1 * time.Second)
+
+	// The subject "Cancelled Event" should appear with status badge
+	err = page.Locator("#emailList >> text=Cancelled Event").WaitFor(playwright.LocatorWaitForOptions{
+		Timeout: playwright.Float(5000),
+	})
+	if err != nil {
+		t.Fatalf("email not found in list after cancel: %v", err)
+	}
+}
+
 // TestEmail_DashboardEmailLink verifies the Emails link appears on the admin dashboard.
 func TestEmail_DashboardEmailLink(t *testing.T) {
 	if testing.Short() {
