@@ -8,10 +8,10 @@ import (
 
 // DevMode errors
 var (
-	ErrDevModeNotAdmin          = errors.New("only admins can use devmode impersonation")
-	ErrDevModeInvalidRole       = errors.New("target role is not valid")
-	ErrDevModeNotImpersonating  = errors.New("not currently impersonating")
-	ErrDevModeAlreadyAdmin      = errors.New("already operating as admin")
+	ErrDevModeNotAdmin         = errors.New("only admins can use devmode impersonation")
+	ErrDevModeInvalidRole      = errors.New("target role is not valid")
+	ErrDevModeNotImpersonating = errors.New("not currently impersonating")
+	ErrDevModeAlreadyAdmin     = errors.New("already operating as admin")
 )
 
 // DevModeImpersonateInput carries input for the impersonate orchestrator.

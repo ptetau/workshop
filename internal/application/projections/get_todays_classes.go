@@ -48,15 +48,15 @@ type GetTodaysClassesDeps struct {
 
 // TodaysClassResult represents a single class session resolved for today.
 type TodaysClassResult struct {
-	ScheduleID   string
-	ClassTypeID  string
+	ScheduleID    string
+	ClassTypeID   string
 	ClassTypeName string
-	ProgramID    string
-	ProgramName  string
-	ProgramType  string
-	Day          string
-	StartTime    string
-	EndTime      string
+	ProgramID     string
+	ProgramName   string
+	ProgramType   string
+	Day           string
+	StartTime     string
+	EndTime       string
 }
 
 // QueryGetTodaysClasses resolves today's classes on-the-fly from Schedule + Terms - Holidays.

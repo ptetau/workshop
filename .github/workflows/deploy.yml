@@ -1,0 +1,83 @@
+name: Deploy to Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "deploy" to confirm production deployment'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Build & Deploy to VPS
+    runs-on: ubuntu-latest
+    if: github.event.inputs.confirm == 'deploy'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run tests
+        run: go test -count=1 ./...
+
+      - name: Build binary
+        run: |
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o workshop ./cmd/server
+        env:
+          CGO_ENABLED: "0"
+          GOOS: linux
+          GOARCH: amd64
+
+      - name: Set up SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to VPS
+        run: |
+          SSH_OPTS="-i ~/.ssh/deploy_key -o StrictHostKeyChecking=no"
+          VPS_USER="${{ secrets.VPS_USER }}"
+          VPS_HOST="${{ secrets.VPS_HOST }}"
+          DEPLOY_DIR="/opt/workshop"
+
+          echo "=== Uploading binary ==="
+          rsync -avz -e "ssh $SSH_OPTS" \
+            workshop \
+            ${VPS_USER}@${VPS_HOST}:${DEPLOY_DIR}/workshop.new
+
+          echo "=== Uploading static files ==="
+          rsync -avz --delete -e "ssh $SSH_OPTS" \
+            static/ \
+            ${VPS_USER}@${VPS_HOST}:${DEPLOY_DIR}/static/
+
+          echo "=== Uploading templates ==="
+          rsync -avz --delete -e "ssh $SSH_OPTS" \
+            internal/adapters/http/templates/ \
+            ${VPS_USER}@${VPS_HOST}:${DEPLOY_DIR}/internal/adapters/http/templates/
+
+          echo "=== Swapping binary and restarting ==="
+          ssh $SSH_OPTS ${VPS_USER}@${VPS_HOST} << 'ENDSSH'
+            set -e
+            cd /opt/workshop
+            # Atomic swap: move new binary into place, then restart
+            sudo mv workshop.new workshop
+            sudo chown workshop:workshop workshop
+            sudo chmod +x workshop
+            sudo systemctl restart workshop
+            # Wait a moment and check it started
+            sleep 2
+            sudo systemctl is-active workshop
+            echo "Deploy complete!"
+          ENDSSH

@@ -60,9 +60,9 @@ func (s *SQLiteStore) Save(ctx context.Context, entity domain.Injury) error {
 	defer tx.Rollback()
 
 	// Upsert implementation
-	fields := []string{ "id","body_part","description","member_id","reported_at", }
-	placeholders := []string{ "?","?","?","?","?", }
-	updates := []string{ "id=excluded.id","body_part=excluded.body_part","description=excluded.description","member_id=excluded.member_id","reported_at=excluded.reported_at", }
+	fields := []string{"id", "body_part", "description", "member_id", "reported_at"}
+	placeholders := []string{"?", "?", "?", "?", "?"}
+	updates := []string{"id=excluded.id", "body_part=excluded.body_part", "description=excluded.description", "member_id=excluded.member_id", "reported_at=excluded.reported_at"}
 
 	query := fmt.Sprintf(
 		"INSERT INTO injury (%s) VALUES (%s) ON CONFLICT(id) DO UPDATE SET %s",
