@@ -111,6 +111,10 @@ func (ss *SessionStore) Update(token string, session Session) bool {
 
 const sessionCookieName = "workshop_session"
 
+// SecureCookies controls the Secure flag on session cookies.
+// Set to true in production (HTTPS via Caddy).
+var SecureCookies bool
+
 // Auth returns middleware that extracts the session from the cookie and sets the account in context.
 // It does NOT block unauthenticated requests — use RequireAuth or RequireRole for that.
 // If the session has PasswordChangeRequired set, all routes except /change-password and /logout
@@ -184,7 +188,7 @@ func SetSessionCookie(w http.ResponseWriter, token string) {
 		Name:     sessionCookieName,
 		Value:    token,
 		HttpOnly: true,
-		Secure:   false, // Allow HTTP for local development
+		Secure:   SecureCookies,
 		SameSite: http.SameSiteStrictMode,
 		Path:     "/",
 		MaxAge:   86400, // 24 hours
@@ -197,7 +201,7 @@ func ClearSessionCookie(w http.ResponseWriter) {
 		Name:     sessionCookieName,
 		Value:    "",
 		HttpOnly: true,
-		Secure:   false,
+		Secure:   SecureCookies,
 		SameSite: http.SameSiteStrictMode,
 		Path:     "/",
 		MaxAge:   -1,

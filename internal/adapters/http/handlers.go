@@ -168,7 +168,7 @@ func handleMembers(w http.ResponseWriter, r *http.Request) {
 
 		if strings.HasPrefix(r.Header.Get("Content-Type"), "application/x-www-form-urlencoded") {
 			if err := r.ParseForm(); err != nil {
-				http.Error(w, "Form error: "+err.Error(), http.StatusBadRequest)
+				http.Error(w, "Invalid form submission", http.StatusBadRequest)
 				return
 			}
 			input.Email = r.FormValue("Email")
@@ -176,7 +176,7 @@ func handleMembers(w http.ResponseWriter, r *http.Request) {
 			input.Program = r.FormValue("Program")
 		} else {
 			if err := strictDecode(r, &input); err != nil {
-				http.Error(w, "JSON error: "+err.Error(), http.StatusBadRequest)
+				http.Error(w, "Invalid request", http.StatusBadRequest)
 				return
 			}
 		}
@@ -215,7 +215,7 @@ func handlePostCheckinCheckInMember(w http.ResponseWriter, r *http.Request) {
 
 	if strings.HasPrefix(r.Header.Get("Content-Type"), "application/x-www-form-urlencoded") {
 		if err := r.ParseForm(); err != nil {
-			http.Error(w, "Form error: "+err.Error(), http.StatusBadRequest)
+			http.Error(w, "Invalid form submission", http.StatusBadRequest)
 			return
 		}
 		input.MemberID = r.FormValue("MemberID")
@@ -223,7 +223,7 @@ func handlePostCheckinCheckInMember(w http.ResponseWriter, r *http.Request) {
 		input.ClassDate = r.FormValue("ClassDate")
 	} else {
 		if err := strictDecode(r, &input); err != nil {
-			http.Error(w, "JSON error: "+err.Error(), http.StatusBadRequest)
+			http.Error(w, "Invalid request", http.StatusBadRequest)
 			return
 		}
 	}
@@ -293,7 +293,7 @@ func handlePostInjuriesReportInjury(w http.ResponseWriter, r *http.Request) {
 
 	if strings.HasPrefix(r.Header.Get("Content-Type"), "application/x-www-form-urlencoded") {
 		if err := r.ParseForm(); err != nil {
-			http.Error(w, "Form error: "+err.Error(), http.StatusBadRequest)
+			http.Error(w, "Invalid form submission", http.StatusBadRequest)
 			return
 		}
 		input.MemberID = r.FormValue("MemberID")
@@ -301,7 +301,7 @@ func handlePostInjuriesReportInjury(w http.ResponseWriter, r *http.Request) {
 		input.Description = r.FormValue("Description")
 	} else {
 		if err := strictDecode(r, &input); err != nil {
-			http.Error(w, "JSON error: "+err.Error(), http.StatusBadRequest)
+			http.Error(w, "Invalid request", http.StatusBadRequest)
 			return
 		}
 	}
@@ -337,7 +337,7 @@ func handlePostWaiversSignWaiver(w http.ResponseWriter, r *http.Request) {
 
 	if strings.HasPrefix(r.Header.Get("Content-Type"), "application/x-www-form-urlencoded") {
 		if err := r.ParseForm(); err != nil {
-			http.Error(w, "Form error: "+err.Error(), http.StatusBadRequest)
+			http.Error(w, "Invalid form submission", http.StatusBadRequest)
 			return
 		}
 		input.MemberName = r.FormValue("MemberName")
@@ -345,7 +345,7 @@ func handlePostWaiversSignWaiver(w http.ResponseWriter, r *http.Request) {
 		input.AcceptedTerms = r.FormValue("AcceptedTerms") == "true"
 	} else {
 		if err := strictDecode(r, &input); err != nil {
-			http.Error(w, "JSON error: "+err.Error(), http.StatusBadRequest)
+			http.Error(w, "Invalid request", http.StatusBadRequest)
 			return
 		}
 	}
@@ -458,7 +458,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method == "POST" {
 		if err := r.ParseForm(); err != nil {
-			http.Error(w, "Form error: "+err.Error(), http.StatusBadRequest)
+			http.Error(w, "Invalid form submission", http.StatusBadRequest)
 			return
 		}
 

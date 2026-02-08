@@ -84,6 +84,7 @@ var sessions *middleware.SessionStore
 func NewMux(staticDir string, s *Stores) http.Handler {
 	stores = s
 	sessions = middleware.NewSessionStore()
+	middleware.SecureCookies = os.Getenv("WORKSHOP_ENV") == "production"
 
 	mux := http.NewServeMux()
 	mux.Handle("/", http.FileServer(http.Dir(staticDir)))
