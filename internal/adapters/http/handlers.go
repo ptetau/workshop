@@ -481,13 +481,17 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Create session
-		token, err := sessions.Create(result.AccountID, result.Email, result.Role)
+		token, err := sessions.Create(result.AccountID, result.Email, result.Role, result.PasswordChangeRequired)
 		if err != nil {
 			http.Error(w, "Session error", http.StatusInternalServerError)
 			return
 		}
 
 		middleware.SetSessionCookie(w, token)
+		if result.PasswordChangeRequired {
+			http.Redirect(w, r, "/change-password", http.StatusSeeOther)
+			return
+		}
 		http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
 		return
 	}
@@ -510,6 +514,71 @@ func handleLogout(w http.ResponseWriter, r *http.Request) {
 
 	middleware.ClearSessionCookie(w)
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
+}
+
+// handleChangePassword handles GET (form) and POST (update) for /change-password
+func handleChangePassword(w http.ResponseWriter, r *http.Request) {
+	session, ok := middleware.GetSessionFromContext(r.Context())
+	if !ok {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+
+	if r.Method == "GET" {
+		renderTemplate(w, r, "change_password.html", map[string]any{
+			"CSRFToken": csrf.Token(r),
+			"Forced":    session.PasswordChangeRequired,
+		})
+		return
+	}
+
+	if r.Method == "POST" {
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "Form error", http.StatusBadRequest)
+			return
+		}
+
+		input := orchestrators.ChangePasswordInput{
+			AccountID:       session.AccountID,
+			CurrentPassword: r.FormValue("CurrentPassword"),
+			NewPassword:     r.FormValue("NewPassword"),
+		}
+
+		// Validate confirm matches
+		if r.FormValue("NewPassword") != r.FormValue("ConfirmPassword") {
+			renderTemplate(w, r, "change_password.html", map[string]any{
+				"CSRFToken": csrf.Token(r),
+				"Forced":    session.PasswordChangeRequired,
+				"Error":     "New passwords do not match",
+			})
+			return
+		}
+
+		deps := orchestrators.ChangePasswordDeps{
+			AccountStore: stores.AccountStore,
+		}
+
+		if err := orchestrators.ExecuteChangePassword(r.Context(), input, deps); err != nil {
+			renderTemplate(w, r, "change_password.html", map[string]any{
+				"CSRFToken": csrf.Token(r),
+				"Forced":    session.PasswordChangeRequired,
+				"Error":     err.Error(),
+			})
+			return
+		}
+
+		// Update session to clear the flag
+		cookie, err := r.Cookie("workshop_session")
+		if err == nil {
+			session.PasswordChangeRequired = false
+			sessions.Update(cookie.Value, session)
+		}
+
+		http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
+		return
+	}
+
+	w.WriteHeader(http.StatusMethodNotAllowed)
 }
 
 // handleMemberSearch handles GET /api/members/search?q=<name>

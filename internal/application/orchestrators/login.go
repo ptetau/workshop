@@ -22,9 +22,10 @@ type LoginInput struct {
 
 // LoginResult carries the result of a successful login.
 type LoginResult struct {
-	AccountID string
-	Email     string
-	Role      string
+	AccountID              string
+	Email                  string
+	Role                   string
+	PasswordChangeRequired bool
 }
 
 // LoginDeps holds dependencies for Login.
@@ -73,8 +74,9 @@ func ExecuteLogin(ctx context.Context, input LoginInput, deps LoginDeps) (LoginR
 	slog.Info("auth_event", "event", "login_success", "email", input.Email, "role", acct.Role)
 
 	return LoginResult{
-		AccountID: acct.ID,
-		Email:     acct.Email,
-		Role:      acct.Role,
+		AccountID:              acct.ID,
+		Email:                  acct.Email,
+		Role:                   acct.Role,
+		PasswordChangeRequired: acct.PasswordChangeRequired,
 	}, nil
 }

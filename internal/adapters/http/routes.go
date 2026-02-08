@@ -10,6 +10,7 @@ func registerRoutes(mux *http.ServeMux) {
 	// Auth routes (no auth required)
 	mux.HandleFunc("/login", handleLogin)
 	mux.HandleFunc("/logout", handleLogout)
+	mux.HandleFunc("/change-password", handleChangePassword)
 
 	// Existing routes
 	mux.HandleFunc("/attendance", handleGetAttendanceGetAttendanceToday)
