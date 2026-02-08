@@ -6,6 +6,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/csrf v1.7.3
 	github.com/playwright-community/playwright-go v0.5200.1
+	github.com/resend/resend-go/v2 v2.28.0
 	github.com/yuin/goldmark v1.7.16
 	golang.org/x/crypto v0.47.0
 	modernc.org/sqlite v1.44.3

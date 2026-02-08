@@ -2,6 +2,7 @@ package web
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -18,12 +19,14 @@ import (
 
 	"workshop/internal/adapters/http/middleware"
 	accountStore "workshop/internal/adapters/storage/account"
+	emailStoreImport "workshop/internal/adapters/storage/email"
 	memberStore "workshop/internal/adapters/storage/member"
 	noticeStore "workshop/internal/adapters/storage/notice"
 	"workshop/internal/application/orchestrators"
 	"workshop/internal/application/projections"
 	accountDomain "workshop/internal/domain/account"
 	clipDomain "workshop/internal/domain/clip"
+	emailDomain "workshop/internal/domain/email"
 	gradingDomain "workshop/internal/domain/grading"
 	holidayDomain "workshop/internal/domain/holiday"
 	messageDomain "workshop/internal/domain/message"
@@ -2749,4 +2752,289 @@ func handleDevModeRestore(w http.ResponseWriter, r *http.Request) {
 	)
 
 	http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
+}
+
+// --- Phase 3: Email System Handlers ---
+
+// memberLookupAdapter bridges the member store to the orchestrator's MemberLookup interface.
+type memberLookupAdapter struct{}
+
+// GetEmailByMemberID resolves a member's name and email from the member store.
+// PRE: memberID is non-empty
+// POST: Returns member name and email, or error if not found
+func (a *memberLookupAdapter) GetEmailByMemberID(ctx context.Context, memberID string) (string, string, error) {
+	m, err := stores.MemberStore.GetByID(ctx, memberID)
+	if err != nil {
+		return "", "", err
+	}
+	return m.Name, m.Email, nil
+}
+
+// handleAdminEmailsPage handles GET /admin/emails
+func handleAdminEmailsPage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if _, ok := requireAdmin(w, r); !ok {
+		return
+	}
+
+	ctx := r.Context()
+	emails, err := stores.EmailStore.List(ctx, emailStoreImport.ListFilter{})
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+
+	renderTemplate(w, r, "admin_emails.html", map[string]any{
+		"Emails": emails,
+	})
+}
+
+// handleAdminComposeEmailPage handles GET /admin/emails/compose
+func handleAdminComposeEmailPage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if _, ok := requireAdmin(w, r); !ok {
+		return
+	}
+
+	emailID := r.URL.Query().Get("id")
+	var draft emailDomain.Email
+	var recipients []emailDomain.Recipient
+	if emailID != "" {
+		var err error
+		draft, err = stores.EmailStore.GetByID(r.Context(), emailID)
+		if err != nil {
+			http.Error(w, "email not found", http.StatusNotFound)
+			return
+		}
+		recipients, _ = stores.EmailStore.GetRecipients(r.Context(), emailID)
+	}
+
+	renderTemplate(w, r, "admin_compose_email.html", map[string]any{
+		"Draft":      draft,
+		"Recipients": recipients,
+	})
+}
+
+// handleEmailCompose handles POST /api/emails/compose (save draft)
+func handleEmailCompose(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	sess, ok := requireAdmin(w, r)
+	if !ok {
+		return
+	}
+
+	var input struct {
+		EmailID   string   `json:"EmailID"`
+		Subject   string   `json:"Subject"`
+		Body      string   `json:"Body"`
+		MemberIDs []string `json:"MemberIDs"`
+	}
+	if err := strictDecode(r, &input); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	em, err := orchestrators.ExecuteComposeEmail(r.Context(), orchestrators.ComposeEmailInput{
+		EmailID:   input.EmailID,
+		Subject:   input.Subject,
+		Body:      input.Body,
+		SenderID:  sess.AccountID,
+		MemberIDs: input.MemberIDs,
+	}, orchestrators.ComposeEmailDeps{
+		EmailStore:   stores.EmailStore,
+		MemberLookup: &memberLookupAdapter{},
+		GenerateID:   generateID,
+		Now:          timeNow,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(em)
+}
+
+// handleEmailSend handles POST /api/emails/send
+func handleEmailSend(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	sess, ok := requireAdmin(w, r)
+	if !ok {
+		return
+	}
+
+	var input struct {
+		EmailID string `json:"EmailID"`
+	}
+	if err := strictDecode(r, &input); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	if emailSender == nil {
+		http.Error(w, "email sending is not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	em, err := orchestrators.ExecuteSendEmail(r.Context(), orchestrators.SendEmailInput{
+		EmailID:  input.EmailID,
+		SenderID: sess.AccountID,
+	}, orchestrators.SendEmailDeps{
+		EmailStore:  stores.EmailStore,
+		EmailSender: emailSender,
+		Now:         timeNow,
+		FromAddress: emailFromAddress,
+		ReplyTo:     emailReplyTo,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(em)
+}
+
+// handleEmailList handles GET /api/emails
+func handleEmailList(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if _, ok := requireAdmin(w, r); !ok {
+		return
+	}
+
+	status := r.URL.Query().Get("status")
+	emails, err := stores.EmailStore.List(r.Context(), emailStoreImport.ListFilter{Status: status})
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if emails == nil {
+		w.Write([]byte("[]"))
+		return
+	}
+	json.NewEncoder(w).Encode(emails)
+}
+
+// handleEmailDetail handles GET /api/emails/detail?id=...
+func handleEmailDetail(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if _, ok := requireAdmin(w, r); !ok {
+		return
+	}
+
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		http.Error(w, "id is required", http.StatusBadRequest)
+		return
+	}
+
+	em, err := stores.EmailStore.GetByID(r.Context(), id)
+	if err != nil {
+		http.Error(w, "email not found", http.StatusNotFound)
+		return
+	}
+
+	recipients, _ := stores.EmailStore.GetRecipients(r.Context(), id)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"Email":      em,
+		"Recipients": recipients,
+	})
+}
+
+// handleEmailDelete handles DELETE /api/emails?id=...
+func handleEmailDelete(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "DELETE" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if _, ok := requireAdmin(w, r); !ok {
+		return
+	}
+
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		http.Error(w, "id is required", http.StatusBadRequest)
+		return
+	}
+
+	em, err := stores.EmailStore.GetByID(r.Context(), id)
+	if err != nil {
+		http.Error(w, "email not found", http.StatusNotFound)
+		return
+	}
+	if !em.IsDraft() {
+		http.Error(w, "only draft emails can be deleted", http.StatusBadRequest)
+		return
+	}
+
+	if err := stores.EmailStore.Delete(r.Context(), id); err != nil {
+		internalError(w, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleMemberSearchForEmail handles GET /api/emails/recipients/search?q=...
+func handleMemberSearchForEmail(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if _, ok := requireAdmin(w, r); !ok {
+		return
+	}
+
+	query := r.URL.Query().Get("q")
+	if query == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte("[]"))
+		return
+	}
+
+	members, err := stores.MemberStore.SearchByName(r.Context(), query, 20)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+
+	type memberResult struct {
+		ID    string `json:"ID"`
+		Name  string `json:"Name"`
+		Email string `json:"Email"`
+	}
+	var results []memberResult
+	for _, m := range members {
+		results = append(results, memberResult{ID: m.ID, Name: m.Name, Email: m.Email})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if results == nil {
+		w.Write([]byte("[]"))
+		return
+	}
+	json.NewEncoder(w).Encode(results)
 }

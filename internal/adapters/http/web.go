@@ -8,11 +8,13 @@ import (
 	"os"
 	"time"
 
+	"workshop/internal/adapters/email"
 	"workshop/internal/adapters/http/middleware"
 	accountStore "workshop/internal/adapters/storage/account"
 	attendanceStore "workshop/internal/adapters/storage/attendance"
 	classTypeStore "workshop/internal/adapters/storage/classtype"
 	clipStore "workshop/internal/adapters/storage/clip"
+	emailStore "workshop/internal/adapters/storage/email"
 	gradingStore "workshop/internal/adapters/storage/grading"
 	holidayStore "workshop/internal/adapters/storage/holiday"
 	injuryStore "workshop/internal/adapters/storage/injury"
@@ -51,6 +53,7 @@ type Stores struct {
 	TrainingGoalStore    trainingGoalStore.Store
 	ThemeStore           themeStore.Store
 	ClipStore            clipStore.Store
+	EmailStore           emailStore.Store
 }
 
 // loadCSRFKey reads the CSRF secret from WORKSHOP_CSRF_KEY (hex-encoded, 32 bytes).
@@ -79,6 +82,20 @@ var stores *Stores
 
 // Global session store instance
 var sessions *middleware.SessionStore
+
+// Global email sender instance (set by SetEmailSender)
+var emailSender email.Sender
+
+// Email configuration
+var emailFromAddress string
+var emailReplyTo string
+
+// SetEmailSender sets the global email sender for the application.
+func SetEmailSender(sender email.Sender, from, replyTo string) {
+	emailSender = sender
+	emailFromAddress = from
+	emailReplyTo = replyTo
+}
 
 // NewMux wires HTTP handlers for the app.
 func NewMux(staticDir string, s *Stores) http.Handler {

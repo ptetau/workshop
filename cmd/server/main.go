@@ -9,12 +9,14 @@ import (
 
 	_ "modernc.org/sqlite"
 
+	emailPkg "workshop/internal/adapters/email"
 	web "workshop/internal/adapters/http"
 	"workshop/internal/adapters/storage"
 	accountStore "workshop/internal/adapters/storage/account"
 	attendanceStore "workshop/internal/adapters/storage/attendance"
 	classTypeStore "workshop/internal/adapters/storage/classtype"
 	clipStorePkg "workshop/internal/adapters/storage/clip"
+	emailStorePkg "workshop/internal/adapters/storage/email"
 	gradingStore "workshop/internal/adapters/storage/grading"
 	holidayStore "workshop/internal/adapters/storage/holiday"
 	injuryStore "workshop/internal/adapters/storage/injury"
@@ -86,6 +88,7 @@ func main() {
 		TrainingGoalStore:    trainingGoalStore.NewSQLiteStore(db),
 		ThemeStore:           themeStorePkg.NewSQLiteStore(db),
 		ClipStore:            clipStorePkg.NewSQLiteStore(db),
+		EmailStore:           emailStorePkg.NewSQLiteStore(db),
 	}
 
 	// Seed default admin account if no accounts exist
@@ -133,6 +136,18 @@ func main() {
 			log.Fatalf("failed to seed synthetic data: %v", err)
 		}
 		log.Println("Synthetic seed data loaded (dev mode)")
+	}
+
+	// Configure email sender
+	resendKey := os.Getenv("WORKSHOP_RESEND_KEY")
+	emailFrom := envOrDefault("WORKSHOP_RESEND_FROM", "Workshop Jiu Jitsu <noreply@workshopjiujitsu.co.nz>")
+	emailReply := envOrDefault("WORKSHOP_REPLY_TO", "info@workshopjiujitsu.co.nz")
+	if resendKey != "" {
+		web.SetEmailSender(emailPkg.NewResendSender(resendKey, emailFrom), emailFrom, emailReply)
+		log.Println("Email sender configured (Resend)")
+	} else {
+		web.SetEmailSender(emailPkg.NewNoopSender(), emailFrom, emailReply)
+		log.Println("Email sender configured (noop — set WORKSHOP_RESEND_KEY for real delivery)")
 	}
 
 	// Create HTTP handler with middleware

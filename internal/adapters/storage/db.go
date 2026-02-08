@@ -19,6 +19,7 @@ type migration struct {
 // New migrations are appended here — never modify existing ones.
 var migrations = []migration{
 	{version: 1, description: "baseline schema", apply: migrate1},
+	{version: 2, description: "email system tables", apply: migrate2},
 }
 
 // SchemaVersion returns the current schema version of the database.
@@ -306,6 +307,52 @@ func migrate1(tx *sql.Tx) error {
 	);
 	`
 
+	_, err := tx.Exec(schema)
+	return err
+}
+
+// --- Migration 2: Email system tables ---
+// Adds email, email_recipient, and email_template tables for §8.2 Email System.
+func migrate2(tx *sql.Tx) error {
+	schema := `
+	CREATE TABLE IF NOT EXISTS email (
+		id TEXT PRIMARY KEY,
+		subject TEXT NOT NULL,
+		body TEXT NOT NULL,
+		sender_id TEXT NOT NULL,
+		status TEXT NOT NULL DEFAULT 'draft',
+		scheduled_at TEXT,
+		sent_at TEXT,
+		created_at TEXT NOT NULL,
+		updated_at TEXT,
+		resend_message_id TEXT,
+		template_version_id TEXT,
+		FOREIGN KEY (sender_id) REFERENCES account(id)
+	);
+
+	CREATE TABLE IF NOT EXISTS email_recipient (
+		email_id TEXT NOT NULL,
+		member_id TEXT NOT NULL,
+		member_name TEXT NOT NULL DEFAULT '',
+		member_email TEXT NOT NULL DEFAULT '',
+		delivery_status TEXT NOT NULL DEFAULT '',
+		PRIMARY KEY (email_id, member_id),
+		FOREIGN KEY (email_id) REFERENCES email(id) ON DELETE CASCADE,
+		FOREIGN KEY (member_id) REFERENCES member(id)
+	);
+
+	CREATE TABLE IF NOT EXISTS email_template (
+		id TEXT PRIMARY KEY,
+		header TEXT NOT NULL DEFAULT '',
+		footer TEXT NOT NULL DEFAULT '',
+		created_at TEXT NOT NULL,
+		active INTEGER NOT NULL DEFAULT 1
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_email_status ON email(status);
+	CREATE INDEX IF NOT EXISTS idx_email_sender ON email(sender_id);
+	CREATE INDEX IF NOT EXISTS idx_email_recipient_member ON email_recipient(member_id);
+	`
 	_, err := tx.Exec(schema)
 	return err
 }

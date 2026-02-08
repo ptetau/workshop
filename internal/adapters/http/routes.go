@@ -92,4 +92,14 @@ func registerRoutes(mux *http.ServeMux) {
 	// DevMode routes (admin-only impersonation)
 	mux.HandleFunc("/api/devmode/impersonate", handleDevModeImpersonate)
 	mux.HandleFunc("/api/devmode/restore", handleDevModeRestore)
+
+	// Email system routes
+	mux.HandleFunc("/admin/emails", handleAdminEmailsPage)
+	mux.HandleFunc("/admin/emails/compose", handleAdminComposeEmailPage)
+	mux.HandleFunc("/api/emails", handleEmailList)
+	mux.HandleFunc("/api/emails/compose", handleEmailCompose)
+	mux.HandleFunc("/api/emails/send", handleEmailSend)
+	mux.HandleFunc("/api/emails/detail", handleEmailDetail)
+	mux.HandleFunc("/api/emails/delete", handleEmailDelete)
+	mux.HandleFunc("/api/emails/recipients/search", handleMemberSearchForEmail)
 }

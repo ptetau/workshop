@@ -68,12 +68,15 @@ func normalizeSQL(s string) string {
 	return strings.Join(fields, " ")
 }
 
-// expectedTables is the list of tables that migration 1 (baseline) should create.
+// expectedTables is the sorted list of tables after all migrations.
 var expectedTables = []string{
 	"account",
 	"attendance",
 	"class_type",
 	"coach_observation",
+	"email",
+	"email_recipient",
+	"email_template",
 	"grading_config",
 	"grading_proposal",
 	"grading_record",

@@ -1,0 +1,199 @@
+{{ define "content" }}
+<div class="card">
+    <h1 id="pageTitle">Compose Email</h1>
+
+    <input type="hidden" id="emailID" value="">
+
+    <div class="form-group">
+        <label>Subject</label>
+        <input type="text" id="emailSubject" placeholder="e.g. Schedule Change Notice" style="width:100%;padding:0.5rem;border:1px solid var(--border);border-radius:2px;">
+    </div>
+
+    <div class="form-group">
+        <label>Body <span style="font-size:0.75rem;color:var(--text-muted);">(HTML supported)</span></label>
+        <textarea id="emailBody" rows="10" placeholder="Write your email content here..." style="width:100%;padding:0.5rem;border:1px solid var(--border);border-radius:2px;font-family:inherit;resize:vertical;"></textarea>
+    </div>
+
+    <div class="form-group">
+        <label>Recipients</label>
+        <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.5rem;">
+            <input type="text" id="recipientSearch" placeholder="Search members by name..." oninput="searchRecipients()" style="flex:1;padding:0.5rem;border:1px solid var(--border);border-radius:2px;">
+            <span id="recipientCount" style="font-size:0.85rem;font-weight:600;color:var(--orange);white-space:nowrap;">0 selected</span>
+        </div>
+        <div id="searchResults" style="max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:2px;display:none;"></div>
+        <div id="selectedRecipients" style="display:flex;flex-wrap:wrap;gap:0.4rem;margin-top:0.5rem;"></div>
+    </div>
+
+    <div style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;margin-top:1.5rem;">
+        <button onclick="saveDraft()" style="background:#2980b9;color:#fff;padding:0.5rem 1.25rem;border:none;border-radius:2px;cursor:pointer;font-weight:600;">Save Draft</button>
+        <button onclick="sendEmail()" style="background:var(--green,#27ae60);color:#fff;padding:0.5rem 1.25rem;border:none;border-radius:2px;cursor:pointer;font-weight:600;">Send Now</button>
+        <a href="/admin/emails" style="color:var(--text-muted);text-decoration:none;font-weight:600;">Cancel</a>
+        <span id="formMsg" style="margin-left:0.5rem;color:var(--orange);font-weight:600;"></span>
+    </div>
+
+    <p style="margin-top:2rem;"><a href="/admin/emails" style="color:var(--orange);text-decoration:none;font-weight:600;">&larr; Back to Emails</a></p>
+</div>
+
+<script>
+var selectedMembers = {};
+var searchTimeout = null;
+
+function updateCount() {
+    var count = Object.keys(selectedMembers).length;
+    document.getElementById('recipientCount').textContent = count + ' selected';
+}
+
+function renderSelected() {
+    var el = document.getElementById('selectedRecipients');
+    var html = '';
+    Object.keys(selectedMembers).forEach(function(id) {
+        var m = selectedMembers[id];
+        html += '<span style="display:inline-flex;align-items:center;gap:0.3rem;background:#e3f2fd;color:#1565c0;padding:0.2rem 0.6rem;border-radius:12px;font-size:0.8rem;">'+
+            escHtml(m.Name)+
+            '<button onclick="removeRecipient(\''+id+'\')" style="background:none;border:none;color:#c62828;cursor:pointer;font-size:1rem;padding:0;line-height:1;">&times;</button></span>';
+    });
+    el.innerHTML = html;
+    updateCount();
+}
+
+function addRecipient(id, name, email) {
+    selectedMembers[id] = {Name: name, Email: email};
+    renderSelected();
+}
+
+function removeRecipient(id) {
+    delete selectedMembers[id];
+    renderSelected();
+}
+
+function searchRecipients() {
+    clearTimeout(searchTimeout);
+    var query = document.getElementById('recipientSearch').value.trim();
+    var el = document.getElementById('searchResults');
+    if (query.length < 2) { el.style.display = 'none'; return; }
+
+    searchTimeout = setTimeout(function() {
+        fetch('/api/emails/recipients/search?q='+encodeURIComponent(query))
+        .then(function(r){return r.json();})
+        .then(function(data) {
+            if (!data || data.length === 0) {
+                el.innerHTML = '<div style="padding:0.5rem;color:#999;font-style:italic;">No members found</div>';
+                el.style.display = 'block';
+                return;
+            }
+            var html = '';
+            data.forEach(function(m) {
+                var selected = selectedMembers[m.ID] ? ' (selected)' : '';
+                var bg = selectedMembers[m.ID] ? '#e8f5e9' : '#fff';
+                html += '<div onclick="addRecipient(\''+m.ID+'\',\''+escAttr(m.Name)+'\',\''+escAttr(m.Email)+'\')" style="padding:0.5rem;cursor:pointer;border-bottom:1px solid #eee;background:'+bg+';">'+
+                    '<strong>'+escHtml(m.Name)+'</strong> <span style="color:#999;font-size:0.85rem;">'+escHtml(m.Email)+selected+'</span></div>';
+            });
+            el.innerHTML = html;
+            el.style.display = 'block';
+        });
+    }, 300);
+}
+
+function escHtml(s) { var d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+function escAttr(s) { return s.replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
+
+function showMsg(text, color) {
+    var el = document.getElementById('formMsg');
+    el.textContent = text;
+    el.style.color = color || 'var(--orange)';
+    setTimeout(function(){el.textContent='';}, 3000);
+}
+
+function getSelectedMemberIDs() {
+    return Object.keys(selectedMembers);
+}
+
+function saveDraft() {
+    var body = {
+        EmailID: document.getElementById('emailID').value || undefined,
+        Subject: document.getElementById('emailSubject').value,
+        Body: document.getElementById('emailBody').value,
+        MemberIDs: getSelectedMemberIDs()
+    };
+    fetch('/api/emails/compose',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+    .then(function(r){if(!r.ok) return r.text().then(function(t){throw new Error(t);}); return r.json();})
+    .then(function(em) {
+        document.getElementById('emailID').value = em.ID;
+        showMsg('Draft saved!');
+    })
+    .catch(function(e){showMsg(e.message || 'Error saving draft','#c62828');});
+}
+
+function sendEmail() {
+    var emailID = document.getElementById('emailID').value;
+    if (!emailID) {
+        // Save draft first, then send
+        var body = {
+            Subject: document.getElementById('emailSubject').value,
+            Body: document.getElementById('emailBody').value,
+            MemberIDs: getSelectedMemberIDs()
+        };
+        fetch('/api/emails/compose',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+        .then(function(r){if(!r.ok) return r.text().then(function(t){throw new Error(t);}); return r.json();})
+        .then(function(em) {
+            document.getElementById('emailID').value = em.ID;
+            return doSend(em.ID);
+        })
+        .catch(function(e){showMsg(e.message || 'Error','#c62828');});
+    } else {
+        // Update draft then send
+        var body = {
+            EmailID: emailID,
+            Subject: document.getElementById('emailSubject').value,
+            Body: document.getElementById('emailBody').value,
+            MemberIDs: getSelectedMemberIDs()
+        };
+        fetch('/api/emails/compose',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+        .then(function(r){if(!r.ok) return r.text().then(function(t){throw new Error(t);}); return r.json();})
+        .then(function(em) {
+            return doSend(em.ID);
+        })
+        .catch(function(e){showMsg(e.message || 'Error','#c62828');});
+    }
+}
+
+function doSend(id) {
+    fetch('/api/emails/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({EmailID:id})})
+    .then(function(r){if(!r.ok) return r.text().then(function(t){throw new Error(t);}); return r.json();})
+    .then(function() {
+        showMsg('Email sent!', 'var(--green,#27ae60)');
+        setTimeout(function(){window.location.href='/admin/emails';}, 1500);
+    })
+    .catch(function(e){showMsg(e.message || 'Send failed','#c62828');});
+}
+
+// Load existing draft if editing
+(function() {
+    var params = new URLSearchParams(window.location.search);
+    var id = params.get('id');
+    if (id) {
+        document.getElementById('pageTitle').textContent = 'Edit Draft';
+        fetch('/api/emails/detail?id='+encodeURIComponent(id))
+        .then(function(r){return r.json();})
+        .then(function(data) {
+            var em = data.Email;
+            var recs = data.Recipients || [];
+            document.getElementById('emailID').value = em.ID;
+            document.getElementById('emailSubject').value = em.Subject;
+            document.getElementById('emailBody').value = em.Body;
+            recs.forEach(function(r) {
+                selectedMembers[r.MemberID] = {Name: r.MemberName, Email: r.MemberEmail};
+            });
+            renderSelected();
+        });
+    }
+})();
+
+// Close search results when clicking outside
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('#recipientSearch') && !e.target.closest('#searchResults')) {
+        document.getElementById('searchResults').style.display = 'none';
+    }
+});
+</script>
+{{ end }}
