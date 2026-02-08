@@ -60,9 +60,9 @@ func (s *SQLiteStore) Save(ctx context.Context, entity domain.Waiver) error {
 	defer tx.Rollback()
 
 	// Upsert implementation
-	fields := []string{ "id","accepted_terms","ip_address","member_id","signed_at", }
-	placeholders := []string{ "?","?","?","?","?", }
-	updates := []string{ "id=excluded.id","accepted_terms=excluded.accepted_terms","ip_address=excluded.ip_address","member_id=excluded.member_id","signed_at=excluded.signed_at", }
+	fields := []string{"id", "accepted_terms", "ip_address", "member_id", "signed_at"}
+	placeholders := []string{"?", "?", "?", "?", "?"}
+	updates := []string{"id=excluded.id", "accepted_terms=excluded.accepted_terms", "ip_address=excluded.ip_address", "member_id=excluded.member_id", "signed_at=excluded.signed_at"}
 
 	query := fmt.Sprintf(
 		"INSERT INTO waiver (%s) VALUES (%s) ON CONFLICT(id) DO UPDATE SET %s",

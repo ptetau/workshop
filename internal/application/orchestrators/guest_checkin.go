@@ -92,7 +92,7 @@ func ExecuteGuestCheckIn(ctx context.Context, input GuestCheckInInput, deps Gues
 		MemberID:      memberID,
 		AcceptedTerms: true,
 		IPAddress:     input.IPAddress,
-		SignedAt:       now,
+		SignedAt:      now,
 	}
 	if err := guestWaiver.Validate(); err != nil {
 		return GuestCheckInResult{}, err

@@ -27,7 +27,7 @@ func Init(dbPath string) *sql.DB {
 	if err := db.Ping(); err != nil {
 		log.Fatalf("Fatal: Database unreachable: %v", err)
 	}
-	
+
 	log.Println("Database initialized successfully in WAL mode.")
 	return db
 }

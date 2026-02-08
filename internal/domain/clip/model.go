@@ -11,16 +11,16 @@ import (
 // INVARIANT: A clip always belongs to a theme via ThemeID.
 type Clip struct {
 	ID           string
-	ThemeID      string    // references Theme by ID
-	Title        string    // descriptive title for the clip
-	YouTubeURL   string    // full YouTube URL
-	YouTubeID    string    // extracted video ID
-	StartSeconds int       // loop start in seconds
-	EndSeconds   int       // loop end in seconds
-	Notes        string    // optional technique notes
-	CreatedBy    string    // account ID of the creator
-	Promoted     bool      // true if promoted to the main library by coach/admin
-	PromotedBy   string    // account ID who promoted it
+	ThemeID      string // references Theme by ID
+	Title        string // descriptive title for the clip
+	YouTubeURL   string // full YouTube URL
+	YouTubeID    string // extracted video ID
+	StartSeconds int    // loop start in seconds
+	EndSeconds   int    // loop end in seconds
+	Notes        string // optional technique notes
+	CreatedBy    string // account ID of the creator
+	Promoted     bool   // true if promoted to the main library by coach/admin
+	PromotedBy   string // account ID who promoted it
 	CreatedAt    time.Time
 }
 

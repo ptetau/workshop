@@ -4,8 +4,5 @@ package web
 
 import "net/http"
 
-
-
 func registerRoutes(mux *http.ServeMux) {
 }
-
