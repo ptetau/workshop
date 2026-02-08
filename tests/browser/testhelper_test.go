@@ -16,6 +16,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
+	emailPkg "workshop/internal/adapters/email"
 	web "workshop/internal/adapters/http"
 	"workshop/internal/adapters/http/middleware"
 	"workshop/internal/adapters/storage"
@@ -23,6 +24,7 @@ import (
 	attendanceStore "workshop/internal/adapters/storage/attendance"
 	classTypeStore "workshop/internal/adapters/storage/classtype"
 	clipStore "workshop/internal/adapters/storage/clip"
+	emailStore "workshop/internal/adapters/storage/email"
 	gradingStore "workshop/internal/adapters/storage/grading"
 	holidayStore "workshop/internal/adapters/storage/holiday"
 	injuryStore "workshop/internal/adapters/storage/injury"
@@ -97,6 +99,7 @@ func newTestApp(t *testing.T) *testApp {
 		TrainingGoalStore:    trainingGoalStore.NewSQLiteStore(db),
 		ThemeStore:           themeStore.NewSQLiteStore(db),
 		ClipStore:            clipStore.NewSQLiteStore(db),
+		EmailStore:           emailStore.NewSQLiteStore(db),
 	}
 
 	// Seed admin (without PasswordChangeRequired so login goes straight to dashboard)
@@ -138,6 +141,9 @@ func newTestApp(t *testing.T) *testApp {
 		fmt.Sprintf("127.0.0.1:%d", port),
 		fmt.Sprintf("localhost:%d", port),
 	)
+
+	// Configure noop email sender for tests
+	web.SetEmailSender(emailPkg.NewNoopSender(), "test@test.com", "reply@test.com")
 
 	// Start HTTP server
 	mux := web.NewMux("static", stores)
