@@ -3,22 +3,127 @@ package storage
 import (
 	"database/sql"
 	"fmt"
+	"log/slog"
 )
 
-// InitDB initializes the database schema.
+// migration is a numbered schema change function.
+// PRE: tx is a valid transaction
+// POST: schema changes applied within the transaction
+type migration struct {
+	version     int
+	description string
+	apply       func(tx *sql.Tx) error
+}
+
+// migrations is the ordered list of all schema migrations.
+// New migrations are appended here — never modify existing ones.
+var migrations = []migration{
+	{version: 1, description: "baseline schema", apply: migrate1},
+}
+
+// SchemaVersion returns the current schema version of the database.
 // PRE: db is a valid database connection
-// POST: All tables are created, WAL mode enabled
-func InitDB(db *sql.DB) error {
-	// Enable WAL mode for better concurrency
-	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
-		return fmt.Errorf("failed to enable WAL mode: %w", err)
+// POST: returns the version number (0 if no schema_version table exists)
+func SchemaVersion(db *sql.DB) (int, error) {
+	var version int
+	err := db.QueryRow("SELECT version FROM schema_version LIMIT 1").Scan(&version)
+	if err != nil {
+		return 0, nil
 	}
-	// Enable foreign key enforcement
-	if _, err := db.Exec("PRAGMA foreign_keys=ON"); err != nil {
-		return fmt.Errorf("failed to enable foreign keys: %w", err)
+	return version, nil
+}
+
+// LatestSchemaVersion returns the highest migration version available.
+func LatestSchemaVersion() int {
+	if len(migrations) == 0 {
+		return 0
+	}
+	return migrations[len(migrations)-1].version
+}
+
+// MigrateDB applies all pending migrations to bring the database to the latest schema version.
+// PRE: db is a valid database connection
+// POST: All pending migrations applied, schema_version updated
+// INVARIANT: Each migration runs in its own transaction — failure rolls back cleanly
+func MigrateDB(db *sql.DB, dbPath string) error {
+	// Ensure schema_version table exists
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL)`); err != nil {
+		return fmt.Errorf("failed to create schema_version table: %w", err)
 	}
 
-	// Create tables
+	// Seed version 0 if table is empty
+	var count int
+	if err := db.QueryRow("SELECT COUNT(*) FROM schema_version").Scan(&count); err != nil {
+		return fmt.Errorf("failed to count schema_version rows: %w", err)
+	}
+	if count == 0 {
+		if _, err := db.Exec("INSERT INTO schema_version (version) VALUES (0)"); err != nil {
+			return fmt.Errorf("failed to seed schema_version: %w", err)
+		}
+	}
+
+	// Read current version
+	current, err := SchemaVersion(db)
+	if err != nil {
+		return fmt.Errorf("failed to read schema version: %w", err)
+	}
+
+	// Find pending migrations
+	var pending []migration
+	for _, m := range migrations {
+		if m.version > current {
+			pending = append(pending, m)
+		}
+	}
+
+	if len(pending) == 0 {
+		slog.Info("schema_up_to_date", "version", current)
+		return nil
+	}
+
+	// Backup before migrating (only for file-based databases, not :memory:)
+	if dbPath != "" && dbPath != ":memory:" {
+		backupPath := dbPath + fmt.Sprintf(".bak-v%d", current)
+		slog.Info("schema_backup", "from_version", current, "backup", backupPath)
+		if _, err := db.Exec(fmt.Sprintf("VACUUM INTO '%s'", backupPath)); err != nil {
+			return fmt.Errorf("failed to backup database before migration: %w", err)
+		}
+	}
+
+	// Apply each pending migration in its own transaction
+	for _, m := range pending {
+		slog.Info("schema_migrate", "version", m.version, "description", m.description)
+
+		tx, err := db.Begin()
+		if err != nil {
+			return fmt.Errorf("migration %d: failed to begin transaction: %w", m.version, err)
+		}
+
+		if err := m.apply(tx); err != nil {
+			tx.Rollback()
+			return fmt.Errorf("migration %d (%s): %w", m.version, m.description, err)
+		}
+
+		if _, err := tx.Exec("UPDATE schema_version SET version = ?", m.version); err != nil {
+			tx.Rollback()
+			return fmt.Errorf("migration %d: failed to update version: %w", m.version, err)
+		}
+
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("migration %d: failed to commit: %w", m.version, err)
+		}
+
+		slog.Info("schema_migrated", "version", m.version)
+	}
+
+	slog.Info("schema_migration_complete", "from", current, "to", migrations[len(migrations)-1].version)
+	return nil
+}
+
+// --- Migration 1: Baseline schema ---
+// This is the initial schema. All tables use CREATE TABLE IF NOT EXISTS
+// so it is safe to run on both new and existing databases.
+func migrate1(tx *sql.Tx) error {
 	schema := `
 	CREATE TABLE IF NOT EXISTS account (
 		id TEXT PRIMARY KEY,
@@ -201,9 +306,6 @@ func InitDB(db *sql.DB) error {
 	);
 	`
 
-	if _, err := db.Exec(schema); err != nil {
-		return fmt.Errorf("failed to create schema: %w", err)
-	}
-
-	return nil
+	_, err := tx.Exec(schema)
+	return err
 }

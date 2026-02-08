@@ -32,9 +32,13 @@ import (
 	"workshop/internal/application/orchestrators"
 )
 
+// version is set at build time via -ldflags "-X main.version=..."
+var version = "dev"
+
 func main() {
 	// Initialize database with WAL mode, foreign keys, and busy timeout per DB_GUIDE
-	dsn := "workshop.db?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(ON)&_pragma=synchronous(NORMAL)"
+	dbPath := "workshop.db"
+	dsn := dbPath + "?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(ON)&_pragma=synchronous(NORMAL)"
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		log.Fatalf("failed to open database: %v", err)
@@ -50,9 +54,9 @@ func main() {
 		log.Fatalf("database unreachable: %v", err)
 	}
 
-	// Initialize database schema
-	if err := storage.InitDB(db); err != nil {
-		log.Fatalf("failed to initialize database: %v", err)
+	// Run database migrations
+	if err := storage.MigrateDB(db, dbPath); err != nil {
+		log.Fatalf("failed to migrate database: %v", err)
 	}
 
 	log.Println("Database initialized successfully!")
@@ -136,7 +140,7 @@ func main() {
 
 	// Start server
 	addr := envOrDefault("WORKSHOP_ADDR", ":8080")
-	log.Printf("Server starting on %s (env=%s)", addr, envOrDefault("WORKSHOP_ENV", "development"))
+	log.Printf("Workshop %s starting on %s (env=%s, schema=%d)", version, addr, envOrDefault("WORKSHOP_ENV", "development"), storage.LatestSchemaVersion())
 
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Fatalf("Server failed: %v", err)

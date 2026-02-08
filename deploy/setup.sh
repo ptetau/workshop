@@ -109,6 +109,7 @@ fi
 echo "=== 9. Create application directory ==="
 mkdir -p /opt/workshop/internal/adapters/http/templates
 mkdir -p /opt/workshop/static
+mkdir -p /opt/workshop/backups
 mkdir -p /var/log/caddy
 chown -R workshop:workshop /opt/workshop
 chmod 750 /opt/workshop

@@ -81,31 +81,43 @@ if err := db.Ping(); err != nil {
 
 ---
 
-## 3. Schema
+## 3. Schema & Migrations
 
-All tables are defined in `db.go` using `CREATE TABLE IF NOT EXISTS`. The schema runs on every startup — idempotent by design.
+The schema is managed by **versioned migrations** in `db.go`. On startup, `MigrateDB` checks the current schema version and applies any pending migrations in order, each in its own transaction.
 
+### Schema version tracking
+
+A `schema_version` table stores a single integer — the current version. Migrations are numbered sequentially (1, 2, 3…). Never modify an existing migration; always append a new one.
+
+### How to add a schema change
+
+1. Write a new migration function in `db.go`:
 ```go
-// internal/adapters/storage/db.go
-schema := `
-CREATE TABLE IF NOT EXISTS member (
-    id TEXT PRIMARY KEY,
-    email TEXT NOT NULL UNIQUE,
-    name TEXT NOT NULL,
-    program TEXT NOT NULL,
-    status TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS attendance (
-    id TEXT PRIMARY KEY,
-    member_id TEXT NOT NULL,
-    check_in_time TEXT NOT NULL,
-    schedule_id TEXT,
-    class_date TEXT,
-    FOREIGN KEY (member_id) REFERENCES member(id)
-);
-`
+func migrate2(tx *sql.Tx) error {
+    _, err := tx.Exec(`ALTER TABLE member ADD COLUMN phone TEXT`)
+    return err
+}
 ```
+
+2. Register it in the `migrations` slice:
+```go
+var migrations = []migration{
+    {version: 1, description: "baseline schema", apply: migrate1},
+    {version: 2, description: "add member phone", apply: migrate2},
+}
+```
+
+3. Add a test in `db_test.go` that seeds data at version N-1, applies migration N, and verifies data survived.
+
+4. Update `expectedTables` in the test if new tables were added.
+
+### Safety guarantees
+
+- **Backup before migrate** — `MigrateDB` creates a `workshop.db.bak-v{N}` via `VACUUM INTO` before applying any pending migration
+- **Transaction per migration** — if a migration fails, the database stays at the previous version
+- **CI tests** — schema drift detection, data survival, and idempotency tests run on every PR
+
+### Column conventions
 
 | Don't | Do |
 |-------|------|
@@ -115,6 +127,7 @@ CREATE TABLE IF NOT EXISTS attendance (
 | Forget foreign key declarations | Always declare `FOREIGN KEY (col) REFERENCES table(id)` |
 | Put restricted data (injuries, observations) in the member table | Store in separate tables with stricter access methods |
 | Skip performance indexes | Add `CREATE INDEX` for frequently queried columns (foreign keys, dates) |
+| Modify an existing migration function | Append a new migration — existing migrations are immutable |
 
 ---
 

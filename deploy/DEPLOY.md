@@ -195,13 +195,94 @@ ssh deploy@51.255.201.85 'sudo systemctl restart workshop'
 
 ## Database Backups
 
-The SQLite database is at `/opt/workshop/workshop.db`. Back it up periodically:
+The SQLite database is at `/opt/workshop/workshop.db`. Backups are stored in `/opt/workshop/backups/`.
+
+### Automated pre-deploy backups
+
+Every deploy automatically creates a backup before swapping the binary:
+- Named `workshop-pre-deploy-YYYYMMDD-HHMMSS.db`
+- Retention: last 5 backups + anything less than 30 days old
+- Uses SQLite `.backup` command (safe while app is running in WAL mode)
+
+### Manual backup
 
 ```bash
-ssh deploy@51.255.201.85 'sqlite3 /opt/workshop/workshop.db ".backup /opt/workshop/backup-$(date +%Y%m%d).db"'
+ssh deploy@51.255.201.85 'sudo -u workshop sqlite3 /opt/workshop/workshop.db ".backup /opt/workshop/backups/manual-$(date +%Y%m%d).db"'
 ```
 
-**Consider:** setting up a cron job on the VPS to automate daily backups.
+### App-level migration backups
+
+The app also creates a `workshop.db.bak-v{N}` file before applying any schema migration on startup. This is a secondary safety net in addition to the deploy-level backup.
+
+## Rollback
+
+If a deploy introduces a bug, you can roll back to a previous version.
+
+### Step 1: Identify the target version
+
+List available releases:
+```bash
+gh release list --repo ptetau/workshop
+```
+
+Each release includes the schema version, commit SHA, and timestamp.
+
+### Step 2: Stop the service
+
+```bash
+ssh deploy@51.255.201.85 'sudo systemctl stop workshop'
+```
+
+### Step 3: Restore the database (if needed)
+
+Only needed if the new deploy ran a schema migration that needs to be undone.
+
+```bash
+ssh deploy@51.255.201.85 << 'EOF'
+  # List available backups
+  ls -lh /opt/workshop/backups/
+
+  # Restore the pre-deploy backup from before the bad deploy
+  sudo systemctl stop workshop
+  sudo -u workshop cp /opt/workshop/backups/workshop-pre-deploy-YYYYMMDD-HHMMSS.db /opt/workshop/workshop.db
+EOF
+```
+
+### Step 4: Deploy the previous version
+
+Option A — rebuild from the tagged commit:
+```bash
+# Check out the previous release tag
+git checkout v1.0.2
+
+# Build the binary
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.version=v1.0.2-rollback" -trimpath -o workshop ./cmd/server
+
+# Upload to VPS
+scp workshop deploy@51.255.201.85:/opt/workshop/workshop.new
+ssh deploy@51.255.201.85 'sudo mv /opt/workshop/workshop.new /opt/workshop/workshop && sudo chown workshop:workshop /opt/workshop/workshop && sudo chmod +x /opt/workshop/workshop'
+```
+
+Option B — re-run the deploy workflow from the previous commit:
+1. Go to GitHub Actions → Deploy to Production
+2. Switch to the tagged commit before running
+
+### Step 5: Restart and verify
+
+```bash
+ssh deploy@51.255.201.85 << 'EOF'
+  sudo systemctl start workshop
+  sleep 2
+  sudo systemctl is-active workshop
+  curl -sf http://127.0.0.1:8080/login && echo "Health check passed"
+EOF
+```
+
+### Important notes
+
+- **Schema version matters** — if rolling back across a migration boundary, you must also restore the database from the pre-deploy backup. The old binary expects the old schema.
+- **Release tags are immutable** — each deploy creates a `v{major}.{minor}.{patch}` tag. The schema version is recorded in the release notes.
+- **Fix-forward preferred** — when possible, fix the bug with a new deploy rather than rolling back, to avoid data loss from restoring an older backup.
 
 ## Security Checklist
 
