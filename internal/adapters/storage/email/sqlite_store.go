@@ -76,6 +76,11 @@ func (s *SQLiteStore) List(ctx context.Context, filter ListFilter) ([]domain.Ema
 		query += " AND sender_id = ?"
 		args = append(args, filter.SenderID)
 	}
+	if filter.Search != "" {
+		query += " AND (subject LIKE ? OR body LIKE ?)"
+		like := "%" + filter.Search + "%"
+		args = append(args, like, like)
+	}
 	query += " ORDER BY created_at DESC"
 
 	rows, err := s.db.QueryContext(ctx, query, args...)

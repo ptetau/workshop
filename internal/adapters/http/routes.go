@@ -65,6 +65,8 @@ func registerRoutes(mux *http.ServeMux) {
 	// Member pages
 	mux.HandleFunc("/training-log", handleTrainingLogPage)
 	mux.HandleFunc("/messages", handleMessagesPage)
+	mux.HandleFunc("/inbox", handleMemberInboxPage)
+	mux.HandleFunc("/api/inbox", handleMemberInboxAPI)
 
 	// Class types API
 	mux.HandleFunc("/api/class-types", handleClassTypes)

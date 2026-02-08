@@ -21,4 +21,5 @@ type Store interface {
 type ListFilter struct {
 	Status   string // Filter by status (empty = all)
 	SenderID string // Filter by sender (empty = all)
+	Search   string // Keyword search in subject/body (empty = all)
 }

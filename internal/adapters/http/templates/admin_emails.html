@@ -5,11 +5,14 @@
         <a href="/admin/emails/compose" style="display:inline-block;background:var(--orange);color:#fff;padding:0.5rem 1.25rem;border-radius:2px;text-decoration:none;font-weight:600;">+ Compose Email</a>
     </div>
 
-    <div style="display:flex;gap:0.5rem;margin-bottom:1.5rem;flex-wrap:wrap;">
+    <div style="display:flex;gap:0.5rem;margin-bottom:1rem;flex-wrap:wrap;align-items:center;">
         <button onclick="filterEmails('')" class="filter-btn" data-filter="all" style="background:var(--orange);color:#fff;padding:0.3rem 0.8rem;border:none;border-radius:2px;cursor:pointer;font-size:0.85rem;">All</button>
         <button onclick="filterEmails('draft')" class="filter-btn" data-filter="draft" style="background:#f8f9fa;color:#333;padding:0.3rem 0.8rem;border:1px solid var(--border);border-radius:2px;cursor:pointer;font-size:0.85rem;">Drafts</button>
         <button onclick="filterEmails('sent')" class="filter-btn" data-filter="sent" style="background:#f8f9fa;color:#333;padding:0.3rem 0.8rem;border:1px solid var(--border);border-radius:2px;cursor:pointer;font-size:0.85rem;">Sent</button>
         <button onclick="filterEmails('scheduled')" class="filter-btn" data-filter="scheduled" style="background:#f8f9fa;color:#333;padding:0.3rem 0.8rem;border:1px solid var(--border);border-radius:2px;cursor:pointer;font-size:0.85rem;">Scheduled</button>
+    </div>
+    <div style="margin-bottom:1.5rem;">
+        <input type="text" id="emailSearch" placeholder="Search emails by subject or content..." oninput="debounceSearch()" style="width:100%;max-width:400px;padding:0.5rem;border:1px solid var(--border);border-radius:2px;">
     </div>
 
     <div id="emailList" style="color:#6c757d;">Loading...</div>
@@ -19,6 +22,12 @@
 
 <script>
 var currentFilter = '';
+var searchTimer = null;
+
+function debounceSearch() {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(function(){ loadEmails(); }, 300);
+}
 
 function filterEmails(status) {
     currentFilter = status;
@@ -76,7 +85,11 @@ function closeDetail() {
 
 function loadEmails() {
     var url = '/api/emails';
-    if (currentFilter) url += '?status=' + currentFilter;
+    var params = [];
+    if (currentFilter) params.push('status=' + currentFilter);
+    var q = document.getElementById('emailSearch').value.trim();
+    if (q) params.push('q=' + encodeURIComponent(q));
+    if (params.length) url += '?' + params.join('&');
     fetch(url).then(function(r){return r.json();}).then(function(data) {
         var el = document.getElementById('emailList');
         if (!data || data.length === 0) {

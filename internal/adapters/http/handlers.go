@@ -2281,6 +2281,74 @@ func handleMessagesPage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleMemberInboxPage handles GET /inbox — shows emails sent to the current member.
+func handleMemberInboxPage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	sess, ok := middleware.GetSessionFromContext(r.Context())
+	if !ok {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	m, err := stores.MemberStore.GetByEmail(r.Context(), sess.Email)
+	memberID := ""
+	if err == nil {
+		memberID = m.ID
+	}
+	renderTemplate(w, r, "member_inbox.html", map[string]any{
+		"Email":    sess.Email,
+		"MemberID": memberID,
+	})
+}
+
+// handleMemberInboxAPI handles GET /api/inbox?member_id=...
+func handleMemberInboxAPI(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	sess, ok := middleware.GetSessionFromContext(r.Context())
+	if !ok {
+		http.Error(w, "not authenticated", http.StatusUnauthorized)
+		return
+	}
+
+	// Members can only view their own inbox; admins can view any
+	memberID := r.URL.Query().Get("member_id")
+	if memberID == "" {
+		// Look up member by session email
+		m, err := stores.MemberStore.GetByEmail(r.Context(), sess.Email)
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte("[]"))
+			return
+		}
+		memberID = m.ID
+	} else if sess.Role != "admin" {
+		// Non-admin trying to view another member's inbox
+		m, err := stores.MemberStore.GetByEmail(r.Context(), sess.Email)
+		if err != nil || m.ID != memberID {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+	}
+
+	emails, err := stores.EmailStore.ListByRecipientMemberID(r.Context(), memberID)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if emails == nil {
+		w.Write([]byte("[]"))
+		return
+	}
+	json.NewEncoder(w).Encode(emails)
+}
+
 // --- Phase 3: Dashboard & Kiosk Handlers ---
 
 // handleDashboard handles GET /dashboard — renders role-appropriate dashboard.
@@ -2919,7 +2987,8 @@ func handleEmailList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	status := r.URL.Query().Get("status")
-	emails, err := stores.EmailStore.List(r.Context(), emailStoreImport.ListFilter{Status: status})
+	search := r.URL.Query().Get("q")
+	emails, err := stores.EmailStore.List(r.Context(), emailStoreImport.ListFilter{Status: status, Search: search})
 	if err != nil {
 		internalError(w, err)
 		return
