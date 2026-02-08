@@ -1060,27 +1060,267 @@ As a Member, I want to see holiday notices automatically so that I know when the
 - *When* I view my dashboard
 - *Then* I see a holiday notice: "Gym closed 18–21 Apr: Easter Weekend"
 
-### 8.2 Direct Messaging
+### 8.2 Email System
 
-Admin can send messages to individual members. In-app only in v1 (message appears on the member's dashboard with a notification badge). Email and SMS delivery planned for later.
+A full email composition and delivery system for communicating with individuals or groups. Emails are sent via **Resend** (see §8.2.7) and delivered to members' real email addresses. Sent emails are also mirrored as in-app messages on the member's dashboard with a notification badge.
 
-**Access:** Admin ✓ (send) | Coach — | Member ✓ (view own) | Trial — | Guest —
+**Access:** Admin ✓ (compose/send) | Coach ✓ (compose/send with Admin approval for bulk) | Member ✓ (view own received) | Trial ✓ (view own received) | Guest —
+
+#### 8.2.1 Recipient Search & Selection
+
+The compose screen provides powerful recipient search and selection. Recipients can be found by:
+
+- **Name** — fuzzy search by member name
+- **Gender identity** — filter by gender identity field
+- **Program** — filter by program (Adults, Kids, Youth)
+- **Class attended (specific session)** — select a specific past session (e.g., "Monday 6 PM Nuts & Bolts on 3 Mar") to target everyone who attended that session. Useful for found items, incidents, or follow-ups.
+- **Class attended (recurring)** — select a class type (e.g., "all Nuts & Bolts attendees in the last 30 days") to target regular attendees. Useful for schedule changes.
+- **Status** — filter by Active, Inactive, Archived, Trial
+- **Belt** — filter by current belt level
+
+Filters can be combined (AND logic). Results populate a selection list with:
+
+- **Select All** — select all filtered results
+- **Select None** — clear selection
+- **Invert Selection** — toggle selected/unselected
+- **Individual toggle** — click to add/remove individual members
+- **Recipient count** — always visible showing "N recipients selected"
 
 #### User Stories
 
-**US-8.2.1: Send a direct message**
-As an Admin, I want to send a message to a member who missed training so that I can check in on them.
+**US-8.2.1: Search recipients by name**
+As an Admin, I want to search for a member by name so that I can quickly message an individual.
 
-- *Given* a member hasn't trained in 2 weeks
-- *When* I send a message: "Hey — everything OK? We missed you at No-Gi"
-- *Then* the message appears on their dashboard with a notification badge
+- *Given* I open the compose screen
+- *When* I type "Marcus" in the recipient search
+- *Then* matching members appear and I can select one or more
 
-**US-8.2.2: Member views message**
-As a Member, I want to see messages from Admin on my dashboard so that I don't miss important communications.
+**US-8.2.2: Filter recipients by class attended (specific)**
+As an Admin, I want to email everyone who attended Monday's Gi Express so that I can ask about a found mouthguard.
 
-- *Given* Admin sent me a message
+- *Given* I open the compose screen
+- *When* I filter by class attended → "Monday 6 PM Gi Express, 3 Mar 2026"
+- *Then* all members who checked into that specific session are listed
+- *And* I can select all and compose my message
+
+**US-8.2.3: Filter recipients by class (recurring)**
+As an Admin, I want to email all regular Nuts & Bolts attendees so that I can notify them of a schedule change.
+
+- *Given* I need to inform all Nuts & Bolts regulars about a room change
+- *When* I filter by class → "Nuts & Bolts" with lookback "last 30 days"
+- *Then* all members who attended any Nuts & Bolts session in the last 30 days are listed
+
+**US-8.2.4: Filter recipients by program**
+As an Admin, I want to email all Kids program parents so that I can notify them of term dates.
+
+- *Given* I need to send term information
+- *When* I filter by program → "Kids"
+- *Then* all members in the Kids program are listed
+
+**US-8.2.5: Multi-select with invert**
+As an Admin, I want to select all members then deselect a few so that I can email almost everyone except a couple of people.
+
+- *Given* I filtered 40 members
+- *When* I click "Select All" then individually deselect 3 members
+- *Then* 37 recipients are selected and the count shows "37 recipients selected"
+
+**US-8.2.6: Invert selection**
+As an Admin, I want to invert my selection so that I can quickly switch who's included/excluded.
+
+- *Given* I have 5 members selected out of 40
+- *When* I click "Invert Selection"
+- *Then* the other 35 members become selected and the original 5 are deselected
+
+#### 8.2.2 Compose & Draft
+
+Email composition includes:
+
+- **Subject line** — required
+- **Body** — rich text / markdown editor
+- **Recipient list** — from §8.2.1
+- **Header/footer template** — auto-applied from configured template (see §8.2.5)
+
+Messages (and their recipient lists) can be saved as **drafts** at any point. Drafts appear in the email management screen and can be resumed, edited, and sent later.
+
+#### User Stories
+
+**US-8.2.7: Compose and send an email**
+As an Admin, I want to compose an email with a subject, body, and recipient list so that I can communicate with members via email.
+
+- *Given* I have selected 15 recipients
+- *When* I write a subject and body and click "Send"
+- *Then* the email is delivered to all 15 recipients via Resend
+- *And* each recipient also sees the message on their in-app dashboard with a notification badge
+
+**US-8.2.8: Save as draft**
+As an Admin, I want to save my partially composed email as a draft so that I can finish it later.
+
+- *Given* I have written a subject and selected 20 recipients but haven't finished the body
+- *When* I click "Save Draft"
+- *Then* the email (including recipient list) is saved with status "draft"
+- *And* I can resume editing it from the email management screen
+
+**US-8.2.9: Resume a draft**
+As an Admin, I want to resume a saved draft so that I can finish composing and send it.
+
+- *Given* I saved a draft yesterday with 20 recipients
+- *When* I open it from the email management screen
+- *Then* the subject, body, and recipient list are restored exactly as I left them
+
+#### 8.2.3 Scheduled Sending
+
+Emails can be scheduled for a specific date and time. Scheduled emails can be cancelled or rescheduled before their send time.
+
+#### User Stories
+
+**US-8.2.10: Schedule an email**
+As an Admin, I want to schedule an email for Friday at 5 PM so that members receive it at the right time.
+
+- *Given* I have composed an email
+- *When* I set the schedule to "Friday 8 Mar 2026, 5:00 PM NZDT" and click "Schedule"
+- *Then* the email is queued for delivery at that time
+- *And* it appears in the email list with status "scheduled" and the scheduled time
+
+**US-8.2.11: Cancel a scheduled email**
+As an Admin, I want to cancel a scheduled email so that it doesn't go out if plans change.
+
+- *Given* I scheduled an email for Friday
+- *When* I click "Cancel" on the scheduled email before Friday
+- *Then* the email is cancelled and moves to "cancelled" status
+- *And* no email is delivered
+
+**US-8.2.12: Reschedule an email**
+As an Admin, I want to reschedule an email to a different time so that I can adjust timing without recomposing.
+
+- *Given* I scheduled an email for Friday 5 PM
+- *When* I change the schedule to Saturday 9 AM
+- *Then* the email is updated and will be delivered at the new time
+
+#### 8.2.4 Email History & Search
+
+All sent emails are stored and searchable. Each email record includes the subject, body, send date, sender, and full recipient list.
+
+#### User Stories
+
+**US-8.2.13: Search email history**
+As an Admin, I want to search past emails by keyword so that I can find a specific communication.
+
+- *Given* I sent 50 emails over the last 6 months
+- *When* I search for "schedule change"
+- *Then* I see all emails whose subject or body contains "schedule change", sorted by most recent
+
+**US-8.2.14: View email with recipients**
+As an Admin, I want to view a sent email and see who received it so that I have a complete record.
+
+- *Given* I sent a "Grading Day" email to 35 members last week
+- *When* I open that email from the history
+- *Then* I see the full email content, send date, and a list of all 35 recipients
+
+**US-8.2.15: Member views received emails**
+As a Member, I want to see emails sent to me on my dashboard so that I don't miss communications even if I missed the email.
+
+- *Given* Admin sent me an email about schedule changes
 - *When* I log into my dashboard
-- *Then* I see a notification badge and can read the message
+- *Then* I see the message with a notification badge and can read the full content
+
+#### 8.2.5 Header & Footer Templates
+
+Admin can configure a default header and footer template that is automatically applied to all outgoing emails. The template supports:
+
+- **Header**: logo, gym name, tagline, or custom HTML/markdown
+- **Footer**: contact info, social links, unsubscribe link (required for compliance), address
+
+Templates are versioned — changes only apply to emails sent after the update.
+
+#### User Stories
+
+**US-8.2.16: Configure email template**
+As an Admin, I want to set a header and footer template so that all emails have consistent branding.
+
+- *Given* I navigate to email template settings
+- *When* I set the header to include the Workshop logo and tagline, and the footer to include the gym address, phone, and social links
+- *Then* all future outgoing emails automatically include this header and footer
+
+**US-8.2.17: Preview email with template**
+As an Admin, I want to preview how my email will look with the header/footer applied so that I can verify the layout before sending.
+
+- *Given* I am composing an email
+- *When* I click "Preview"
+- *Then* I see the email as the recipient will see it, with header and footer applied
+
+**US-8.2.18: Update template without affecting past emails**
+As an Admin, I want template changes to only affect future emails so that past email records remain accurate.
+
+- *Given* I update the footer to include a new phone number
+- *When* I view a previously sent email
+- *Then* it still shows the old footer as it was sent
+
+#### 8.2.6 Account Activation Email
+
+When a new member is registered, an activation email is sent to their email address. The member must click the activation link to verify their email and set their password. Until activated, the account cannot log in.
+
+#### User Stories
+
+**US-8.2.19: Registration sends activation email**
+As an Admin, I want new member registrations to trigger an activation email so that the member can verify their email and set up their account.
+
+- *Given* I register a new member with email "marcus@email.com"
+- *When* the registration is saved
+- *Then* an activation email is sent to "marcus@email.com" with a secure, time-limited activation link
+- *And* the account is in "pending_activation" status until the link is clicked
+
+**US-8.2.20: Member activates account**
+As a new Member, I want to click the activation link to set my password so that I can log in.
+
+- *Given* I received an activation email
+- *When* I click the link and set my password
+- *Then* my account is activated, my email is verified, and I can log in
+
+**US-8.2.21: Resend activation email**
+As an Admin, I want to resend the activation email so that a member who missed it can still activate.
+
+- *Given* a member's account is still pending activation
+- *When* I click "Resend Activation"
+- *Then* a new activation email is sent with a fresh link
+- *And* the previous link is invalidated
+
+**US-8.2.22: Activation link expires**
+As an Admin, I want activation links to expire after 72 hours so that stale links can't be used.
+
+- *Given* a member received an activation email 4 days ago
+- *When* they click the link
+- *Then* they see "Link expired — contact your gym to resend"
+
+#### 8.2.7 Email Provider: Resend
+
+All outgoing email is delivered via **[Resend](https://resend.com)** — a developer-first email API with an official Go SDK.
+
+**Why Resend:**
+
+| Criteria | Resend |
+|----------|--------|
+| **Go SDK** | Official: `github.com/resend/resend-go/v3` |
+| **Batch sending** | Up to 100 emails per API call |
+| **Scheduled sending** | ISO 8601 datetime or natural language; cancel/reschedule supported |
+| **Idempotency** | Built-in idempotency keys to prevent duplicate sends |
+| **Compliance** | GDPR and SOC 2 compliant |
+| **Deliverability** | DKIM, SPF, DMARC support; dedicated IP option |
+| **Pricing** | Free: 3,000/mo (100/day). Pro ($20/mo): 50,000/mo. More than sufficient for a BJJ gym with ~80–150 members |
+| **Logging** | Full delivery event tracking (sent, delivered, bounced, opened) |
+
+**Integration pattern:**
+
+- Emails are composed in Workshop and sent via the Resend API
+- Each sent email is stored locally in the `email` table with subject, body, sender, status, scheduled_at, sent_at, and resend_message_id
+- Recipients are stored in `email_recipient` linking email_id to member_id
+- Resend delivery events (delivered, bounced, opened) can be received via webhook for status tracking
+- The Resend API key is stored as an environment variable (`RESEND_API_KEY`), never hardcoded
+- Sending domain must be verified in Resend dashboard (e.g., `mail.workshopjiujitsu.co.nz`)
+
+**Batch limitations to note:**
+- Batch API does not support `scheduled_at` — scheduled emails must be sent individually
+- Batch API does not support attachments (not needed for our use case)
+- For sends > 100 recipients, multiple batch calls are chained
 
 ### 8.3 Coach Observations
 
@@ -1677,7 +1917,7 @@ All data in the system is classified by sensitivity level.
 | Concept | Section | Storage | Description |
 |---------|---------|---------|-------------|
 | `Account` | §1 | accounts | User identity with role and password hash |
-| `Member` | §1 | members | Profile: name, email, program_id, fee, frequency, status, belt_size, gi_size, rash_top_size, tshirt_size |
+| `Member` | §1 | members | Profile: name, email, gender_identity, program_id, fee, frequency, status, belt_size, gi_size, rash_top_size, tshirt_size |
 | `Program` | §1.3 | programs | Audience group: Adults, Kids, Youth. Determines class visibility, term structure, and comms targeting |
 | `Class` | §1.3 | classes | Named session type within a program (Gi Express, Nuts & Bolts, etc.). Has duration and optional mat_hours_weight (default 1.0) |
 | `Schedule` | §9.7 | schedules | Recurring weekly entry: day, time, class_id, coach_id, duration |
@@ -1687,7 +1927,10 @@ All data in the system is classified by sensitivity level.
 | `Injury` | §9.2 | injuries | Red Flag body-part toggle, active 7 days |
 | `Attendance` | §3.1 | attendance | Check-in record: member_id + class_id + date + time. Supports multi-session and un-check-in (soft delete). Mat hours = duration × class weight |
 | `Notice` | §8.1 | notices | Unified notification: type (school_wide / class_specific / holiday), status (draft / published) |
-| `Message` | §8.2 | messages | Direct in-app message from Admin to member |
+| `Email` | §8.2 | emails | Composed email: subject, body_html, body_text, sender_id, status (draft/scheduled/sending/sent/cancelled/failed), scheduled_at, sent_at, resend_message_id, template_header_snapshot, template_footer_snapshot |
+| `EmailRecipient` | §8.2 | email_recipients | Join table: email_id, member_id, delivery_status (pending/delivered/bounced/opened), resend_recipient_id |
+| `EmailTemplate` | §8.2.5 | email_templates | Header/footer template: type (header/footer), content_html, version, created_by, created_at. Versioned — only latest applies to new sends |
+| `ActivationToken` | §8.2.6 | activation_tokens | Account activation: account_id, token (secure random), expires_at, used_at. 72-hour expiry. One active token per account |
 | `GradingRecord` | §4.6 | grading_records | Promotion history: belt, stripe, date, proposed_by, approved_by, method (standard/override). Ceremony handled outside system |
 | `GradingConfig` | §4.1 | grading_config | Per-belt thresholds: mat hours (adults) or attendance % (kids), stripe count, grading mode toggle |
 | `GradingProposal` | §4.6 | grading_proposals | Coach-proposed promotion: member, target belt, notes, status (pending/approved/rejected) |
@@ -1718,7 +1961,7 @@ All data in the system is classified by sensitivity level.
 1. **§2–§3** — Kiosk, check-in (auto-select, multi-session, un-check-in), attendance, training log, mat hours (with weighting), estimated hours, historical attendance
 2. **§4** — Belt progression (stripe inference, term-based grading with per-term reset, belt/stripe icons, proposals, admin overrides)
 3. **§9** — Member management (waiver, red flags, member list with sizes, inactive radar, archive, schedule/holiday management, program assignment)
-4. **§8** — Communication (notices with program targeting, messaging, coach observations)
+4. **§8** — Communication (notices, email system via Resend with recipient search/filtering, drafts, scheduling, templates, email history; account activation emails; coach observations) — *account activation (§8.2.6) should be woven into §9.1 registration flow*
 5. **§5–§6** — Curriculum engine (versioned rotors with concurrent themes, topic queues, auto-advance, coach ownership, topic voting)
 6. **§7** — Technical library & clips (cross-linked to topics, not hard-coupled)
 7. **§10** — Calendar (events, competitions, rotor views, personal goals)
@@ -1748,3 +1991,7 @@ The following decisions were resolved during PRD review.
 | 12 | Grading vs Promotion terminology | **"Belt Progression" = the system.** "Promotion" = the result. Ceremony handled outside the system. Added belt size, gi size, rash top size, t-shirt size to member profiles. | §4, §9.3 |
 | 13 | Who can advance rotors | **Coaches edit/advance for classes they own.** Admin can override everything. | §5.4 |
 | 14 | Displaced (bumped) topic | **Voted topic inserted before scheduled topic.** Bumped topic stays in its queue position for next rotation cycle. | §6.2 |
+| 15 | Email provider | **Resend** (`resend.com`). Official Go SDK, batch + scheduled sending, GDPR/SOC 2 compliant, free tier sufficient for small gyms, Pro ($20/mo) for growth. API key via env var, never hardcoded. | §8.2.7 |
+| 16 | Registration requires activation | **Yes.** Registration sends activation email; account is `pending_activation` until link clicked. 72-hour token expiry. Admin can resend. | §8.2.6 |
+| 17 | Email vs in-app messaging | **Both.** Emails are delivered via Resend AND mirrored as in-app dashboard messages. Email is the primary channel; in-app is the fallback. Old `Message` concept replaced by `Email` + `EmailRecipient`. | §8.2 |
+| 18 | Gender identity on member profile | **Added** as optional field for recipient filtering. Not displayed publicly; used only for targeted communications. | §8.2.1, Appendix A |
