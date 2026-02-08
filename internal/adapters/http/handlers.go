@@ -1,6 +1,7 @@
 package web
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/csrf"
+	"github.com/yuin/goldmark"
 
 	"workshop/internal/adapters/http/middleware"
 	accountStore "workshop/internal/adapters/storage/account"
@@ -91,6 +93,19 @@ func renderTemplate(w http.ResponseWriter, r *http.Request, templateName string,
 		"realRole":        func() string { return realRole },
 		"isRealAdmin":     func() bool { return isRealAdmin },
 		"list":            func(items ...string) []string { return items },
+		"renderMarkdown": func(md string) template.HTML {
+			var buf bytes.Buffer
+			if err := goldmark.Convert([]byte(md), &buf); err != nil {
+				return template.HTML(template.HTMLEscapeString(md))
+			}
+			return template.HTML(buf.String())
+		},
+		"noticeColorHex": func(color string) string {
+			if hex, ok := noticeDomain.ColorHex[color]; ok {
+				return hex
+			}
+			return noticeDomain.ColorHex[noticeDomain.ColorOrange]
+		},
 	}
 
 	layoutPath := filepath.Join(templatesDir, "layout.html")
@@ -792,36 +807,58 @@ func handleNotices(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		var input struct {
-			Type     string `json:"Type"`
-			Title    string `json:"Title"`
-			Content  string `json:"Content"`
-			TargetID string `json:"TargetID"`
+			Type         string `json:"Type"`
+			Title        string `json:"Title"`
+			Content      string `json:"Content"`
+			TargetID     string `json:"TargetID"`
+			AuthorName   string `json:"AuthorName"`
+			ShowAuthor   bool   `json:"ShowAuthor"`
+			Color        string `json:"Color"`
+			VisibleFrom  string `json:"VisibleFrom"`
+			VisibleUntil string `json:"VisibleUntil"`
 		}
 		if err := strictDecode(r, &input); err != nil {
 			http.Error(w, "invalid JSON", http.StatusBadRequest)
 			return
 		}
-		notice := noticeDomain.Notice{
-			ID:        generateID(),
-			Type:      input.Type,
-			Status:    noticeDomain.StatusDraft,
-			Title:     input.Title,
-			Content:   input.Content,
-			CreatedBy: sess.AccountID,
-			TargetID:  input.TargetID,
-			CreatedAt: timeNow(),
+		color := input.Color
+		if color == "" {
+			color = noticeDomain.ColorOrange
 		}
-		if err := notice.Validate(); err != nil {
+		n := noticeDomain.Notice{
+			ID:         generateID(),
+			Type:       input.Type,
+			Status:     noticeDomain.StatusDraft,
+			Title:      input.Title,
+			Content:    input.Content,
+			CreatedBy:  sess.AccountID,
+			TargetID:   input.TargetID,
+			AuthorName: input.AuthorName,
+			ShowAuthor: input.ShowAuthor,
+			Color:      color,
+			CreatedAt:  timeNow(),
+		}
+		if input.VisibleFrom != "" {
+			if t, err := time.Parse(time.RFC3339, input.VisibleFrom); err == nil {
+				n.VisibleFrom = t
+			}
+		}
+		if input.VisibleUntil != "" {
+			if t, err := time.Parse(time.RFC3339, input.VisibleUntil); err == nil {
+				n.VisibleUntil = t
+			}
+		}
+		if err := n.Validate(); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		if err := stores.NoticeStore.Save(ctx, notice); err != nil {
+		if err := stores.NoticeStore.Save(ctx, n); err != nil {
 			internalError(w, err)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(notice)
+		json.NewEncoder(w).Encode(n)
 		return
 	}
 
@@ -1474,6 +1511,124 @@ func handleNoticePublish(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(notice)
+}
+
+// handleNoticeEdit handles POST /api/notices/edit
+func handleNoticeEdit(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if _, ok := requireAdmin(w, r); !ok {
+		return
+	}
+	var input struct {
+		NoticeID     string `json:"NoticeID"`
+		Title        string `json:"Title"`
+		Content      string `json:"Content"`
+		Type         string `json:"Type"`
+		AuthorName   string `json:"AuthorName"`
+		ShowAuthor   bool   `json:"ShowAuthor"`
+		Color        string `json:"Color"`
+		VisibleFrom  string `json:"VisibleFrom"`
+		VisibleUntil string `json:"VisibleUntil"`
+	}
+	if err := strictDecode(r, &input); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if input.NoticeID == "" {
+		http.Error(w, "NoticeID is required", http.StatusBadRequest)
+		return
+	}
+	n, err := stores.NoticeStore.GetByID(r.Context(), input.NoticeID)
+	if err != nil {
+		http.Error(w, "notice not found", http.StatusNotFound)
+		return
+	}
+	if input.Title != "" {
+		n.Title = input.Title
+	}
+	if input.Content != "" {
+		n.Content = input.Content
+	}
+	if input.Type != "" {
+		n.Type = input.Type
+	}
+	n.AuthorName = input.AuthorName
+	n.ShowAuthor = input.ShowAuthor
+	if input.Color != "" {
+		n.Color = input.Color
+	}
+	n.VisibleFrom = time.Time{}
+	n.VisibleUntil = time.Time{}
+	if input.VisibleFrom != "" {
+		if t, err := time.Parse(time.RFC3339, input.VisibleFrom); err == nil {
+			n.VisibleFrom = t
+		}
+	}
+	if input.VisibleUntil != "" {
+		if t, err := time.Parse(time.RFC3339, input.VisibleUntil); err == nil {
+			n.VisibleUntil = t
+		}
+	}
+	n.UpdatedAt = timeNow()
+	if err := n.Validate(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := stores.NoticeStore.Save(r.Context(), n); err != nil {
+		internalError(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(n)
+}
+
+// handleNoticePin handles POST /api/notices/pin (toggle pin/unpin)
+func handleNoticePin(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if _, ok := requireAdmin(w, r); !ok {
+		return
+	}
+	var input struct {
+		NoticeID string `json:"NoticeID"`
+		Pinned   bool   `json:"Pinned"`
+	}
+	if err := strictDecode(r, &input); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if input.NoticeID == "" {
+		http.Error(w, "NoticeID is required", http.StatusBadRequest)
+		return
+	}
+	n, err := stores.NoticeStore.GetByID(r.Context(), input.NoticeID)
+	if err != nil {
+		http.Error(w, "notice not found", http.StatusNotFound)
+		return
+	}
+	if input.Pinned {
+		if err := n.Pin(timeNow()); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	} else {
+		if err := n.Unpin(); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+	n.UpdatedAt = timeNow()
+	if err := stores.NoticeStore.Save(r.Context(), n); err != nil {
+		internalError(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(n)
 }
 
 // handleGradingDecide handles POST /api/grading/proposals/decide

@@ -13,19 +13,19 @@ import (
 	"workshop/internal/adapters/http/middleware"
 	accountStore "workshop/internal/adapters/storage/account"
 	attendanceStore "workshop/internal/adapters/storage/attendance"
+	classTypeStore "workshop/internal/adapters/storage/classtype"
 	gradingStore "workshop/internal/adapters/storage/grading"
+	holidayStore "workshop/internal/adapters/storage/holiday"
 	injuryStore "workshop/internal/adapters/storage/injury"
 	memberStore "workshop/internal/adapters/storage/member"
 	messageStore "workshop/internal/adapters/storage/message"
 	milestoneStore "workshop/internal/adapters/storage/milestone"
 	noticeStore "workshop/internal/adapters/storage/notice"
 	observationStore "workshop/internal/adapters/storage/observation"
+	programStore "workshop/internal/adapters/storage/program"
 	scheduleStore "workshop/internal/adapters/storage/schedule"
 	termStore "workshop/internal/adapters/storage/term"
-	holidayStore "workshop/internal/adapters/storage/holiday"
 	trainingGoalStore "workshop/internal/adapters/storage/traininggoal"
-	classTypeStore "workshop/internal/adapters/storage/classtype"
-	programStore "workshop/internal/adapters/storage/program"
 	waiverStore "workshop/internal/adapters/storage/waiver"
 
 	accountDomain "workshop/internal/domain/account"
@@ -61,6 +61,7 @@ func (m *mockAccountStore) GetByID(ctx context.Context, id string) (accountDomai
 	}
 	return accountDomain.Account{}, sql.ErrNoRows
 }
+
 // GetByEmail implements the mock AccountStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -72,6 +73,7 @@ func (m *mockAccountStore) GetByEmail(ctx context.Context, email string) (accoun
 	}
 	return accountDomain.Account{}, sql.ErrNoRows
 }
+
 // Save implements the mock AccountStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -82,6 +84,7 @@ func (m *mockAccountStore) Save(ctx context.Context, a accountDomain.Account) er
 	m.accounts[a.ID] = a
 	return nil
 }
+
 // Delete implements the mock AccountStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -89,6 +92,7 @@ func (m *mockAccountStore) Delete(ctx context.Context, id string) error {
 	delete(m.accounts, id)
 	return nil
 }
+
 // List implements the mock AccountStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -99,6 +103,7 @@ func (m *mockAccountStore) List(ctx context.Context, filter accountStore.ListFil
 	}
 	return list, nil
 }
+
 // Count implements the mock AccountStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -119,6 +124,7 @@ func (m *mockNoticeStore) GetByID(ctx context.Context, id string) (noticeDomain.
 	}
 	return noticeDomain.Notice{}, sql.ErrNoRows
 }
+
 // Save implements the mock NoticeStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -129,6 +135,7 @@ func (m *mockNoticeStore) Save(ctx context.Context, n noticeDomain.Notice) error
 	m.notices[n.ID] = n
 	return nil
 }
+
 // Delete implements the mock NoticeStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -136,6 +143,7 @@ func (m *mockNoticeStore) Delete(ctx context.Context, id string) error {
 	delete(m.notices, id)
 	return nil
 }
+
 // List implements the mock NoticeStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -146,6 +154,7 @@ func (m *mockNoticeStore) List(ctx context.Context, filter noticeStore.ListFilte
 	}
 	return list, nil
 }
+
 // ListPublished implements the mock NoticeStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -172,6 +181,7 @@ func (m *mockMessageStore) GetByID(ctx context.Context, id string) (messageDomai
 	}
 	return messageDomain.Message{}, sql.ErrNoRows
 }
+
 // Save implements the mock MessageStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -182,6 +192,7 @@ func (m *mockMessageStore) Save(ctx context.Context, msg messageDomain.Message) 
 	m.messages[msg.ID] = msg
 	return nil
 }
+
 // Delete implements the mock MessageStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -189,6 +200,7 @@ func (m *mockMessageStore) Delete(ctx context.Context, id string) error {
 	delete(m.messages, id)
 	return nil
 }
+
 // ListByReceiverID implements the mock MessageStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -201,6 +213,7 @@ func (m *mockMessageStore) ListByReceiverID(ctx context.Context, receiverID stri
 	}
 	return list, nil
 }
+
 // CountUnread implements the mock MessageStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -227,6 +240,7 @@ func (m *mockObservationStore) GetByID(ctx context.Context, id string) (observat
 	}
 	return observationDomain.Observation{}, sql.ErrNoRows
 }
+
 // Save implements the mock ObservationStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -237,6 +251,7 @@ func (m *mockObservationStore) Save(ctx context.Context, o observationDomain.Obs
 	m.observations[o.ID] = o
 	return nil
 }
+
 // Delete implements the mock ObservationStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -244,6 +259,7 @@ func (m *mockObservationStore) Delete(ctx context.Context, id string) error {
 	delete(m.observations, id)
 	return nil
 }
+
 // ListByMemberID implements the mock ObservationStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -270,6 +286,7 @@ func (m *mockGradingRecordStore) GetByID(ctx context.Context, id string) (gradin
 	}
 	return gradingDomain.Record{}, sql.ErrNoRows
 }
+
 // Save implements the mock GradingRecordStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -280,6 +297,7 @@ func (m *mockGradingRecordStore) Save(ctx context.Context, r gradingDomain.Recor
 	m.records[r.ID] = r
 	return nil
 }
+
 // ListByMemberID implements the mock GradingRecordStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -306,6 +324,7 @@ func (m *mockGradingConfigStore) GetByID(ctx context.Context, id string) (gradin
 	}
 	return gradingDomain.Config{}, sql.ErrNoRows
 }
+
 // Save implements the mock GradingConfigStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -316,6 +335,7 @@ func (m *mockGradingConfigStore) Save(ctx context.Context, c gradingDomain.Confi
 	m.configs[c.ID] = c
 	return nil
 }
+
 // GetByProgramAndBelt implements the mock GradingConfigStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -327,6 +347,7 @@ func (m *mockGradingConfigStore) GetByProgramAndBelt(ctx context.Context, progra
 	}
 	return gradingDomain.Config{}, sql.ErrNoRows
 }
+
 // List implements the mock GradingConfigStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -351,6 +372,7 @@ func (m *mockGradingProposalStore) GetByID(ctx context.Context, id string) (grad
 	}
 	return gradingDomain.Proposal{}, sql.ErrNoRows
 }
+
 // Save implements the mock GradingProposalStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -361,6 +383,7 @@ func (m *mockGradingProposalStore) Save(ctx context.Context, p gradingDomain.Pro
 	m.proposals[p.ID] = p
 	return nil
 }
+
 // ListPending implements the mock GradingProposalStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -373,6 +396,7 @@ func (m *mockGradingProposalStore) ListPending(ctx context.Context) ([]gradingDo
 	}
 	return list, nil
 }
+
 // ListByMemberID implements the mock GradingProposalStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -399,6 +423,7 @@ func (m *mockMilestoneStore) GetByID(ctx context.Context, id string) (milestoneD
 	}
 	return milestoneDomain.Milestone{}, sql.ErrNoRows
 }
+
 // Save implements the mock MilestoneStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -409,6 +434,7 @@ func (m *mockMilestoneStore) Save(ctx context.Context, ms milestoneDomain.Milest
 	m.milestones[ms.ID] = ms
 	return nil
 }
+
 // Delete implements the mock MilestoneStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -416,6 +442,7 @@ func (m *mockMilestoneStore) Delete(ctx context.Context, id string) error {
 	delete(m.milestones, id)
 	return nil
 }
+
 // List implements the mock MilestoneStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -440,6 +467,7 @@ func (m *mockTrainingGoalStore) GetByID(ctx context.Context, id string) (trainin
 	}
 	return trainingGoalDomain.TrainingGoal{}, sql.ErrNoRows
 }
+
 // Save implements the mock TrainingGoalStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -450,6 +478,7 @@ func (m *mockTrainingGoalStore) Save(ctx context.Context, g trainingGoalDomain.T
 	m.goals[g.ID] = g
 	return nil
 }
+
 // Delete implements the mock TrainingGoalStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -457,6 +486,7 @@ func (m *mockTrainingGoalStore) Delete(ctx context.Context, id string) error {
 	delete(m.goals, id)
 	return nil
 }
+
 // GetActiveByMemberID implements the mock TrainingGoalStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -468,6 +498,7 @@ func (m *mockTrainingGoalStore) GetActiveByMemberID(ctx context.Context, memberI
 	}
 	return trainingGoalDomain.TrainingGoal{}, sql.ErrNoRows
 }
+
 // ListByMemberID implements the mock TrainingGoalStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -494,6 +525,7 @@ func (m *mockScheduleStore) GetByID(ctx context.Context, id string) (scheduleDom
 	}
 	return scheduleDomain.Schedule{}, sql.ErrNoRows
 }
+
 // Save implements the mock ScheduleStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -504,6 +536,7 @@ func (m *mockScheduleStore) Save(ctx context.Context, s scheduleDomain.Schedule)
 	m.schedules[s.ID] = s
 	return nil
 }
+
 // Delete implements the mock ScheduleStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -511,6 +544,7 @@ func (m *mockScheduleStore) Delete(ctx context.Context, id string) error {
 	delete(m.schedules, id)
 	return nil
 }
+
 // List implements the mock ScheduleStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -521,6 +555,7 @@ func (m *mockScheduleStore) List(ctx context.Context) ([]scheduleDomain.Schedule
 	}
 	return list, nil
 }
+
 // ListByDay implements the mock ScheduleStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -533,6 +568,7 @@ func (m *mockScheduleStore) ListByDay(ctx context.Context, day string) ([]schedu
 	}
 	return list, nil
 }
+
 // ListByClassTypeID implements the mock ScheduleStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -559,6 +595,7 @@ func (m *mockTermStore) GetByID(ctx context.Context, id string) (termDomain.Term
 	}
 	return termDomain.Term{}, sql.ErrNoRows
 }
+
 // Save implements the mock TermStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -569,6 +606,7 @@ func (m *mockTermStore) Save(ctx context.Context, t termDomain.Term) error {
 	m.terms[t.ID] = t
 	return nil
 }
+
 // Delete implements the mock TermStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -576,6 +614,7 @@ func (m *mockTermStore) Delete(ctx context.Context, id string) error {
 	delete(m.terms, id)
 	return nil
 }
+
 // List implements the mock TermStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -600,6 +639,7 @@ func (m *mockHolidayStore) GetByID(ctx context.Context, id string) (holidayDomai
 	}
 	return holidayDomain.Holiday{}, sql.ErrNoRows
 }
+
 // Save implements the mock HolidayStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -610,6 +650,7 @@ func (m *mockHolidayStore) Save(ctx context.Context, h holidayDomain.Holiday) er
 	m.holidays[h.ID] = h
 	return nil
 }
+
 // Delete implements the mock HolidayStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -617,6 +658,7 @@ func (m *mockHolidayStore) Delete(ctx context.Context, id string) error {
 	delete(m.holidays, id)
 	return nil
 }
+
 // List implements the mock HolidayStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -641,6 +683,7 @@ func (m *mockClassTypeStore) GetByID(ctx context.Context, id string) (classTypeD
 	}
 	return classTypeDomain.ClassType{}, sql.ErrNoRows
 }
+
 // Save implements the mock ClassTypeStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -651,6 +694,7 @@ func (m *mockClassTypeStore) Save(ctx context.Context, ct classTypeDomain.ClassT
 	m.classTypes[ct.ID] = ct
 	return nil
 }
+
 // Delete implements the mock ClassTypeStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -658,6 +702,7 @@ func (m *mockClassTypeStore) Delete(ctx context.Context, id string) error {
 	delete(m.classTypes, id)
 	return nil
 }
+
 // List implements the mock ClassTypeStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -668,6 +713,7 @@ func (m *mockClassTypeStore) List(ctx context.Context) ([]classTypeDomain.ClassT
 	}
 	return list, nil
 }
+
 // ListByProgramID implements the mock ClassTypeStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -694,6 +740,7 @@ func (m *mockProgramStore) GetByID(ctx context.Context, id string) (programDomai
 	}
 	return programDomain.Program{}, sql.ErrNoRows
 }
+
 // Save implements the mock ProgramStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -704,6 +751,7 @@ func (m *mockProgramStore) Save(ctx context.Context, p programDomain.Program) er
 	m.programs[p.ID] = p
 	return nil
 }
+
 // Delete implements the mock ProgramStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -711,6 +759,7 @@ func (m *mockProgramStore) Delete(ctx context.Context, id string) error {
 	delete(m.programs, id)
 	return nil
 }
+
 // List implements the mock ProgramStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -877,6 +926,123 @@ func TestHandleNotices_MethodNotAllowed(t *testing.T) {
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Errorf("got %d, want %d", rec.Code, http.StatusMethodNotAllowed)
 	}
+}
+
+// TestHandleNotices_POST_WithNewFields tests creating a notice with all new fields.
+func TestHandleNotices_POST_WithNewFields(t *testing.T) {
+	stores = newFullStores()
+	body := `{"Type":"school_wide","Title":"Open Mat","Content":"**Friday** 4-5:30pm","AuthorName":"Coach Pat","ShowAuthor":true,"Color":"blue","VisibleFrom":"2026-03-01T00:00:00Z","VisibleUntil":"2026-03-31T23:59:59Z"}`
+	req := authRequest("POST", "/api/notices", body, adminSession)
+	rec := httptest.NewRecorder()
+	handleNotices(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("got %d, want %d. Body: %s", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+	var n noticeDomain.Notice
+	json.NewDecoder(rec.Body).Decode(&n)
+	if n.Color != "blue" {
+		t.Errorf("expected color=blue, got %s", n.Color)
+	}
+	if n.AuthorName != "Coach Pat" {
+		t.Errorf("expected AuthorName=Coach Pat, got %s", n.AuthorName)
+	}
+	if !n.ShowAuthor {
+		t.Error("expected ShowAuthor=true")
+	}
+	if n.VisibleFrom.IsZero() {
+		t.Error("expected VisibleFrom to be set")
+	}
+	if n.Status != noticeDomain.StatusDraft {
+		t.Errorf("expected status=draft, got %s", n.Status)
+	}
+}
+
+// TestHandleNotices_POST_InvalidColor tests that invalid color is rejected.
+func TestHandleNotices_POST_InvalidColor(t *testing.T) {
+	stores = newFullStores()
+	body := `{"Type":"school_wide","Title":"Test","Content":"test","Color":"neon_pink"}`
+	req := authRequest("POST", "/api/notices", body, adminSession)
+	rec := httptest.NewRecorder()
+	handleNotices(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("got %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+// TestHandleNoticeEdit tests editing an existing notice.
+func TestHandleNoticeEdit(t *testing.T) {
+	stores = newFullStores()
+	stores.NoticeStore.Save(context.Background(), noticeDomain.Notice{
+		ID: "edit-1", Type: noticeDomain.TypeSchoolWide, Status: noticeDomain.StatusDraft,
+		Title: "Original", Content: "Original content", CreatedBy: "admin",
+		Color: noticeDomain.ColorOrange,
+	})
+
+	body := `{"NoticeID":"edit-1","Title":"Updated Title","Content":"Updated **content**","Color":"red","AuthorName":"Coach Marcus","ShowAuthor":true}`
+	req := authRequest("POST", "/api/notices/edit", body, adminSession)
+	rec := httptest.NewRecorder()
+	handleNoticeEdit(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("got %d, want %d. Body: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var n noticeDomain.Notice
+	json.NewDecoder(rec.Body).Decode(&n)
+	if n.Title != "Updated Title" {
+		t.Errorf("expected title=Updated Title, got %s", n.Title)
+	}
+	if n.Color != "red" {
+		t.Errorf("expected color=red, got %s", n.Color)
+	}
+	if n.AuthorName != "Coach Marcus" {
+		t.Errorf("expected AuthorName=Coach Marcus, got %s", n.AuthorName)
+	}
+	if n.UpdatedAt.IsZero() {
+		t.Error("expected UpdatedAt to be set")
+	}
+}
+
+// TestHandleNoticePin tests pinning and unpinning a notice.
+func TestHandleNoticePin(t *testing.T) {
+	stores = newFullStores()
+	stores.NoticeStore.Save(context.Background(), noticeDomain.Notice{
+		ID: "pin-1", Type: noticeDomain.TypeSchoolWide, Status: noticeDomain.StatusPublished,
+		Title: "Pinnable", Content: "content", CreatedBy: "admin", Color: noticeDomain.ColorOrange,
+	})
+
+	t.Run("pin notice", func(t *testing.T) {
+		body := `{"NoticeID":"pin-1","Pinned":true}`
+		req := authRequest("POST", "/api/notices/pin", body, adminSession)
+		rec := httptest.NewRecorder()
+		handleNoticePin(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("got %d, want %d. Body: %s", rec.Code, http.StatusOK, rec.Body.String())
+		}
+		var n noticeDomain.Notice
+		json.NewDecoder(rec.Body).Decode(&n)
+		if !n.Pinned {
+			t.Error("expected Pinned=true")
+		}
+	})
+
+	t.Run("unpin notice", func(t *testing.T) {
+		body := `{"NoticeID":"pin-1","Pinned":false}`
+		req := authRequest("POST", "/api/notices/pin", body, adminSession)
+		rec := httptest.NewRecorder()
+		handleNoticePin(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("got %d, want %d. Body: %s", rec.Code, http.StatusOK, rec.Body.String())
+		}
+		var n noticeDomain.Notice
+		json.NewDecoder(rec.Body).Decode(&n)
+		if n.Pinned {
+			t.Error("expected Pinned=false")
+		}
+	})
 }
 
 // --- Tests: /api/messages ---

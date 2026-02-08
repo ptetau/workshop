@@ -2,8 +2,9 @@
 <div class="card">
     <h1>Notice Management</h1>
 
-    <div style="background:#f8f9fa;padding:1.5rem;border-radius:2px;margin-bottom:2rem;">
-        <h3 style="margin-top:0;">Create Notice</h3>
+    <div id="noticeForm" style="background:#f8f9fa;padding:1.5rem;border-radius:2px;margin-bottom:2rem;">
+        <h3 style="margin-top:0;" id="formTitle">Create Notice</h3>
+        <input type="hidden" id="editNoticeID" value="">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
             <div class="form-group">
                 <label>Title</label>
@@ -11,63 +12,211 @@
             </div>
             <div class="form-group">
                 <label>Type</label>
-                <select id="noticeType" style="width:100%;padding:0.5rem;border:1px solid #ccc;border-radius:4px;">
+                <select id="noticeType" style="width:100%;padding:0.5rem;border:1px solid var(--border);border-radius:2px;">
                     <option value="school_wide">School Wide</option>
                     <option value="class_specific">Class Specific</option>
                 </select>
             </div>
         </div>
         <div class="form-group">
-            <label>Content</label>
-            <input type="text" id="noticeContent" placeholder="Notice content...">
+            <label>Content <span style="font-size:0.75rem;color:var(--text-muted);">(Markdown supported)</span></label>
+            <textarea id="noticeContent" rows="5" placeholder="**Bold**, *italic*, [links](url), lists..." style="width:100%;padding:0.5rem;border:1px solid var(--border);border-radius:2px;font-family:inherit;resize:vertical;"></textarea>
         </div>
-        <button onclick="createNotice()">Create &amp; Publish</button>
-        <span id="formMsg" style="margin-left:1rem;color:#F9B232;"></span>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+            <div class="form-group">
+                <label>Author Name</label>
+                <input type="text" id="noticeAuthor" placeholder="Coach Pat">
+            </div>
+            <div class="form-group" style="display:flex;align-items:center;gap:0.5rem;padding-top:1.5rem;">
+                <input type="checkbox" id="noticeShowAuthor" style="width:auto;">
+                <label for="noticeShowAuthor" style="margin:0;font-size:0.85rem;">Display author on notice</label>
+            </div>
+        </div>
+        <div class="form-group">
+            <label>Highlight Colour</label>
+            <div id="colorPicker" style="display:flex;gap:0.5rem;flex-wrap:wrap;"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+            <div class="form-group">
+                <label>Visible From <span style="font-size:0.75rem;color:var(--text-muted);">(optional)</span></label>
+                <input type="datetime-local" id="noticeVisibleFrom" style="width:100%;padding:0.5rem;border:1px solid var(--border);border-radius:2px;">
+            </div>
+            <div class="form-group">
+                <label>Visible Until <span style="font-size:0.75rem;color:var(--text-muted);">(optional)</span></label>
+                <input type="datetime-local" id="noticeVisibleUntil" style="width:100%;padding:0.5rem;border:1px solid var(--border);border-radius:2px;">
+            </div>
+        </div>
+        <div style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
+            <button onclick="saveNotice('draft')">Save as Draft</button>
+            <button onclick="saveNotice('publish')" style="background:var(--green,#27ae60);">Save &amp; Publish</button>
+            <button id="cancelEditBtn" onclick="cancelEdit()" style="background:var(--text-muted);display:none;">Cancel Edit</button>
+            <span id="formMsg" style="margin-left:0.5rem;color:var(--orange);font-weight:600;"></span>
+        </div>
     </div>
 
     <h2>All Notices</h2>
     <div id="noticeList" style="color:#6c757d;">Loading...</div>
 
-    <p style="margin-top:2rem;"><a href="/dashboard" style="color:#F9B232;text-decoration:none;font-weight:600;">← Back to Dashboard</a></p>
+    <p style="margin-top:2rem;"><a href="/dashboard" style="color:var(--orange);text-decoration:none;font-weight:600;">← Back to Dashboard</a></p>
 </div>
 
 <script>
-function loadNotices() {
-    fetch('/api/notices').then(r=>r.json()).then(data => {
-        var el = document.getElementById('noticeList');
-        if (!data||data.length===0) { el.innerHTML='<p style="color:#6c757d;font-style:italic;">No notices yet.</p>'; return; }
-        el.innerHTML='';
-        data.forEach(n => {
-            var statusColor = n.Status==='published'?'#F9B232':'#ffc107';
-            var publishBtn = n.Status!=='published'?'<button onclick="publishNotice(\''+n.ID+'\')" style="background:#F9B232;padding:0.25rem 0.75rem;font-size:0.85rem;margin-left:0.5rem;">Publish</button>':'';
-            el.innerHTML+='<div style="background:#fff;border:1px solid #dee2e6;padding:1rem;border-radius:2px;margin-bottom:0.75rem;border-left:4px solid '+statusColor+';">'+
-                '<div style="display:flex;justify-content:space-between;align-items:center;">'+
-                '<strong>'+n.Title+'</strong>'+
-                '<span style="font-size:0.8rem;padding:0.15rem 0.5rem;border-radius:12px;background:'+(n.Status==='published'?'#e8f5e9':'#fff3e0')+';color:'+(n.Status==='published'?'#2e7d32':'#e65100')+';">'+n.Status+'</span></div>'+
-                '<p style="margin:0.5rem 0 0;color:#555;">'+n.Content+'</p>'+
-                '<div style="margin-top:0.5rem;font-size:0.8rem;color:#999;">Type: '+n.Type+publishBtn+'</div></div>';
-        });
+var COLOR_PRESETS = {orange:'#F9B232',red:'#e74c3c',green:'#27ae60',blue:'#2980b9',purple:'#8e44ad',teal:'#16a085',grey:'#7f8c8d'};
+var selectedColor = 'orange';
+
+function initColorPicker() {
+    var el = document.getElementById('colorPicker');
+    el.innerHTML = '';
+    Object.keys(COLOR_PRESETS).forEach(function(name) {
+        var hex = COLOR_PRESETS[name];
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.dataset.color = name;
+        btn.style.cssText = 'width:2.5rem;height:2.5rem;border-radius:50%;border:3px solid transparent;background:'+hex+';cursor:pointer;padding:0;transition:border-color 0.2s;';
+        btn.title = name;
+        if (name === selectedColor) btn.style.borderColor = '#1a1a2e';
+        btn.onclick = function() { selectColor(name); };
+        el.appendChild(btn);
     });
 }
-function createNotice() {
+function selectColor(name) {
+    selectedColor = name;
+    document.querySelectorAll('#colorPicker button').forEach(function(b) {
+        b.style.borderColor = b.dataset.color === name ? '#1a1a2e' : 'transparent';
+    });
+}
+
+function resetForm() {
+    document.getElementById('editNoticeID').value = '';
+    document.getElementById('noticeTitle').value = '';
+    document.getElementById('noticeContent').value = '';
+    document.getElementById('noticeType').value = 'school_wide';
+    document.getElementById('noticeAuthor').value = '';
+    document.getElementById('noticeShowAuthor').checked = false;
+    document.getElementById('noticeVisibleFrom').value = '';
+    document.getElementById('noticeVisibleUntil').value = '';
+    selectedColor = 'orange';
+    initColorPicker();
+    document.getElementById('formTitle').textContent = 'Create Notice';
+    document.getElementById('cancelEditBtn').style.display = 'none';
+}
+function cancelEdit() { resetForm(); }
+
+function editNotice(n) {
+    document.getElementById('editNoticeID').value = n.ID;
+    document.getElementById('noticeTitle').value = n.Title;
+    document.getElementById('noticeContent').value = n.Content;
+    document.getElementById('noticeType').value = n.Type;
+    document.getElementById('noticeAuthor').value = n.AuthorName || '';
+    document.getElementById('noticeShowAuthor').checked = n.ShowAuthor;
+    selectedColor = n.Color || 'orange';
+    initColorPicker();
+    if (n.VisibleFrom && n.VisibleFrom !== '0001-01-01T00:00:00Z') {
+        document.getElementById('noticeVisibleFrom').value = n.VisibleFrom.slice(0,16);
+    } else { document.getElementById('noticeVisibleFrom').value = ''; }
+    if (n.VisibleUntil && n.VisibleUntil !== '0001-01-01T00:00:00Z') {
+        document.getElementById('noticeVisibleUntil').value = n.VisibleUntil.slice(0,16);
+    } else { document.getElementById('noticeVisibleUntil').value = ''; }
+    document.getElementById('formTitle').textContent = 'Edit Notice';
+    document.getElementById('cancelEditBtn').style.display = 'inline-block';
+    document.getElementById('noticeForm').scrollIntoView({behavior:'smooth'});
+}
+
+function saveNotice(mode) {
+    var editID = document.getElementById('editNoticeID').value;
     var body = {
         Title: document.getElementById('noticeTitle').value,
         Content: document.getElementById('noticeContent').value,
         Type: document.getElementById('noticeType').value,
-        TargetID: ''
+        AuthorName: document.getElementById('noticeAuthor').value,
+        ShowAuthor: document.getElementById('noticeShowAuthor').checked,
+        Color: selectedColor,
+        VisibleFrom: document.getElementById('noticeVisibleFrom').value ? new Date(document.getElementById('noticeVisibleFrom').value).toISOString() : '',
+        VisibleUntil: document.getElementById('noticeVisibleUntil').value ? new Date(document.getElementById('noticeVisibleUntil').value).toISOString() : ''
     };
-    fetch('/api/notices',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
-    .then(r=>{if(!r.ok)throw r;return r.json();})
-    .then(notice => {
-        return fetch('/api/notices/publish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({NoticeID:notice.ID})});
-    })
-    .then(()=>{document.getElementById('formMsg').textContent='Published!';loadNotices();setTimeout(()=>document.getElementById('formMsg').textContent='',2000);})
-    .catch(()=>document.getElementById('formMsg').textContent='Error');
+
+    if (editID) {
+        body.NoticeID = editID;
+        fetch('/api/notices/edit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+        .then(function(r){if(!r.ok) throw r; return r.json();})
+        .then(function(n) {
+            if (mode === 'publish' && n.Status !== 'published') {
+                return fetch('/api/notices/publish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({NoticeID:n.ID})});
+            }
+        })
+        .then(function(){showMsg('Updated!');resetForm();loadNotices();})
+        .catch(function(){showMsg('Error','red');});
+    } else {
+        fetch('/api/notices',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+        .then(function(r){if(!r.ok) throw r; return r.json();})
+        .then(function(notice) {
+            if (mode === 'publish') {
+                return fetch('/api/notices/publish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({NoticeID:notice.ID})}).then(function(){return notice;});
+            }
+            return notice;
+        })
+        .then(function(){showMsg(mode==='publish'?'Published!':'Saved as draft!');resetForm();loadNotices();})
+        .catch(function(){showMsg('Error','red');});
+    }
 }
+
 function publishNotice(id) {
     fetch('/api/notices/publish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({NoticeID:id})})
-    .then(()=>loadNotices());
+    .then(function(){loadNotices();});
 }
+
+function togglePin(id, pinned) {
+    fetch('/api/notices/pin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({NoticeID:id,Pinned:!pinned})})
+    .then(function(){loadNotices();});
+}
+
+function showMsg(text, color) {
+    var el = document.getElementById('formMsg');
+    el.textContent = text;
+    el.style.color = color || 'var(--orange)';
+    setTimeout(function(){el.textContent='';}, 2500);
+}
+
+function escHtml(s) { var d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+function loadNotices() {
+    fetch('/api/notices').then(function(r){return r.json();}).then(function(data) {
+        var el = document.getElementById('noticeList');
+        if (!data||data.length===0) { el.innerHTML='<p style="color:#6c757d;font-style:italic;">No notices yet.</p>'; return; }
+        el.innerHTML = '';
+        data.forEach(function(n) {
+            var hex = COLOR_PRESETS[n.Color] || COLOR_PRESETS.orange;
+            var statusBg = n.Status==='published' ? '#e8f5e9' : '#fff3e0';
+            var statusFg = n.Status==='published' ? '#2e7d32' : '#e65100';
+            var pinIcon = n.Pinned ? '📌 ' : '';
+            var pinLabel = n.Pinned ? 'Unpin' : 'Pin';
+
+            var meta = [];
+            meta.push('<span style="font-size:0.75rem;padding:0.15rem 0.5rem;border-radius:12px;background:'+statusBg+';color:'+statusFg+';">'+n.Status+'</span>');
+            meta.push('<span style="font-size:0.75rem;color:var(--text-muted);">'+n.Type+'</span>');
+            if (n.ShowAuthor && n.AuthorName) meta.push('<span style="font-size:0.75rem;color:var(--text-muted);">by '+escHtml(n.AuthorName)+'</span>');
+
+            var actions = [];
+            if (n.Status !== 'published') actions.push('<button onclick="publishNotice(\''+n.ID+'\')" style="background:var(--green,#27ae60);padding:0.2rem 0.6rem;font-size:0.75rem;">Publish</button>');
+            actions.push('<button onclick="togglePin(\''+n.ID+'\','+n.Pinned+')" style="background:transparent;color:var(--text-muted);border:1px solid var(--border);padding:0.2rem 0.6rem;font-size:0.75rem;">'+pinLabel+'</button>');
+            actions.push('<button onclick=\'editNotice('+JSON.stringify(n)+')\' style="background:transparent;color:var(--orange);border:1px solid var(--orange);padding:0.2rem 0.6rem;font-size:0.75rem;">Edit</button>');
+
+            var schedule = '';
+            if (n.VisibleFrom && n.VisibleFrom !== '0001-01-01T00:00:00Z') schedule += 'From: '+new Date(n.VisibleFrom).toLocaleString()+' ';
+            if (n.VisibleUntil && n.VisibleUntil !== '0001-01-01T00:00:00Z') schedule += 'Until: '+new Date(n.VisibleUntil).toLocaleString();
+
+            el.innerHTML += '<div style="background:#fff;border:1px solid #dee2e6;padding:1rem;border-radius:2px;margin-bottom:0.75rem;border-left:4px solid '+hex+';">'+
+                '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;">'+
+                '<strong>'+pinIcon+escHtml(n.Title)+'</strong>'+
+                '<div style="display:flex;gap:0.4rem;align-items:center;">'+meta.join(' ')+'</div></div>'+
+                '<div style="margin:0.5rem 0;color:#555;font-size:0.9rem;white-space:pre-wrap;">'+escHtml(n.Content)+'</div>'+
+                (schedule?'<div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.4rem;">⏰ '+schedule+'</div>':'')+
+                '<div style="display:flex;gap:0.4rem;flex-wrap:wrap;">'+actions.join('')+'</div></div>';
+        });
+    });
+}
+
+initColorPicker();
 loadNotices();
 </script>
 {{ end }}

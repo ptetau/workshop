@@ -114,7 +114,15 @@ func InitDB(db *sql.DB) error {
 		created_by TEXT NOT NULL,
 		published_by TEXT,
 		target_id TEXT,
+		author_name TEXT NOT NULL DEFAULT '',
+		show_author INTEGER NOT NULL DEFAULT 0,
+		color TEXT NOT NULL DEFAULT 'orange',
+		pinned INTEGER NOT NULL DEFAULT 0,
+		pinned_at TEXT,
+		visible_from TEXT,
+		visible_until TEXT,
 		created_at TEXT NOT NULL,
+		updated_at TEXT,
 		published_at TEXT
 	);
 

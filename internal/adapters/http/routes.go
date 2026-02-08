@@ -70,6 +70,8 @@ func registerRoutes(mux *http.ServeMux) {
 
 	// Layer 1b workflow routes
 	mux.HandleFunc("/api/notices/publish", handleNoticePublish)
+	mux.HandleFunc("/api/notices/edit", handleNoticeEdit)
+	mux.HandleFunc("/api/notices/pin", handleNoticePin)
 	mux.HandleFunc("/api/grading/proposals/decide", handleGradingDecide)
 	mux.HandleFunc("/api/grading/config", handleGradingConfig)
 	mux.HandleFunc("/api/grading/readiness", handleGradingReadiness)

@@ -20,13 +20,16 @@ func NewSQLiteStore(db *sql.DB) *SQLiteStore {
 	return &SQLiteStore{db: db}
 }
 
+const noticeColumns = `id, type, status, title, content, created_by, published_by, target_id,
+		author_name, show_author, color, pinned, pinned_at, visible_from, visible_until,
+		created_at, updated_at, published_at`
+
 // GetByID retrieves a notice by ID.
 // PRE: id is non-empty
 // POST: Returns the entity or an error if not found
 func (s *SQLiteStore) GetByID(ctx context.Context, id string) (domain.Notice, error) {
 	row := s.db.QueryRowContext(ctx,
-		`SELECT id, type, status, title, content, created_by, published_by, target_id, created_at, published_at
-		 FROM notice WHERE id = ?`, id)
+		`SELECT `+noticeColumns+` FROM notice WHERE id = ?`, id)
 	return scanNotice(row)
 }
 
@@ -35,15 +38,22 @@ func (s *SQLiteStore) GetByID(ctx context.Context, id string) (domain.Notice, er
 // POST: Entity is persisted (insert or update)
 func (s *SQLiteStore) Save(ctx context.Context, n domain.Notice) error {
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO notice (id, type, status, title, content, created_by, published_by, target_id, created_at, published_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`INSERT INTO notice (id, type, status, title, content, created_by, published_by, target_id,
+		   author_name, show_author, color, pinned, pinned_at, visible_from, visible_until,
+		   created_at, updated_at, published_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(id) DO UPDATE SET
 		   type=excluded.type, status=excluded.status, title=excluded.title, content=excluded.content,
 		   created_by=excluded.created_by, published_by=excluded.published_by, target_id=excluded.target_id,
-		   created_at=excluded.created_at, published_at=excluded.published_at`,
+		   author_name=excluded.author_name, show_author=excluded.show_author, color=excluded.color,
+		   pinned=excluded.pinned, pinned_at=excluded.pinned_at, visible_from=excluded.visible_from,
+		   visible_until=excluded.visible_until, created_at=excluded.created_at, updated_at=excluded.updated_at,
+		   published_at=excluded.published_at`,
 		n.ID, n.Type, n.Status, n.Title, n.Content, n.CreatedBy,
 		nullableString(n.PublishedBy), nullableString(n.TargetID),
-		n.CreatedAt.Format(timeLayout), nullableTime(n.PublishedAt))
+		n.AuthorName, boolToInt(n.ShowAuthor), n.Color, boolToInt(n.Pinned),
+		nullableTime(n.PinnedAt), nullableTime(n.VisibleFrom), nullableTime(n.VisibleUntil),
+		n.CreatedAt.Format(timeLayout), nullableTime(n.UpdatedAt), nullableTime(n.PublishedAt))
 	return err
 }
 
@@ -57,9 +67,9 @@ func (s *SQLiteStore) Delete(ctx context.Context, id string) error {
 
 // List returns notices matching the filter.
 // PRE: filter has valid parameters
-// POST: Returns matching notices
+// POST: Returns matching notices ordered by pinned first (most recently pinned), then by created_at DESC
 func (s *SQLiteStore) List(ctx context.Context, filter ListFilter) ([]domain.Notice, error) {
-	query := `SELECT id, type, status, title, content, created_by, published_by, target_id, created_at, published_at FROM notice WHERE 1=1`
+	query := `SELECT ` + noticeColumns + ` FROM notice WHERE 1=1`
 	args := []any{}
 
 	if filter.Type != "" {
@@ -70,7 +80,7 @@ func (s *SQLiteStore) List(ctx context.Context, filter ListFilter) ([]domain.Not
 		query += ` AND status = ?`
 		args = append(args, filter.Status)
 	}
-	query += ` ORDER BY created_at DESC`
+	query += ` ORDER BY pinned DESC, pinned_at DESC, created_at DESC`
 	if filter.Limit > 0 {
 		query += ` LIMIT ?`
 		args = append(args, filter.Limit)
@@ -89,13 +99,18 @@ func (s *SQLiteStore) List(ctx context.Context, filter ListFilter) ([]domain.Not
 	return scanNotices(rows)
 }
 
-// ListPublished returns all published notices of a given type.
+// ListPublished returns all published notices of a given type that are currently visible.
 // PRE: noticeType is valid
-// POST: Returns published notices of the given type
+// POST: Returns published, visible notices ordered by pinned first then published_at DESC
 func (s *SQLiteStore) ListPublished(ctx context.Context, noticeType string) ([]domain.Notice, error) {
+	now := time.Now().UTC().Format(timeLayout)
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, type, status, title, content, created_by, published_by, target_id, created_at, published_at
-		 FROM notice WHERE status = 'published' AND type = ? ORDER BY published_at DESC`, noticeType)
+		`SELECT `+noticeColumns+`
+		 FROM notice WHERE status = 'published' AND type = ?
+		 AND (visible_from IS NULL OR visible_from <= ?)
+		 AND (visible_until IS NULL OR visible_until >= ?)
+		 ORDER BY pinned DESC, pinned_at DESC, published_at DESC`,
+		noticeType, now, now)
 	if err != nil {
 		return nil, err
 	}
@@ -106,25 +121,21 @@ func (s *SQLiteStore) ListPublished(ctx context.Context, noticeType string) ([]d
 // scanNotice scans a single row into a Notice.
 func scanNotice(row *sql.Row) (domain.Notice, error) {
 	var n domain.Notice
-	var publishedBy, targetID, publishedAt sql.NullString
+	var publishedBy, targetID sql.NullString
+	var showAuthor, pinned int
+	var pinnedAt, visibleFrom, visibleUntil, updatedAt, publishedAt sql.NullString
 	var createdAt string
 
 	err := row.Scan(&n.ID, &n.Type, &n.Status, &n.Title, &n.Content, &n.CreatedBy,
-		&publishedBy, &targetID, &createdAt, &publishedAt)
+		&publishedBy, &targetID,
+		&n.AuthorName, &showAuthor, &n.Color, &pinned,
+		&pinnedAt, &visibleFrom, &visibleUntil,
+		&createdAt, &updatedAt, &publishedAt)
 	if err != nil {
 		return domain.Notice{}, err
 	}
 
-	n.CreatedAt, _ = time.Parse(timeLayout, createdAt)
-	if publishedBy.Valid {
-		n.PublishedBy = publishedBy.String
-	}
-	if targetID.Valid {
-		n.TargetID = targetID.String
-	}
-	if publishedAt.Valid {
-		n.PublishedAt, _ = time.Parse(timeLayout, publishedAt.String)
-	}
+	applyNullables(&n, publishedBy, targetID, pinnedAt, visibleFrom, visibleUntil, updatedAt, publishedAt, createdAt, showAuthor, pinned)
 	return n, nil
 }
 
@@ -133,28 +144,51 @@ func scanNotices(rows *sql.Rows) ([]domain.Notice, error) {
 	var notices []domain.Notice
 	for rows.Next() {
 		var n domain.Notice
-		var publishedBy, targetID, publishedAt sql.NullString
+		var publishedBy, targetID sql.NullString
+		var showAuthor, pinned int
+		var pinnedAt, visibleFrom, visibleUntil, updatedAt, publishedAt sql.NullString
 		var createdAt string
 
 		err := rows.Scan(&n.ID, &n.Type, &n.Status, &n.Title, &n.Content, &n.CreatedBy,
-			&publishedBy, &targetID, &createdAt, &publishedAt)
+			&publishedBy, &targetID,
+			&n.AuthorName, &showAuthor, &n.Color, &pinned,
+			&pinnedAt, &visibleFrom, &visibleUntil,
+			&createdAt, &updatedAt, &publishedAt)
 		if err != nil {
 			return nil, err
 		}
 
-		n.CreatedAt, _ = time.Parse(timeLayout, createdAt)
-		if publishedBy.Valid {
-			n.PublishedBy = publishedBy.String
-		}
-		if targetID.Valid {
-			n.TargetID = targetID.String
-		}
-		if publishedAt.Valid {
-			n.PublishedAt, _ = time.Parse(timeLayout, publishedAt.String)
-		}
+		applyNullables(&n, publishedBy, targetID, pinnedAt, visibleFrom, visibleUntil, updatedAt, publishedAt, createdAt, showAuthor, pinned)
 		notices = append(notices, n)
 	}
 	return notices, rows.Err()
+}
+
+func applyNullables(n *domain.Notice, publishedBy, targetID, pinnedAt, visibleFrom, visibleUntil, updatedAt, publishedAt sql.NullString, createdAt string, showAuthor, pinned int) {
+	n.CreatedAt, _ = time.Parse(timeLayout, createdAt)
+	n.ShowAuthor = showAuthor != 0
+	n.Pinned = pinned != 0
+	if publishedBy.Valid {
+		n.PublishedBy = publishedBy.String
+	}
+	if targetID.Valid {
+		n.TargetID = targetID.String
+	}
+	if pinnedAt.Valid {
+		n.PinnedAt, _ = time.Parse(timeLayout, pinnedAt.String)
+	}
+	if visibleFrom.Valid {
+		n.VisibleFrom, _ = time.Parse(timeLayout, visibleFrom.String)
+	}
+	if visibleUntil.Valid {
+		n.VisibleUntil, _ = time.Parse(timeLayout, visibleUntil.String)
+	}
+	if updatedAt.Valid {
+		n.UpdatedAt, _ = time.Parse(timeLayout, updatedAt.String)
+	}
+	if publishedAt.Valid {
+		n.PublishedAt, _ = time.Parse(timeLayout, publishedAt.String)
+	}
 }
 
 func nullableString(s string) any {
@@ -169,4 +203,11 @@ func nullableTime(t time.Time) any {
 		return nil
 	}
 	return t.Format(timeLayout)
+}
+
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }

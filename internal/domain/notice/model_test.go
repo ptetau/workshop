@@ -130,3 +130,139 @@ func TestNotice_IsDraft_IsPublished(t *testing.T) {
 		t.Error("expected IsPublished=true for published notice")
 	}
 }
+
+// TestNotice_Validate_Color tests color validation.
+func TestNotice_Validate_Color(t *testing.T) {
+	base := notice.Notice{
+		ID: "1", Type: notice.TypeSchoolWide, Status: notice.StatusDraft,
+		Title: "T", Content: "C", CreatedBy: "acct-1",
+	}
+
+	t.Run("valid color", func(t *testing.T) {
+		n := base
+		n.Color = notice.ColorBlue
+		if err := n.Validate(); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+	t.Run("empty color is valid (defaults to orange)", func(t *testing.T) {
+		n := base
+		n.Color = ""
+		if err := n.Validate(); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+	t.Run("invalid color", func(t *testing.T) {
+		n := base
+		n.Color = "neon_pink"
+		if err := n.Validate(); err != notice.ErrInvalidColor {
+			t.Errorf("expected ErrInvalidColor, got %v", err)
+		}
+	})
+}
+
+// TestNotice_Pin_Unpin tests the Pin and Unpin methods.
+func TestNotice_Pin_Unpin(t *testing.T) {
+	now := time.Now()
+
+	t.Run("pin unpinned notice", func(t *testing.T) {
+		n := notice.Notice{Pinned: false}
+		if err := n.Pin(now); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !n.Pinned {
+			t.Error("expected Pinned=true")
+		}
+		if n.PinnedAt.IsZero() {
+			t.Error("expected PinnedAt to be set")
+		}
+	})
+	t.Run("pin already pinned notice", func(t *testing.T) {
+		n := notice.Notice{Pinned: true, PinnedAt: now}
+		if err := n.Pin(now); err != notice.ErrAlreadyPinned {
+			t.Errorf("expected ErrAlreadyPinned, got %v", err)
+		}
+	})
+	t.Run("unpin pinned notice", func(t *testing.T) {
+		n := notice.Notice{Pinned: true, PinnedAt: now}
+		if err := n.Unpin(); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if n.Pinned {
+			t.Error("expected Pinned=false")
+		}
+		if !n.PinnedAt.IsZero() {
+			t.Error("expected PinnedAt to be zero")
+		}
+	})
+	t.Run("unpin not pinned notice", func(t *testing.T) {
+		n := notice.Notice{Pinned: false}
+		if err := n.Unpin(); err != notice.ErrNotPinned {
+			t.Errorf("expected ErrNotPinned, got %v", err)
+		}
+	})
+}
+
+// TestNotice_IsVisible tests the visibility window logic.
+func TestNotice_IsVisible(t *testing.T) {
+	now := time.Date(2026, 2, 8, 12, 0, 0, 0, time.UTC)
+
+	t.Run("no window set — always visible", func(t *testing.T) {
+		n := notice.Notice{}
+		if !n.IsVisible(now) {
+			t.Error("expected visible when no window set")
+		}
+	})
+	t.Run("visible_from in past — visible", func(t *testing.T) {
+		n := notice.Notice{VisibleFrom: now.Add(-time.Hour)}
+		if !n.IsVisible(now) {
+			t.Error("expected visible")
+		}
+	})
+	t.Run("visible_from in future — not visible", func(t *testing.T) {
+		n := notice.Notice{VisibleFrom: now.Add(time.Hour)}
+		if n.IsVisible(now) {
+			t.Error("expected not visible")
+		}
+	})
+	t.Run("visible_until in future — visible", func(t *testing.T) {
+		n := notice.Notice{VisibleUntil: now.Add(time.Hour)}
+		if !n.IsVisible(now) {
+			t.Error("expected visible")
+		}
+	})
+	t.Run("visible_until in past — not visible", func(t *testing.T) {
+		n := notice.Notice{VisibleUntil: now.Add(-time.Hour)}
+		if n.IsVisible(now) {
+			t.Error("expected not visible")
+		}
+	})
+	t.Run("within window", func(t *testing.T) {
+		n := notice.Notice{VisibleFrom: now.Add(-time.Hour), VisibleUntil: now.Add(time.Hour)}
+		if !n.IsVisible(now) {
+			t.Error("expected visible within window")
+		}
+	})
+}
+
+// TestNotice_EffectiveColor tests the EffectiveColor method.
+func TestNotice_EffectiveColor(t *testing.T) {
+	t.Run("empty defaults to orange hex", func(t *testing.T) {
+		n := notice.Notice{Color: ""}
+		if n.EffectiveColor() != "#F9B232" {
+			t.Errorf("expected #F9B232, got %s", n.EffectiveColor())
+		}
+	})
+	t.Run("blue returns blue hex", func(t *testing.T) {
+		n := notice.Notice{Color: notice.ColorBlue}
+		if n.EffectiveColor() != "#2980b9" {
+			t.Errorf("expected #2980b9, got %s", n.EffectiveColor())
+		}
+	})
+	t.Run("invalid color falls back to orange", func(t *testing.T) {
+		n := notice.Notice{Color: "neon"}
+		if n.EffectiveColor() != "#F9B232" {
+			t.Errorf("expected #F9B232, got %s", n.EffectiveColor())
+		}
+	})
+}
