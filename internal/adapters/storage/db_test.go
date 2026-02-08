@@ -71,6 +71,7 @@ func normalizeSQL(s string) string {
 // expectedTables is the sorted list of tables after all migrations.
 var expectedTables = []string{
 	"account",
+	"activation_token",
 	"attendance",
 	"class_type",
 	"coach_observation",

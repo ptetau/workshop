@@ -17,6 +17,12 @@ const (
 	RoleGuest  = "guest"
 )
 
+// Account status constants
+const (
+	StatusActive            = "active"
+	StatusPendingActivation = "pending_activation"
+)
+
 // ValidRoles contains all valid role values.
 var ValidRoles = []string{RoleAdmin, RoleCoach, RoleMember, RoleTrial, RoleGuest}
 
@@ -28,6 +34,10 @@ var (
 	ErrEmptyPassword    = errors.New("password cannot be empty")
 	ErrPasswordTooShort = errors.New("password must be at least 12 characters")
 	ErrWrongPassword    = errors.New("incorrect password")
+	ErrTokenExpired     = errors.New("activation link has expired")
+	ErrTokenInvalid     = errors.New("activation token is invalid")
+	ErrAlreadyActivated = errors.New("account is already activated")
+	ErrNotPending       = errors.New("account is not pending activation")
 )
 
 // Account holds state for the Account concept.
@@ -36,10 +46,21 @@ type Account struct {
 	Email                  string
 	PasswordHash           string
 	Role                   string
+	Status                 string // active, pending_activation
 	CreatedAt              time.Time
 	FailedLogins           int
 	LockedUntil            time.Time
 	PasswordChangeRequired bool
+}
+
+// ActivationToken represents a time-limited token for account activation.
+type ActivationToken struct {
+	ID        string
+	AccountID string
+	Token     string
+	ExpiresAt time.Time
+	Used      bool
+	CreatedAt time.Time
 }
 
 // Validate checks if the Account has valid data.
@@ -127,6 +148,39 @@ func (a *Account) IsAdmin() bool {
 // INVARIANT: Account fields are not mutated
 func (a *Account) IsCoachOrAdmin() bool {
 	return a.Role == RoleAdmin || a.Role == RoleCoach
+}
+
+// IsPendingActivation returns true if the account is pending activation.
+// INVARIANT: Account fields are not mutated
+func (a *Account) IsPendingActivation() bool {
+	return a.Status == StatusPendingActivation
+}
+
+// Activate transitions the account from pending to active.
+// PRE: Account is in pending_activation status
+// POST: Status is set to active
+func (a *Account) Activate() error {
+	if a.Status == StatusActive {
+		return ErrAlreadyActivated
+	}
+	if a.Status != StatusPendingActivation {
+		return ErrNotPending
+	}
+	a.Status = StatusActive
+	return nil
+}
+
+// IsExpired returns true if the activation token has expired.
+// INVARIANT: Token fields are not mutated
+func (t *ActivationToken) IsExpired(now time.Time) bool {
+	return now.After(t.ExpiresAt)
+}
+
+// Invalidate marks the token as used.
+// PRE: Token exists
+// POST: Used is set to true
+func (t *ActivationToken) Invalidate() {
+	t.Used = true
 }
 
 func isValidRole(role string) bool {

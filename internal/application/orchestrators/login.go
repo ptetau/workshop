@@ -36,6 +36,7 @@ type LoginDeps struct {
 var (
 	ErrInvalidCredentials = errors.New("invalid email or password")
 	ErrAccountLocked      = errors.New("account is locked due to too many failed attempts")
+	ErrPendingActivation  = errors.New("account is pending activation — check your email for the activation link")
 )
 
 // ExecuteLogin validates credentials and returns account info for session creation.
@@ -51,6 +52,12 @@ func ExecuteLogin(ctx context.Context, input LoginInput, deps LoginDeps) (LoginR
 	if err != nil {
 		slog.Info("auth_event", "event", "login_failed", "email", input.Email, "reason", "not_found")
 		return LoginResult{}, ErrInvalidCredentials
+	}
+
+	// Check if account is pending activation
+	if acct.IsPendingActivation() {
+		slog.Info("auth_event", "event", "login_blocked", "email", input.Email, "reason", "pending_activation")
+		return LoginResult{}, ErrPendingActivation
 	}
 
 	// Check if account is locked

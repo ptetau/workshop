@@ -20,6 +20,7 @@ type migration struct {
 var migrations = []migration{
 	{version: 1, description: "baseline schema", apply: migrate1},
 	{version: 2, description: "email system tables", apply: migrate2},
+	{version: 3, description: "account activation", apply: migrate3},
 }
 
 // SchemaVersion returns the current schema version of the database.
@@ -352,6 +353,29 @@ func migrate2(tx *sql.Tx) error {
 	CREATE INDEX IF NOT EXISTS idx_email_status ON email(status);
 	CREATE INDEX IF NOT EXISTS idx_email_sender ON email(sender_id);
 	CREATE INDEX IF NOT EXISTS idx_email_recipient_member ON email_recipient(member_id);
+	`
+	_, err := tx.Exec(schema)
+	return err
+}
+
+// --- Migration 3: Account activation ---
+// Adds activation_token table and status column to account for §8.2.6 Account Activation.
+func migrate3(tx *sql.Tx) error {
+	schema := `
+	ALTER TABLE account ADD COLUMN status TEXT NOT NULL DEFAULT 'active';
+
+	CREATE TABLE IF NOT EXISTS activation_token (
+		id TEXT PRIMARY KEY,
+		account_id TEXT NOT NULL,
+		token TEXT NOT NULL UNIQUE,
+		expires_at TEXT NOT NULL,
+		used INTEGER NOT NULL DEFAULT 0,
+		created_at TEXT NOT NULL,
+		FOREIGN KEY (account_id) REFERENCES account(id) ON DELETE CASCADE
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_activation_token_account ON activation_token(account_id);
+	CREATE INDEX IF NOT EXISTS idx_activation_token_token ON activation_token(token);
 	`
 	_, err := tx.Exec(schema)
 	return err

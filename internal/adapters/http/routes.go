@@ -11,6 +11,9 @@ func registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/login", handleLogin)
 	mux.HandleFunc("/logout", handleLogout)
 	mux.HandleFunc("/change-password", handleChangePassword)
+	mux.HandleFunc("/activate", handleActivatePage)
+	mux.HandleFunc("/api/activate", handleActivateAccount)
+	mux.HandleFunc("/api/admin/resend-activation", handleResendActivation)
 
 	// Existing routes
 	mux.HandleFunc("/attendance", handleGetAttendanceGetAttendanceToday)

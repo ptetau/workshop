@@ -1440,13 +1440,14 @@ func handleAccounts(w http.ResponseWriter, r *http.Request) {
 		}
 		// Strip password hashes from response
 		type safeAccount struct {
-			ID    string `json:"ID"`
-			Email string `json:"Email"`
-			Role  string `json:"Role"`
+			ID     string `json:"ID"`
+			Email  string `json:"Email"`
+			Role   string `json:"Role"`
+			Status string `json:"Status"`
 		}
 		var safe []safeAccount
 		for _, a := range accounts {
-			safe = append(safe, safeAccount{ID: a.ID, Email: a.Email, Role: a.Role})
+			safe = append(safe, safeAccount{ID: a.ID, Email: a.Email, Role: a.Role, Status: a.Status})
 		}
 		w.Header().Set("Content-Type", "application/json")
 		if safe == nil {
@@ -1480,21 +1481,56 @@ func handleAccounts(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		if err := acct.SetPassword(input.Password); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		if err := stores.AccountStore.Save(ctx, acct); err != nil {
-			internalError(w, err)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(map[string]string{
+
+		response := map[string]string{
 			"ID":    acct.ID,
 			"Email": acct.Email,
 			"Role":  acct.Role,
-		})
+		}
+
+		// Non-admin accounts use activation flow (no password required)
+		if input.Role != accountDomain.RoleAdmin {
+			acct.Status = accountDomain.StatusPendingActivation
+			// Set a random placeholder password (will be replaced on activation)
+			acct.PasswordHash = "pending_activation"
+			if err := stores.AccountStore.Save(ctx, acct); err != nil {
+				internalError(w, err)
+				return
+			}
+			// Generate activation token
+			tokenStr := generateID()
+			tok := accountDomain.ActivationToken{
+				ID:        generateID(),
+				AccountID: acct.ID,
+				Token:     tokenStr,
+				ExpiresAt: timeNow().Add(72 * time.Hour),
+				CreatedAt: timeNow(),
+			}
+			if err := stores.AccountStore.SaveActivationToken(ctx, tok); err != nil {
+				internalError(w, err)
+				return
+			}
+			response["Status"] = accountDomain.StatusPendingActivation
+			response["ActivationToken"] = tokenStr
+			slog.Info("auth_event", "event", "account_created_pending", "email", acct.Email, "role", acct.Role)
+		} else {
+			// Admin accounts require a password and are active immediately
+			if err := acct.SetPassword(input.Password); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			acct.Status = accountDomain.StatusActive
+			if err := stores.AccountStore.Save(ctx, acct); err != nil {
+				internalError(w, err)
+				return
+			}
+			response["Status"] = accountDomain.StatusActive
+			slog.Info("auth_event", "event", "account_created", "email", acct.Email, "role", acct.Role)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(response)
 		return
 	}
 
@@ -3380,4 +3416,152 @@ func handleMemberSearchForEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	json.NewEncoder(w).Encode(results)
+}
+
+// handleActivatePage handles GET /activate?token=... — shows the password-setting form.
+func handleActivatePage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	token := r.URL.Query().Get("token")
+	if token == "" {
+		http.Error(w, "Missing activation token", http.StatusBadRequest)
+		return
+	}
+
+	tok, err := stores.AccountStore.GetActivationTokenByToken(r.Context(), token)
+	if err != nil {
+		renderTemplate(w, r, "activate.html", map[string]any{"Error": "Invalid activation link."})
+		return
+	}
+	if tok.Used {
+		renderTemplate(w, r, "activate.html", map[string]any{"Error": "This activation link has already been used."})
+		return
+	}
+	if tok.IsExpired(timeNow()) {
+		renderTemplate(w, r, "activate.html", map[string]any{"Error": "This activation link has expired. Please contact the gym to resend."})
+		return
+	}
+
+	renderTemplate(w, r, "activate.html", map[string]any{"Token": token})
+}
+
+// handleActivateAccount handles POST /api/activate — sets password and activates account.
+func handleActivateAccount(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var input struct {
+		Token    string `json:"Token"`
+		Password string `json:"Password"`
+	}
+	if err := strictDecode(r, &input); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if input.Token == "" || input.Password == "" {
+		http.Error(w, "Token and Password are required", http.StatusBadRequest)
+		return
+	}
+
+	tok, err := stores.AccountStore.GetActivationTokenByToken(r.Context(), input.Token)
+	if err != nil {
+		http.Error(w, "Invalid activation token", http.StatusBadRequest)
+		return
+	}
+	if tok.Used {
+		http.Error(w, "This activation link has already been used", http.StatusBadRequest)
+		return
+	}
+	if tok.IsExpired(timeNow()) {
+		http.Error(w, "Link expired - contact your gym to resend", http.StatusBadRequest)
+		return
+	}
+
+	acct, err := stores.AccountStore.GetByID(r.Context(), tok.AccountID)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+
+	if err := acct.Activate(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if err := acct.SetPassword(input.Password); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	acct.PasswordChangeRequired = false
+
+	if err := stores.AccountStore.Save(r.Context(), acct); err != nil {
+		internalError(w, err)
+		return
+	}
+
+	tok.Invalidate()
+	stores.AccountStore.SaveActivationToken(r.Context(), tok)
+	stores.AccountStore.InvalidateTokensForAccount(r.Context(), tok.AccountID)
+
+	slog.Info("auth_event", "event", "account_activated", "account_id", acct.ID, "email", acct.Email)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "activated"})
+}
+
+// handleResendActivation handles POST /api/admin/resend-activation — admin resends activation email.
+func handleResendActivation(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if _, ok := requireAdmin(w, r); !ok {
+		return
+	}
+
+	var input struct {
+		AccountID string `json:"AccountID"`
+	}
+	if err := strictDecode(r, &input); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if input.AccountID == "" {
+		http.Error(w, "AccountID is required", http.StatusBadRequest)
+		return
+	}
+
+	acct, err := stores.AccountStore.GetByID(r.Context(), input.AccountID)
+	if err != nil {
+		http.Error(w, "Account not found", http.StatusNotFound)
+		return
+	}
+	if acct.Status != accountDomain.StatusPendingActivation {
+		http.Error(w, "Account is already activated", http.StatusBadRequest)
+		return
+	}
+
+	stores.AccountStore.InvalidateTokensForAccount(r.Context(), acct.ID)
+
+	tokenStr := generateID()
+	tok := accountDomain.ActivationToken{
+		ID:        generateID(),
+		AccountID: acct.ID,
+		Token:     tokenStr,
+		ExpiresAt: timeNow().Add(72 * time.Hour),
+		CreatedAt: timeNow(),
+	}
+	if err := stores.AccountStore.SaveActivationToken(r.Context(), tok); err != nil {
+		internalError(w, err)
+		return
+	}
+
+	slog.Info("auth_event", "event", "activation_resent", "account_id", acct.ID, "email", acct.Email)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "sent", "token": tokenStr})
 }

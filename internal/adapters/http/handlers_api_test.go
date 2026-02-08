@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -109,6 +110,27 @@ func (m *mockAccountStore) List(ctx context.Context, filter accountStore.ListFil
 // POST: returns expected result
 func (m *mockAccountStore) Count(ctx context.Context) (int, error) {
 	return len(m.accounts), nil
+}
+
+// SaveActivationToken implements the mock AccountStore for testing.
+// PRE: valid parameters
+// POST: returns nil
+func (m *mockAccountStore) SaveActivationToken(ctx context.Context, token accountDomain.ActivationToken) error {
+	return nil
+}
+
+// GetActivationTokenByToken implements the mock AccountStore for testing.
+// PRE: valid parameters
+// POST: returns error (stub)
+func (m *mockAccountStore) GetActivationTokenByToken(ctx context.Context, token string) (accountDomain.ActivationToken, error) {
+	return accountDomain.ActivationToken{}, errors.New("not found")
+}
+
+// InvalidateTokensForAccount implements the mock AccountStore for testing.
+// PRE: valid parameters
+// POST: returns nil
+func (m *mockAccountStore) InvalidateTokensForAccount(ctx context.Context, accountID string) error {
+	return nil
 }
 
 type mockNoticeStore struct {
