@@ -1,0 +1,27 @@
+[Unit]
+Description=Workshop Jiu Jitsu CRM
+After=network.target
+
+[Service]
+Type=simple
+User=workshop
+Group=workshop
+WorkingDirectory=/opt/workshop
+ExecStart=/opt/workshop/workshop
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=workshop
+
+# Environment
+Environment=WORKSHOP_ENV=production
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/workshop
+
+[Install]
+WantedBy=multi-user.target

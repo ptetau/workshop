@@ -1,0 +1,23 @@
+# Replace YOUR_DOMAIN with your actual domain (e.g., app.workshopjiujitsu.co.nz)
+# If you don't have a domain yet, use :80 instead of the domain line
+# and Caddy will serve on HTTP only.
+#
+# With a domain, Caddy automatically provisions HTTPS via Let's Encrypt.
+
+YOUR_DOMAIN {
+	reverse_proxy localhost:8080
+	encode gzip
+
+	header {
+		# Security headers
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	log {
+		output file /var/log/caddy/workshop.log
+		format json
+	}
+}
