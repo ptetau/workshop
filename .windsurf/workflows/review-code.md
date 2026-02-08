@@ -10,29 +10,9 @@ Review code changes against all project guides: [Guidelines](../../GUIDELINES.md
 
 1. **Run automated checks** — execute all verification commands and report results:
 
-// turbo
-```powershell
-go build ./...
-```
-
-// turbo
-```powershell
-gofmt -l .
-```
-
-// turbo
-```powershell
-go run ./tools/lintguidelines --root . --strict
-```
-
-// turbo
-```powershell
-go test -race -count=1 ./...
-```
-
-```powershell
-govulncheck ./...
-```
+   ```powershell
+   pwsh scripts/check-all.ps1
+   ```
 
 2. **Identify changed files** — determine which layers are affected by the changes:
    - `internal/domain/*/model.go` → Architecture §Concepts
