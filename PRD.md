@@ -109,6 +109,149 @@ Kids and Youth programs are term-aligned. The system suggests NZ school term dat
 | **Promotion** | The act of advancing a member to a new belt. Proposed by Coach, approved by Admin. The ceremony is handled outside the system. |
 | **Stripe** | A progress marker within a belt level (0–4). For adults, inferred automatically from mat hours. |
 
+### 1.5 List View Pattern
+
+A **cross-cutting UI pattern** that applies to every list/table view in the system. All list views share the same interaction model for pagination, sorting, searching, and row count.
+
+#### 1.5.1 Applicable Views
+
+The following views implement the list view pattern:
+
+| View | Section | Columns (sortable) | Default Sort | Search/Filter Fields |
+|------|---------|-------------------|-------------|---------------------|
+| **Member List** | §9.3 | Name, Email, Program, Belt, Status, Joined | Name (A–Z) | Name, email, program, status, belt |
+| **Attendance (Today)** | §3.1 | Name, Belt, Class, Time, Injury Flag | Time (newest) | Name, class |
+| **Historical Attendance** | §3.2 | Name, Belt, Class, Date, Time | Date (newest) | Name, class, date range |
+| **Training Log** | §3.3 | Date, Class, Duration, Mat Hours | Date (newest) | Class, date range |
+| **Grading Readiness** | §4.5 | Name, Belt, Mat Hours/Attendance, Progress % | Progress (highest) | Program, belt, name |
+| **Grading Proposals** | §4.6 | Member, Current Belt, Target Belt, Proposed By, Status, Date | Date (newest) | Status, program, belt |
+| **Schedules** | §9.7 | Day, Time, Class, Program, Coach, Duration | Day + Time | Program, class, day |
+| **Holidays** | §9.7 | Name, Start Date, End Date | Start Date (soonest) | Name, date range |
+| **Terms** | §1.3 | Term Name, Start Date, End Date, Confirmed | Start Date (soonest) | — |
+| **Accounts** | §1.1 | Email, Role, Created | Email (A–Z) | Email, role |
+| **Notices** | §8.1 | Title, Type, Status, Author, Date | Date (newest) | Type, status, title |
+| **Email History** | §8.2 | Subject, Recipients, Status, Scheduled, Sent | Sent (newest) | Status, subject, recipient |
+| **Inactive Radar** | §9.6 | Name, Program, Belt, Last Check-In, Days Inactive | Days Inactive (highest) | Program, name |
+| **Milestones** | §3.3 | Name, Threshold, Members Achieved | Threshold (lowest) | Name |
+| **Clip Library** | §7.1 | Title, Tags, Topic Link, Added By, Date | Date (newest) | Title, tag, topic |
+| **Coach Observations** | §8.3 | Member, Author, Date, Preview | Date (newest) | Member, author |
+| **Topic Queue** | §5.3 | Position, Topic Name, Duration, Last Covered | Position (ascending) | Topic name |
+| **Audit Log** | §14.1 | Timestamp, Actor, Action, Resource, Detail | Timestamp (newest) | Actor, action, resource type, date range |
+
+#### 1.5.2 Pagination
+
+All list views are **server-side paginated**. The client sends `page` and `per_page` query parameters; the server returns the requested slice plus total count metadata.
+
+**Behaviour:**
+
+- Page numbers are **1-indexed**
+- Navigation controls: **First**, **Previous**, **[page numbers]**, **Next**, **Last**
+- Show at most **5 page number buttons** around the current page (e.g., `3 4 [5] 6 7`)
+- Display: **"Showing X–Y of Z results"** below the table
+- If total results ≤ selected row count, pagination controls are hidden
+- Navigating pages preserves the current sort, search, and row count settings
+- All pagination state is encoded in the URL query string (bookmarkable, shareable)
+
+#### 1.5.3 Row Count Selector
+
+A dropdown above the table (right-aligned) allowing the user to choose how many rows per page.
+
+**Options:** `10`, `20`, `50`, `100`, `200`
+
+**Behaviour:**
+
+- Default: **20** rows per page
+- Changing row count resets to page 1
+- Selection is persisted per-view in the user's browser (localStorage) so it is remembered across sessions
+- The dropdown label reads: **"Rows: [N]"**
+
+#### 1.5.4 Column Sorting
+
+Every column listed as "sortable" in the table above supports click-to-sort.
+
+**Behaviour:**
+
+- Click a column header to sort ascending; click again to toggle descending; click a third time to return to default sort
+- **Sort indicator:** `▲` (ascending) or `▼` (descending) displayed next to the active sort column header
+- Only **one column** can be sorted at a time (no multi-column sort)
+- Sort is applied server-side (not client-side JavaScript re-ordering)
+- Sort parameter is encoded in the URL query string: `sort=name&dir=asc`
+
+#### 1.5.5 Search & Filters
+
+Each list view has a **filter bar** above the table with view-specific search and filter controls.
+
+**Behaviour:**
+
+- **Text search** fields use server-side `LIKE` matching (case-insensitive, partial match)
+- **Dropdown filters** (e.g., program, status, role, belt) filter by exact match
+- **Date range** filters provide "from" and "to" date pickers
+- Applying any filter resets to page 1
+- A **"Clear filters"** link/button appears when any filter is active, resetting all filters
+- Active filters are encoded in the URL query string (bookmarkable)
+- Filters are combined with **AND** logic (all must match)
+- Search is debounced (250ms) for text inputs to avoid excessive server requests
+- Empty filters are ignored (show all)
+
+#### 1.5.6 URL State
+
+All list view state is reflected in the URL query string so that views are **bookmarkable and shareable**:
+
+```
+/members?q=smith&program=adults&status=active&sort=name&dir=asc&per_page=50&page=2
+```
+
+Navigating back/forward in the browser restores the exact list state.
+
+#### User Stories
+
+**US-1.5.1: Paginate a list**
+As an Admin, I want list views to be paginated so that large lists load quickly and are easy to navigate.
+
+- *Given* there are 85 members and I have selected 20 rows per page
+- *When* I view the member list
+- *Then* I see rows 1–20 with "Showing 1–20 of 85 results"
+- *And* I can click "Next" or page 2/3/4/5 to navigate
+
+**US-1.5.2: Change row count**
+As an Admin, I want to choose how many rows per page so that I can see more or fewer items at once.
+
+- *Given* I am on the member list showing 20 rows
+- *When* I select "50" from the Rows dropdown
+- *Then* the list reloads showing 50 rows per page, starting from page 1
+- *And* next time I visit, it still shows 50
+
+**US-1.5.3: Sort by column**
+As a Coach, I want to sort any list by clicking column headers so that I can find what I need quickly.
+
+- *Given* I am viewing the attendance list sorted by Time
+- *When* I click the "Name" column header
+- *Then* the list re-sorts alphabetically by name (ascending) with a ▲ indicator
+- *And* clicking "Name" again sorts descending with a ▼ indicator
+
+**US-1.5.4: Search and filter**
+As an Admin, I want to search and filter list views so that I can narrow down results.
+
+- *Given* I am on the member list with 200 members
+- *When* I type "smith" in the search box and select "Adults" from the program filter
+- *Then* the list shows only Adult members matching "smith"
+- *And* "Showing 1–3 of 3 results" is displayed
+- *And* the URL updates to reflect the active filters
+
+**US-1.5.5: Clear filters**
+As an Admin, I want to clear all active filters with one click so that I can return to the full list quickly.
+
+- *Given* I have active search text and a program filter applied
+- *When* I click "Clear filters"
+- *Then* all filters are removed and the full list is displayed
+
+**US-1.5.6: Bookmark a filtered view**
+As a Coach, I want to bookmark a filtered and sorted list view so that I can return to it later.
+
+- *Given* I have filtered attendance to "Nuts & Bolts" class sorted by name
+- *When* I copy the URL and open it in a new tab
+- *Then* the same filtered, sorted view is displayed
+
 ---
 
 ## 2. Kiosk & Check-In
@@ -1299,7 +1442,7 @@ All outgoing email is delivered via **[Resend](https://resend.com)** — a devel
 
 | Criteria | Resend |
 |----------|--------|
-| **Go SDK** | Official: `github.com/resend/resend-go/v3` |
+| **Go SDK** | Official: `github.com/resend/resend-go/v2` |
 | **Batch sending** | Up to 100 emails per API call |
 | **Scheduled sending** | ISO 8601 datetime or natural language; cancel/reschedule supported |
 | **Idempotency** | Built-in idempotency keys to prevent duplicate sends |
@@ -1314,8 +1457,10 @@ All outgoing email is delivered via **[Resend](https://resend.com)** — a devel
 - Each sent email is stored locally in the `email` table with subject, body, sender, status, scheduled_at, sent_at, and resend_message_id
 - Recipients are stored in `email_recipient` linking email_id to member_id
 - Resend delivery events (delivered, bounced, opened) can be received via webhook for status tracking
-- The Resend API key is stored as an environment variable (`RESEND_API_KEY`), never hardcoded
-- Sending domain must be verified in Resend dashboard (e.g., `mail.workshopjiujitsu.co.nz`)
+- The Resend API key is stored as an environment variable (`WORKSHOP_RESEND_KEY`), never hardcoded
+- Default sender: `Workshop Jiu Jitsu <noreply@workshopjiujitsu.co.nz>` (configurable via `WORKSHOP_RESEND_FROM` env var)
+- Sending domain `workshopjiujitsu.co.nz` must be verified in the Resend dashboard (DNS records: DKIM, SPF, DMARC)
+- Gym contact email: `info@workshopjiujitsu.co.nz` (for reply-to and footer)
 
 **Batch limitations to note:**
 - Batch API does not support `scheduled_at` — scheduled emails must be sent individually
@@ -1995,3 +2140,4 @@ The following decisions were resolved during PRD review.
 | 16 | Registration requires activation | **Yes.** Registration sends activation email; account is `pending_activation` until link clicked. 72-hour token expiry. Admin can resend. | §8.2.6 |
 | 17 | Email vs in-app messaging | **Both.** Emails are delivered via Resend AND mirrored as in-app dashboard messages. Email is the primary channel; in-app is the fallback. Old `Message` concept replaced by `Email` + `EmailRecipient`. | §8.2 |
 | 18 | Gender identity on member profile | **Added** as optional field for recipient filtering. Not displayed publicly; used only for targeted communications. | §8.2.1, Appendix A |
+| 19 | List view pattern | **Server-side pagination, column sorting, search/filters, and configurable row count (10/20/50/100/200) on all list views.** URL query string encodes full state (bookmarkable). Default 20 rows. Single-column sort. Debounced search. Row count persisted in localStorage per-view. | §1.5 |

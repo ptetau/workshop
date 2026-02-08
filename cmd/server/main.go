@@ -85,8 +85,8 @@ func main() {
 	}
 
 	// Seed default admin account if no accounts exist
-	adminEmail := envOrDefault("WORKSHOP_ADMIN_EMAIL", "admin@workshop.co.nz")
-	adminPassword := envOrDefault("WORKSHOP_ADMIN_PASSWORD", "workshop12345!")
+	adminEmail := envOrDefault("WORKSHOP_ADMIN_EMAIL", "info@workshopjiujitsu.co.nz")
+	adminPassword := envOrDefault("WORKSHOP_ADMIN_PASSWORD", "Umami monster")
 	seedDeps := orchestrators.CreateAccountDeps{AccountStore: acctStore}
 	if err := orchestrators.ExecuteSeedAdmin(context.Background(), seedDeps, adminEmail, adminPassword); err != nil {
 		log.Fatalf("failed to seed admin: %v", err)

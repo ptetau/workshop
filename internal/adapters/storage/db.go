@@ -27,7 +27,8 @@ func InitDB(db *sql.DB) error {
 		role TEXT NOT NULL,
 		created_at TEXT NOT NULL,
 		failed_logins INTEGER NOT NULL DEFAULT 0,
-		locked_until TEXT
+		locked_until TEXT,
+		password_change_required INTEGER NOT NULL DEFAULT 0
 	);
 
 	CREATE TABLE IF NOT EXISTS member (

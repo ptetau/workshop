@@ -20,9 +20,10 @@ type AccountStoreForCreate interface {
 
 // CreateAccountInput carries input for the orchestrator.
 type CreateAccountInput struct {
-	Email    string
-	Password string
-	Role     string
+	Email                  string
+	Password               string
+	Role                   string
+	PasswordChangeRequired bool
 }
 
 // CreateAccountDeps holds dependencies for CreateAccount.
@@ -54,10 +55,11 @@ func ExecuteCreateAccount(ctx context.Context, input CreateAccountInput, deps Cr
 	}
 
 	acct := account.Account{
-		ID:        uuid.New().String(),
-		Email:     input.Email,
-		Role:      input.Role,
-		CreatedAt: time.Now(),
+		ID:                     uuid.New().String(),
+		Email:                  input.Email,
+		Role:                   input.Role,
+		CreatedAt:              time.Now(),
+		PasswordChangeRequired: input.PasswordChangeRequired,
 	}
 
 	// Validate domain rules
@@ -93,9 +95,10 @@ func ExecuteSeedAdmin(ctx context.Context, deps CreateAccountDeps, email, passwo
 	}
 
 	_, err = ExecuteCreateAccount(ctx, CreateAccountInput{
-		Email:    email,
-		Password: password,
-		Role:     account.RoleAdmin,
+		Email:                  email,
+		Password:               password,
+		Role:                   account.RoleAdmin,
+		PasswordChangeRequired: true,
 	}, deps)
 	if err != nil {
 		return err

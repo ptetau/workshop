@@ -18,10 +18,11 @@ const accountContextKey contextKey = "account"
 
 // Session represents an authenticated session.
 type Session struct {
-	AccountID string
-	Email     string
-	Role      string
-	CreatedAt time.Time
+	AccountID              string
+	Email                  string
+	Role                   string
+	CreatedAt              time.Time
+	PasswordChangeRequired bool
 
 	// DevMode impersonation fields — populated only when an admin is impersonating another role.
 	RealAccountID string
@@ -51,7 +52,7 @@ func NewSessionStore() *SessionStore {
 // Create stores a new session and returns the token.
 // PRE: accountID, email, role are non-empty
 // POST: Session is stored, token is returned
-func (ss *SessionStore) Create(accountID, email, role string) (string, error) {
+func (ss *SessionStore) Create(accountID, email, role string, passwordChangeRequired bool) (string, error) {
 	token, err := generateToken()
 	if err != nil {
 		return "", err
@@ -59,10 +60,11 @@ func (ss *SessionStore) Create(accountID, email, role string) (string, error) {
 	ss.mu.Lock()
 	defer ss.mu.Unlock()
 	ss.sessions[token] = Session{
-		AccountID: accountID,
-		Email:     email,
-		Role:      role,
-		CreatedAt: time.Now(),
+		AccountID:              accountID,
+		Email:                  email,
+		Role:                   role,
+		CreatedAt:              time.Now(),
+		PasswordChangeRequired: passwordChangeRequired,
 	}
 	return token, nil
 }
@@ -111,6 +113,8 @@ const sessionCookieName = "workshop_session"
 
 // Auth returns middleware that extracts the session from the cookie and sets the account in context.
 // It does NOT block unauthenticated requests — use RequireAuth or RequireRole for that.
+// If the session has PasswordChangeRequired set, all routes except /change-password and /logout
+// are redirected to /change-password.
 func Auth(sessions *SessionStore) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -119,6 +123,15 @@ func Auth(sessions *SessionStore) func(http.Handler) http.Handler {
 				if session, ok := sessions.Get(cookie.Value); ok {
 					ctx := context.WithValue(r.Context(), accountContextKey, session)
 					r = r.WithContext(ctx)
+
+					// Force password change redirect
+					if session.PasswordChangeRequired {
+						path := r.URL.Path
+						if path != "/change-password" && path != "/logout" && path != "/login" {
+							http.Redirect(w, r, "/change-password", http.StatusSeeOther)
+							return
+						}
+					}
 				}
 			}
 			next.ServeHTTP(w, r)

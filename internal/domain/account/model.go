@@ -32,13 +32,14 @@ var (
 
 // Account holds state for the Account concept.
 type Account struct {
-	ID           string
-	Email        string
-	PasswordHash string
-	Role         string
-	CreatedAt    time.Time
-	FailedLogins int
-	LockedUntil  time.Time
+	ID                     string
+	Email                  string
+	PasswordHash           string
+	Role                   string
+	CreatedAt              time.Time
+	FailedLogins           int
+	LockedUntil            time.Time
+	PasswordChangeRequired bool
 }
 
 // Validate checks if the Account has valid data.
