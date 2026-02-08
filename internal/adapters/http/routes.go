@@ -102,4 +102,5 @@ func registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/emails/detail", handleEmailDetail)
 	mux.HandleFunc("/api/emails/delete", handleEmailDelete)
 	mux.HandleFunc("/api/emails/recipients/search", handleMemberSearchForEmail)
+	mux.HandleFunc("/api/emails/recipients/filter", handleMemberFilterForEmail)
 }

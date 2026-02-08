@@ -16,9 +16,22 @@
 
     <div class="form-group">
         <label>Recipients</label>
-        <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.5rem;">
-            <input type="text" id="recipientSearch" placeholder="Search members by name..." oninput="searchRecipients()" style="flex:1;padding:0.5rem;border:1px solid var(--border);border-radius:2px;">
+        <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.5rem;flex-wrap:wrap;">
+            <input type="text" id="recipientSearch" placeholder="Search members by name..." oninput="searchRecipients()" style="flex:1;min-width:200px;padding:0.5rem;border:1px solid var(--border);border-radius:2px;">
+            <select id="programFilter" onchange="filterByProgram()" style="padding:0.5rem;border:1px solid var(--border);border-radius:2px;">
+                <option value="">Filter by program...</option>
+                <option value="adults">Adults</option>
+                <option value="kids">Kids</option>
+            </select>
             <span id="recipientCount" style="font-size:0.85rem;font-weight:600;color:var(--orange);white-space:nowrap;">0 selected</span>
+        </div>
+        <div id="filterResults" style="max-height:250px;overflow-y:auto;border:1px solid var(--border);border-radius:2px;display:none;margin-bottom:0.5rem;">
+            <div style="display:flex;gap:0.5rem;padding:0.4rem 0.5rem;background:#f5f5f5;border-bottom:1px solid #eee;">
+                <button id="selectAllBtn" onclick="selectAllFiltered()" style="background:var(--orange);color:#fff;border:none;padding:0.25rem 0.75rem;border-radius:2px;cursor:pointer;font-size:0.8rem;font-weight:600;">Select All</button>
+                <button id="invertBtn" onclick="invertSelection()" style="background:var(--dark);color:#fff;border:none;padding:0.25rem 0.75rem;border-radius:2px;cursor:pointer;font-size:0.8rem;font-weight:600;">Invert Selection</button>
+                <button onclick="clearFilter()" style="background:none;border:1px solid var(--border);padding:0.25rem 0.75rem;border-radius:2px;cursor:pointer;font-size:0.8rem;">Clear</button>
+            </div>
+            <div id="filterResultsList"></div>
         </div>
         <div id="searchResults" style="max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:2px;display:none;"></div>
         <div id="selectedRecipients" style="display:flex;flex-wrap:wrap;gap:0.4rem;margin-top:0.5rem;"></div>
@@ -37,6 +50,7 @@
 <script>
 var selectedMembers = {};
 var searchTimeout = null;
+var filteredMembers = [];
 
 function updateCount() {
     var count = Object.keys(selectedMembers).length;
@@ -96,6 +110,73 @@ function searchRecipients() {
 
 function escHtml(s) { var d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
 function escAttr(s) { return s.replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
+
+function filterByProgram() {
+    var program = document.getElementById('programFilter').value;
+    var el = document.getElementById('filterResults');
+    if (!program) { el.style.display = 'none'; filteredMembers = []; return; }
+
+    fetch('/api/emails/recipients/filter?program='+encodeURIComponent(program))
+    .then(function(r){return r.json();})
+    .then(function(data) {
+        filteredMembers = data || [];
+        renderFilterResults();
+        el.style.display = 'block';
+    });
+}
+
+function renderFilterResults() {
+    var el = document.getElementById('filterResultsList');
+    if (filteredMembers.length === 0) {
+        el.innerHTML = '<div style="padding:0.5rem;color:#999;font-style:italic;">No members found</div>';
+        return;
+    }
+    var html = '';
+    filteredMembers.forEach(function(m) {
+        var checked = selectedMembers[m.ID] ? ' checked' : '';
+        html += '<label style="display:flex;align-items:center;gap:0.5rem;padding:0.4rem 0.5rem;border-bottom:1px solid #eee;cursor:pointer;">' +
+            '<input type="checkbox" data-member-id="'+m.ID+'" data-member-name="'+escAttr(m.Name)+'" data-member-email="'+escAttr(m.Email)+'"' + checked +
+            ' onchange="toggleFilteredMember(this)" style="margin:0;">' +
+            '<span><strong>'+escHtml(m.Name)+'</strong> <span style="color:#999;font-size:0.85rem;">'+escHtml(m.Email)+'</span></span></label>';
+    });
+    el.innerHTML = html;
+}
+
+function toggleFilteredMember(cb) {
+    var id = cb.getAttribute('data-member-id');
+    if (cb.checked) {
+        selectedMembers[id] = {Name: cb.getAttribute('data-member-name'), Email: cb.getAttribute('data-member-email')};
+    } else {
+        delete selectedMembers[id];
+    }
+    renderSelected();
+}
+
+function selectAllFiltered() {
+    filteredMembers.forEach(function(m) {
+        selectedMembers[m.ID] = {Name: m.Name, Email: m.Email};
+    });
+    renderFilterResults();
+    renderSelected();
+}
+
+function invertSelection() {
+    filteredMembers.forEach(function(m) {
+        if (selectedMembers[m.ID]) {
+            delete selectedMembers[m.ID];
+        } else {
+            selectedMembers[m.ID] = {Name: m.Name, Email: m.Email};
+        }
+    });
+    renderFilterResults();
+    renderSelected();
+}
+
+function clearFilter() {
+    document.getElementById('programFilter').value = '';
+    document.getElementById('filterResults').style.display = 'none';
+    filteredMembers = [];
+}
 
 function showMsg(text, color) {
     var el = document.getElementById('formMsg');

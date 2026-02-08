@@ -18,6 +18,8 @@ type Store interface {
 
 // ListFilter carries filtering parameters for List operations.
 type ListFilter struct {
-	Limit  int
-	Offset int
+	Limit   int
+	Offset  int
+	Program string
+	Status  string
 }

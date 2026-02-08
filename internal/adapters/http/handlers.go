@@ -2998,6 +2998,49 @@ func handleEmailDelete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// handleMemberFilterForEmail handles GET /api/emails/recipients/filter?program=...
+func handleMemberFilterForEmail(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if _, ok := requireAdmin(w, r); !ok {
+		return
+	}
+
+	program := r.URL.Query().Get("program")
+
+	filter := memberStore.ListFilter{
+		Status: "active",
+	}
+	if program != "" {
+		filter.Program = program
+	}
+
+	members, err := stores.MemberStore.List(r.Context(), filter)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+
+	type memberResult struct {
+		ID    string `json:"ID"`
+		Name  string `json:"Name"`
+		Email string `json:"Email"`
+	}
+	var results []memberResult
+	for _, m := range members {
+		results = append(results, memberResult{ID: m.ID, Name: m.Name, Email: m.Email})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if results == nil {
+		w.Write([]byte("[]"))
+		return
+	}
+	json.NewEncoder(w).Encode(results)
+}
+
 // handleMemberSearchForEmail handles GET /api/emails/recipients/search?q=...
 func handleMemberSearchForEmail(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {

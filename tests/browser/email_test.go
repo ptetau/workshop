@@ -14,13 +14,19 @@ import (
 // seedTestMember creates a member directly in the store for use in email tests.
 func seedTestMember(t *testing.T, app *testApp, name, email string) string {
 	t.Helper()
+	return seedTestMemberWithProgram(t, app, name, email, memberDomain.ProgramAdults)
+}
+
+// seedTestMemberWithProgram creates a member with a specific program.
+func seedTestMemberWithProgram(t *testing.T, app *testApp, name, email, program string) string {
+	t.Helper()
 	id := uuid.New().String()
 	m := memberDomain.Member{
 		ID:        id,
 		AccountID: app.AdminID,
 		Email:     email,
 		Name:      name,
-		Program:   memberDomain.ProgramAdults,
+		Program:   program,
 		Status:    memberDomain.StatusActive,
 	}
 	if err := app.Stores.MemberStore.Save(context.Background(), m); err != nil {
@@ -297,6 +303,202 @@ func TestEmail_SendEmail(t *testing.T) {
 	})
 	if err != nil {
 		t.Error("sent status badge not visible for sent email")
+	}
+}
+
+// TestEmail_FilterByProgram tests filtering recipients by program.
+// Covers #110: Admin can filter recipients by program (e.g. Kids, Adults).
+func TestEmail_FilterByProgram(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping browser test in short mode")
+	}
+
+	app := newTestApp(t)
+
+	// Seed members in different programs
+	seedTestMember(t, app, "Alice Adults", "alice@test.com")
+	seedTestMemberWithProgram(t, app, "Bobby Kids", "bobby@test.com", memberDomain.ProgramKids)
+	seedTestMemberWithProgram(t, app, "Charlie Kids", "charlie@test.com", memberDomain.ProgramKids)
+
+	page := app.newPage(t)
+	app.login(t, page)
+
+	_, err := page.Goto(app.BaseURL + "/admin/emails/compose")
+	if err != nil {
+		t.Fatalf("failed to navigate to compose: %v", err)
+	}
+
+	// Select "Kids" from program filter
+	if _, err := page.Locator("#programFilter").SelectOption(playwright.SelectOptionValues{Values: &[]string{"kids"}}); err != nil {
+		t.Fatalf("failed to select Kids program: %v", err)
+	}
+
+	// Wait for filter results to appear
+	err = page.Locator("#filterResultsList >> text=Bobby Kids").WaitFor(playwright.LocatorWaitForOptions{
+		Timeout: playwright.Float(5000),
+	})
+	if err != nil {
+		t.Fatalf("Bobby Kids not found in filter results: %v", err)
+	}
+
+	// Charlie Kids should also appear
+	err = page.Locator("#filterResultsList >> text=Charlie Kids").WaitFor(playwright.LocatorWaitForOptions{
+		Timeout: playwright.Float(3000),
+	})
+	if err != nil {
+		t.Error("Charlie Kids not found in filter results")
+	}
+
+	// Alice Adults should NOT appear in Kids filter
+	count, _ := page.Locator("#filterResultsList >> text=Alice Adults").Count()
+	if count > 0 {
+		t.Error("Alice Adults should not appear in Kids program filter")
+	}
+}
+
+// TestEmail_SelectAll tests the Select All button for filtered recipients.
+// Covers #111: Admin can select all filtered members then deselect individuals.
+func TestEmail_SelectAll(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping browser test in short mode")
+	}
+
+	app := newTestApp(t)
+
+	// Seed 3 kids members
+	seedTestMemberWithProgram(t, app, "Dana Kids", "dana@test.com", memberDomain.ProgramKids)
+	seedTestMemberWithProgram(t, app, "Eve Kids", "eve@test.com", memberDomain.ProgramKids)
+	seedTestMemberWithProgram(t, app, "Finn Kids", "finn@test.com", memberDomain.ProgramKids)
+
+	page := app.newPage(t)
+	app.login(t, page)
+
+	_, err := page.Goto(app.BaseURL + "/admin/emails/compose")
+	if err != nil {
+		t.Fatalf("failed to navigate to compose: %v", err)
+	}
+
+	// Filter by Kids
+	if _, err := page.Locator("#programFilter").SelectOption(playwright.SelectOptionValues{Values: &[]string{"kids"}}); err != nil {
+		t.Fatalf("failed to select Kids program: %v", err)
+	}
+
+	// Wait for filter results
+	err = page.Locator("#filterResultsList >> text=Dana Kids").WaitFor(playwright.LocatorWaitForOptions{
+		Timeout: playwright.Float(5000),
+	})
+	if err != nil {
+		t.Fatalf("filter results did not load: %v", err)
+	}
+
+	// Click Select All
+	if err := page.Locator("#selectAllBtn").Click(); err != nil {
+		t.Fatalf("failed to click Select All: %v", err)
+	}
+
+	// Verify all 3 are selected
+	err = page.Locator("#recipientCount >> text=3 selected").WaitFor(playwright.LocatorWaitForOptions{
+		Timeout: playwright.Float(3000),
+	})
+	if err != nil {
+		t.Error("recipient count did not update to '3 selected' after Select All")
+	}
+
+	// Deselect one by unchecking
+	cb := page.Locator("#filterResultsList input[data-member-name='Dana Kids']")
+	if err := cb.Uncheck(); err != nil {
+		t.Fatalf("failed to uncheck Dana Kids: %v", err)
+	}
+
+	// Verify count dropped to 2
+	err = page.Locator("#recipientCount >> text=2 selected").WaitFor(playwright.LocatorWaitForOptions{
+		Timeout: playwright.Float(3000),
+	})
+	if err != nil {
+		t.Error("recipient count did not update to '2 selected' after deselecting one")
+	}
+}
+
+// TestEmail_InvertSelection tests the Invert Selection button.
+// Covers #112: Admin can invert the selection to quickly switch included/excluded.
+func TestEmail_InvertSelection(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping browser test in short mode")
+	}
+
+	app := newTestApp(t)
+
+	// Seed 3 adults members
+	seedTestMember(t, app, "Grace Adult", "grace@test.com")
+	seedTestMember(t, app, "Hank Adult", "hank@test.com")
+	seedTestMember(t, app, "Iris Adult", "iris@test.com")
+
+	page := app.newPage(t)
+	app.login(t, page)
+
+	_, err := page.Goto(app.BaseURL + "/admin/emails/compose")
+	if err != nil {
+		t.Fatalf("failed to navigate to compose: %v", err)
+	}
+
+	// Filter by Adults
+	if _, err := page.Locator("#programFilter").SelectOption(playwright.SelectOptionValues{Values: &[]string{"adults"}}); err != nil {
+		t.Fatalf("failed to select Adults program: %v", err)
+	}
+
+	// Wait for filter results
+	err = page.Locator("#filterResultsList >> text=Grace Adult").WaitFor(playwright.LocatorWaitForOptions{
+		Timeout: playwright.Float(5000),
+	})
+	if err != nil {
+		t.Fatalf("filter results did not load: %v", err)
+	}
+
+	// Select All first
+	if err := page.Locator("#selectAllBtn").Click(); err != nil {
+		t.Fatalf("failed to click Select All: %v", err)
+	}
+
+	// Verify 3 selected
+	err = page.Locator("#recipientCount >> text=3 selected").WaitFor(playwright.LocatorWaitForOptions{
+		Timeout: playwright.Float(3000),
+	})
+	if err != nil {
+		t.Fatalf("expected 3 selected after Select All: %v", err)
+	}
+
+	// Deselect Grace by unchecking
+	cb := page.Locator("#filterResultsList input[data-member-name='Grace Adult']")
+	if err := cb.Uncheck(); err != nil {
+		t.Fatalf("failed to uncheck Grace Adult: %v", err)
+	}
+
+	// Now 2 selected (Hank + Iris)
+	err = page.Locator("#recipientCount >> text=2 selected").WaitFor(playwright.LocatorWaitForOptions{
+		Timeout: playwright.Float(3000),
+	})
+	if err != nil {
+		t.Fatalf("expected 2 selected: %v", err)
+	}
+
+	// Click Invert — should select Grace, deselect Hank + Iris → 1 selected
+	if err := page.Locator("#invertBtn").Click(); err != nil {
+		t.Fatalf("failed to click Invert Selection: %v", err)
+	}
+
+	err = page.Locator("#recipientCount >> text=1 selected").WaitFor(playwright.LocatorWaitForOptions{
+		Timeout: playwright.Float(3000),
+	})
+	if err != nil {
+		t.Error("after invert, expected 1 selected (Grace only)")
+	}
+
+	// Grace should be in selected recipients
+	err = page.Locator("#selectedRecipients >> text=Grace Adult").WaitFor(playwright.LocatorWaitForOptions{
+		Timeout: playwright.Float(3000),
+	})
+	if err != nil {
+		t.Error("Grace Adult should be in selected recipients after invert")
 	}
 }
 
