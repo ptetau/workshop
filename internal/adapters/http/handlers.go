@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/csrf"
 	"github.com/yuin/goldmark"
+	goldmarkHTML "github.com/yuin/goldmark/renderer/html"
 
 	"workshop/internal/adapters/http/middleware"
 	accountStore "workshop/internal/adapters/storage/account"
@@ -37,6 +38,14 @@ import (
 
 // timeNow is a variable for testability.
 var timeNow = time.Now
+
+// mdRenderer is a goldmark instance configured for safe HTML output.
+// Raw HTML in markdown input is escaped (WithUnsafe is NOT set), preventing XSS.
+var mdRenderer = goldmark.New(
+	goldmark.WithRendererOptions(
+		goldmarkHTML.WithHardWraps(),
+	),
+)
 
 // generateID creates a new UUID string.
 func generateID() string {
@@ -95,7 +104,7 @@ func renderTemplate(w http.ResponseWriter, r *http.Request, templateName string,
 		"list":            func(items ...string) []string { return items },
 		"renderMarkdown": func(md string) template.HTML {
 			var buf bytes.Buffer
-			if err := goldmark.Convert([]byte(md), &buf); err != nil {
+			if err := mdRenderer.Convert([]byte(md), &buf); err != nil {
 				return template.HTML(template.HTMLEscapeString(md))
 			}
 			return template.HTML(buf.String())
@@ -772,7 +781,7 @@ func handleNotices(w http.ResponseWriter, r *http.Request) {
 		}
 		noticeType := r.URL.Query().Get("type")
 		if noticeType != "" {
-			results, err := stores.NoticeStore.ListPublished(ctx, noticeType)
+			results, err := stores.NoticeStore.ListPublished(ctx, noticeType, timeNow())
 			if err != nil {
 				internalError(w, err)
 				return
@@ -801,9 +810,8 @@ func handleNotices(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == "POST" {
-		sess, ok := middleware.GetSessionFromContext(ctx)
+		sess, ok := requireAdmin(w, r)
 		if !ok {
-			http.Error(w, "not authenticated", http.StatusUnauthorized)
 			return
 		}
 		var input struct {
@@ -1501,7 +1509,7 @@ func handleNoticePublish(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "notice not found", http.StatusNotFound)
 		return
 	}
-	if err := notice.Publish(sess.AccountID); err != nil {
+	if err := notice.Publish(sess.AccountID, timeNow()); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -1514,6 +1522,9 @@ func handleNoticePublish(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleNoticeEdit handles POST /api/notices/edit
+// Partial-update semantics:
+//   - Title, Content, Type, Color: only updated when the input value is non-empty (cannot be cleared).
+//   - AuthorName, ShowAuthor, VisibleFrom, VisibleUntil: always overwritten (can be cleared by sending zero-values).
 func handleNoticeEdit(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)

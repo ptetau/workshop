@@ -158,7 +158,7 @@ func (m *mockNoticeStore) List(ctx context.Context, filter noticeStore.ListFilte
 // ListPublished implements the mock NoticeStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
-func (m *mockNoticeStore) ListPublished(ctx context.Context, noticeType string) ([]noticeDomain.Notice, error) {
+func (m *mockNoticeStore) ListPublished(ctx context.Context, noticeType string, now time.Time) ([]noticeDomain.Notice, error) {
 	var list []noticeDomain.Notice
 	for _, n := range m.notices {
 		if n.Status == noticeDomain.StatusPublished && (noticeType == "" || n.Type == noticeType) {
@@ -1043,6 +1043,46 @@ func TestHandleNoticePin(t *testing.T) {
 			t.Error("expected Pinned=false")
 		}
 	})
+}
+
+// TestHandleNotices_POST_NonAdmin tests that non-admin users cannot create notices.
+func TestHandleNotices_POST_NonAdmin(t *testing.T) {
+	stores = newFullStores()
+	body := `{"Type":"school_wide","Title":"Test","Content":"test"}`
+	req := authRequest("POST", "/api/notices", body, coachSession)
+	rec := httptest.NewRecorder()
+	handleNotices(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("got %d, want %d", rec.Code, http.StatusForbidden)
+	}
+}
+
+// TestHandleNoticeEdit_Unauthenticated tests that unauthenticated users cannot edit notices.
+func TestHandleNoticeEdit_Unauthenticated(t *testing.T) {
+	stores = newFullStores()
+	body := `{"NoticeID":"edit-1","Title":"Hacked"}`
+	req := httptest.NewRequest("POST", "/api/notices/edit", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	handleNoticeEdit(rec, req)
+
+	if rec.Code != http.StatusUnauthorized && rec.Code != http.StatusForbidden {
+		t.Errorf("got %d, want 401 or 403", rec.Code)
+	}
+}
+
+// TestHandleNoticeEdit_NonAdmin tests that non-admin users cannot edit notices.
+func TestHandleNoticeEdit_NonAdmin(t *testing.T) {
+	stores = newFullStores()
+	body := `{"NoticeID":"edit-1","Title":"Hacked"}`
+	req := authRequest("POST", "/api/notices/edit", body, memberSession)
+	rec := httptest.NewRecorder()
+	handleNoticeEdit(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("got %d, want %d", rec.Code, http.StatusForbidden)
+	}
 }
 
 // --- Tests: /api/messages ---

@@ -77,7 +77,7 @@ func TestNotice_Publish(t *testing.T) {
 			ID: "1", Type: notice.TypeSchoolWide, Status: notice.StatusDraft,
 			Title: "Test", Content: "Test content", CreatedBy: "acct-1",
 		}
-		if err := n.Publish("acct-admin"); err != nil {
+		if err := n.Publish("acct-admin", time.Now()); err != nil {
 			t.Errorf("Publish() unexpected error: %v", err)
 		}
 		if !n.IsPublished() {
@@ -96,7 +96,7 @@ func TestNotice_Publish(t *testing.T) {
 			ID: "2", Type: notice.TypeSchoolWide, Status: notice.StatusPublished,
 			Title: "Test", Content: "content",
 		}
-		if err := n.Publish("acct-admin"); err == nil {
+		if err := n.Publish("acct-admin", time.Now()); err == nil {
 			t.Error("expected error when publishing already published notice")
 		}
 	})
@@ -106,7 +106,7 @@ func TestNotice_Publish(t *testing.T) {
 			ID: "3", Type: notice.TypeSchoolWide, Status: notice.StatusDraft,
 			Title: "Test", Content: "content",
 		}
-		if err := n.Publish(""); err == nil {
+		if err := n.Publish("", time.Now()); err == nil {
 			t.Error("expected error when publisher ID is empty")
 		}
 	})

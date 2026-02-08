@@ -179,12 +179,16 @@ function showMsg(text, color) {
 
 function escHtml(s) { var d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
 
+var noticeMap = {};
+
 function loadNotices() {
     fetch('/api/notices').then(function(r){return r.json();}).then(function(data) {
         var el = document.getElementById('noticeList');
         if (!data||data.length===0) { el.innerHTML='<p style="color:#6c757d;font-style:italic;">No notices yet.</p>'; return; }
-        el.innerHTML = '';
+        noticeMap = {};
+        var html = '';
         data.forEach(function(n) {
+            noticeMap[n.ID] = n;
             var hex = COLOR_PRESETS[n.Color] || COLOR_PRESETS.orange;
             var statusBg = n.Status==='published' ? '#e8f5e9' : '#fff3e0';
             var statusFg = n.Status==='published' ? '#2e7d32' : '#e65100';
@@ -199,13 +203,13 @@ function loadNotices() {
             var actions = [];
             if (n.Status !== 'published') actions.push('<button onclick="publishNotice(\''+n.ID+'\')" style="background:var(--green,#27ae60);padding:0.2rem 0.6rem;font-size:0.75rem;">Publish</button>');
             actions.push('<button onclick="togglePin(\''+n.ID+'\','+n.Pinned+')" style="background:transparent;color:var(--text-muted);border:1px solid var(--border);padding:0.2rem 0.6rem;font-size:0.75rem;">'+pinLabel+'</button>');
-            actions.push('<button onclick=\'editNotice('+JSON.stringify(n)+')\' style="background:transparent;color:var(--orange);border:1px solid var(--orange);padding:0.2rem 0.6rem;font-size:0.75rem;">Edit</button>');
+            actions.push('<button onclick="editNotice(noticeMap[\''+n.ID+'\'])" style="background:transparent;color:var(--orange);border:1px solid var(--orange);padding:0.2rem 0.6rem;font-size:0.75rem;">Edit</button>');
 
             var schedule = '';
             if (n.VisibleFrom && n.VisibleFrom !== '0001-01-01T00:00:00Z') schedule += 'From: '+new Date(n.VisibleFrom).toLocaleString()+' ';
             if (n.VisibleUntil && n.VisibleUntil !== '0001-01-01T00:00:00Z') schedule += 'Until: '+new Date(n.VisibleUntil).toLocaleString();
 
-            el.innerHTML += '<div style="background:#fff;border:1px solid #dee2e6;padding:1rem;border-radius:2px;margin-bottom:0.75rem;border-left:4px solid '+hex+';">'+
+            html += '<div style="background:#fff;border:1px solid #dee2e6;padding:1rem;border-radius:2px;margin-bottom:0.75rem;border-left:4px solid '+hex+';">'+
                 '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;">'+
                 '<strong>'+pinIcon+escHtml(n.Title)+'</strong>'+
                 '<div style="display:flex;gap:0.4rem;align-items:center;">'+meta.join(' ')+'</div></div>'+
@@ -213,6 +217,7 @@ function loadNotices() {
                 (schedule?'<div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.4rem;">⏰ '+schedule+'</div>':'')+
                 '<div style="display:flex;gap:0.4rem;flex-wrap:wrap;">'+actions.join('')+'</div></div>';
         });
+        el.innerHTML = html;
     });
 }
 

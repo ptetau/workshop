@@ -12,7 +12,7 @@ import (
 
 // DashboardNoticeStore defines the notice store interface needed by the dashboard projection.
 type DashboardNoticeStore interface {
-	ListPublished(ctx context.Context, noticeType string) ([]notice.Notice, error)
+	ListPublished(ctx context.Context, noticeType string, now time.Time) ([]notice.Notice, error)
 }
 
 // DashboardProposalStore defines the grading proposal store interface needed by the dashboard projection.
@@ -86,7 +86,7 @@ func QueryGetDashboard(ctx context.Context, query GetDashboardQuery, deps GetDas
 	}
 
 	// All roles: published school-wide notices
-	notices, err := deps.NoticeStore.ListPublished(ctx, "school_wide")
+	notices, err := deps.NoticeStore.ListPublished(ctx, "school_wide", now)
 	if err == nil {
 		result.Notices = notices
 	}

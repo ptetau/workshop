@@ -170,7 +170,7 @@ func (n *Notice) IsPublished() bool {
 // Publish moves the notice from draft to published.
 // PRE: Notice is in draft state, publisherID is non-empty
 // POST: Status is published, PublishedBy and PublishedAt are set
-func (n *Notice) Publish(publisherID string) error {
+func (n *Notice) Publish(publisherID string, now time.Time) error {
 	if n.IsPublished() {
 		return errors.New("notice is already published")
 	}
@@ -179,7 +179,7 @@ func (n *Notice) Publish(publisherID string) error {
 	}
 	n.Status = StatusPublished
 	n.PublishedBy = publisherID
-	n.PublishedAt = time.Now()
+	n.PublishedAt = now
 	return nil
 }
 

@@ -3,6 +3,7 @@ package notice
 import (
 	"context"
 	"database/sql"
+	"log/slog"
 	"time"
 
 	domain "workshop/internal/domain/notice"
@@ -100,17 +101,17 @@ func (s *SQLiteStore) List(ctx context.Context, filter ListFilter) ([]domain.Not
 }
 
 // ListPublished returns all published notices of a given type that are currently visible.
-// PRE: noticeType is valid
+// PRE: noticeType is valid, now is the current time
 // POST: Returns published, visible notices ordered by pinned first then published_at DESC
-func (s *SQLiteStore) ListPublished(ctx context.Context, noticeType string) ([]domain.Notice, error) {
-	now := time.Now().UTC().Format(timeLayout)
+func (s *SQLiteStore) ListPublished(ctx context.Context, noticeType string, now time.Time) ([]domain.Notice, error) {
+	nowStr := now.UTC().Format(timeLayout)
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT `+noticeColumns+`
 		 FROM notice WHERE status = 'published' AND type = ?
 		 AND (visible_from IS NULL OR visible_from <= ?)
 		 AND (visible_until IS NULL OR visible_until >= ?)
 		 ORDER BY pinned DESC, pinned_at DESC, published_at DESC`,
-		noticeType, now, now)
+		noticeType, nowStr, nowStr)
 	if err != nil {
 		return nil, err
 	}
@@ -118,24 +119,35 @@ func (s *SQLiteStore) ListPublished(ctx context.Context, noticeType string) ([]d
 	return scanNotices(rows)
 }
 
+// scannedRow holds the raw scanned values from a notice row before conversion.
+type scannedRow struct {
+	publishedBy  sql.NullString
+	targetID     sql.NullString
+	showAuthor   int
+	pinned       int
+	pinnedAt     sql.NullString
+	visibleFrom  sql.NullString
+	visibleUntil sql.NullString
+	createdAt    string
+	updatedAt    sql.NullString
+	publishedAt  sql.NullString
+}
+
 // scanNotice scans a single row into a Notice.
 func scanNotice(row *sql.Row) (domain.Notice, error) {
 	var n domain.Notice
-	var publishedBy, targetID sql.NullString
-	var showAuthor, pinned int
-	var pinnedAt, visibleFrom, visibleUntil, updatedAt, publishedAt sql.NullString
-	var createdAt string
+	var s scannedRow
 
 	err := row.Scan(&n.ID, &n.Type, &n.Status, &n.Title, &n.Content, &n.CreatedBy,
-		&publishedBy, &targetID,
-		&n.AuthorName, &showAuthor, &n.Color, &pinned,
-		&pinnedAt, &visibleFrom, &visibleUntil,
-		&createdAt, &updatedAt, &publishedAt)
+		&s.publishedBy, &s.targetID,
+		&n.AuthorName, &s.showAuthor, &n.Color, &s.pinned,
+		&s.pinnedAt, &s.visibleFrom, &s.visibleUntil,
+		&s.createdAt, &s.updatedAt, &s.publishedAt)
 	if err != nil {
 		return domain.Notice{}, err
 	}
 
-	applyNullables(&n, publishedBy, targetID, pinnedAt, visibleFrom, visibleUntil, updatedAt, publishedAt, createdAt, showAuthor, pinned)
+	applyScanned(&n, &s)
 	return n, nil
 }
 
@@ -144,51 +156,56 @@ func scanNotices(rows *sql.Rows) ([]domain.Notice, error) {
 	var notices []domain.Notice
 	for rows.Next() {
 		var n domain.Notice
-		var publishedBy, targetID sql.NullString
-		var showAuthor, pinned int
-		var pinnedAt, visibleFrom, visibleUntil, updatedAt, publishedAt sql.NullString
-		var createdAt string
+		var s scannedRow
 
 		err := rows.Scan(&n.ID, &n.Type, &n.Status, &n.Title, &n.Content, &n.CreatedBy,
-			&publishedBy, &targetID,
-			&n.AuthorName, &showAuthor, &n.Color, &pinned,
-			&pinnedAt, &visibleFrom, &visibleUntil,
-			&createdAt, &updatedAt, &publishedAt)
+			&s.publishedBy, &s.targetID,
+			&n.AuthorName, &s.showAuthor, &n.Color, &s.pinned,
+			&s.pinnedAt, &s.visibleFrom, &s.visibleUntil,
+			&s.createdAt, &s.updatedAt, &s.publishedAt)
 		if err != nil {
 			return nil, err
 		}
 
-		applyNullables(&n, publishedBy, targetID, pinnedAt, visibleFrom, visibleUntil, updatedAt, publishedAt, createdAt, showAuthor, pinned)
+		applyScanned(&n, &s)
 		notices = append(notices, n)
 	}
 	return notices, rows.Err()
 }
 
-func applyNullables(n *domain.Notice, publishedBy, targetID, pinnedAt, visibleFrom, visibleUntil, updatedAt, publishedAt sql.NullString, createdAt string, showAuthor, pinned int) {
-	n.CreatedAt, _ = time.Parse(timeLayout, createdAt)
-	n.ShowAuthor = showAuthor != 0
-	n.Pinned = pinned != 0
-	if publishedBy.Valid {
-		n.PublishedBy = publishedBy.String
+// applyScanned converts raw scanned values into the Notice domain fields.
+func applyScanned(n *domain.Notice, s *scannedRow) {
+	n.ShowAuthor = s.showAuthor != 0
+	n.Pinned = s.pinned != 0
+	if s.publishedBy.Valid {
+		n.PublishedBy = s.publishedBy.String
 	}
-	if targetID.Valid {
-		n.TargetID = targetID.String
+	if s.targetID.Valid {
+		n.TargetID = s.targetID.String
 	}
-	if pinnedAt.Valid {
-		n.PinnedAt, _ = time.Parse(timeLayout, pinnedAt.String)
+	n.CreatedAt = parseTime(s.createdAt, "created_at", n.ID)
+	n.PinnedAt = parseNullableTime(s.pinnedAt, "pinned_at", n.ID)
+	n.VisibleFrom = parseNullableTime(s.visibleFrom, "visible_from", n.ID)
+	n.VisibleUntil = parseNullableTime(s.visibleUntil, "visible_until", n.ID)
+	n.UpdatedAt = parseNullableTime(s.updatedAt, "updated_at", n.ID)
+	n.PublishedAt = parseNullableTime(s.publishedAt, "published_at", n.ID)
+}
+
+// parseTime parses a time string, logging a warning on failure.
+func parseTime(raw, field, noticeID string) time.Time {
+	t, err := time.Parse(timeLayout, raw)
+	if err != nil {
+		slog.Warn("notice: failed to parse time", "field", field, "notice_id", noticeID, "raw", raw, "error", err)
 	}
-	if visibleFrom.Valid {
-		n.VisibleFrom, _ = time.Parse(timeLayout, visibleFrom.String)
+	return t
+}
+
+// parseNullableTime parses a nullable time string, logging a warning on failure.
+func parseNullableTime(ns sql.NullString, field, noticeID string) time.Time {
+	if !ns.Valid {
+		return time.Time{}
 	}
-	if visibleUntil.Valid {
-		n.VisibleUntil, _ = time.Parse(timeLayout, visibleUntil.String)
-	}
-	if updatedAt.Valid {
-		n.UpdatedAt, _ = time.Parse(timeLayout, updatedAt.String)
-	}
-	if publishedAt.Valid {
-		n.PublishedAt, _ = time.Parse(timeLayout, publishedAt.String)
-	}
+	return parseTime(ns.String, field, noticeID)
 }
 
 func nullableString(s string) any {
