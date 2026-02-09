@@ -282,6 +282,64 @@ func (s *SQLiteStore) ListByMemberIDAndDate(ctx context.Context, memberID string
 	return results, rows.Err()
 }
 
+// ListDistinctMemberIDsByScheduleAndDate returns distinct member IDs who attended a specific class session.
+// PRE: scheduleID and classDate are non-empty
+// POST: Returns distinct member IDs for the given session
+func (s *SQLiteStore) ListDistinctMemberIDsByScheduleAndDate(ctx context.Context, scheduleID string, classDate string) ([]string, error) {
+	query := `SELECT DISTINCT member_id FROM attendance WHERE schedule_id = ? AND class_date = ?`
+	rows, err := s.db.QueryContext(ctx, query, scheduleID, classDate)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+// ListDistinctMemberIDsByScheduleIDsSince returns distinct member IDs who attended any of the given schedules since a date.
+// PRE: scheduleIDs is non-empty, since is YYYY-MM-DD format
+// POST: Returns distinct member IDs matching the criteria
+func (s *SQLiteStore) ListDistinctMemberIDsByScheduleIDsSince(ctx context.Context, scheduleIDs []string, since string) ([]string, error) {
+	if len(scheduleIDs) == 0 {
+		return nil, nil
+	}
+	placeholders := make([]string, len(scheduleIDs))
+	args := make([]any, len(scheduleIDs)+1)
+	for i, id := range scheduleIDs {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+	args[len(scheduleIDs)] = since
+
+	query := fmt.Sprintf(
+		`SELECT DISTINCT member_id FROM attendance WHERE schedule_id IN (%s) AND class_date >= ?`,
+		strings.Join(placeholders, ","),
+	)
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
 func parseStoredTime(value string) (time.Time, error) {
 	if idx := strings.Index(value, " m="); idx != -1 {
 		value = value[:idx]
