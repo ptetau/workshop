@@ -22,6 +22,7 @@ import (
 	emailStoreImport "workshop/internal/adapters/storage/email"
 	memberStore "workshop/internal/adapters/storage/member"
 	noticeStore "workshop/internal/adapters/storage/notice"
+	"workshop/internal/application/listutil"
 	"workshop/internal/application/orchestrators"
 	"workshop/internal/application/projections"
 	accountDomain "workshop/internal/domain/account"
@@ -118,6 +119,42 @@ func renderTemplate(w http.ResponseWriter, r *http.Request, templateName string,
 			}
 			return noticeDomain.ColorHex[noticeDomain.ColorOrange]
 		},
+		"add": func(a, b int) int { return a + b },
+		"sub": func(a, b int) int { return a - b },
+		"sortHeaderArgs": func(col, label, activeSort, activeDir, search, program, status string, perPage int) map[string]string {
+			nextDir := "asc"
+			if col == activeSort && activeDir == "asc" {
+				nextDir = "desc"
+			}
+			return map[string]string{
+				"Col": col, "Label": label,
+				"ActiveSort": activeSort, "ActiveDir": activeDir, "NextDir": nextDir,
+				"Search": search, "Program": program, "Status": status,
+				"PerPage": fmt.Sprintf("%d", perPage),
+			}
+		},
+		"paginationQuery": func(page int, sort, dir, search, program, status string, perPage int) template.URL {
+			q := fmt.Sprintf("page=%d", page)
+			if sort != "" {
+				q += "&sort=" + sort
+			}
+			if dir != "" {
+				q += "&dir=" + dir
+			}
+			if search != "" {
+				q += "&q=" + search
+			}
+			if program != "" {
+				q += "&program=" + program
+			}
+			if status != "" {
+				q += "&status=" + status
+			}
+			if perPage > 0 {
+				q += fmt.Sprintf("&per_page=%d", perPage)
+			}
+			return template.URL(q)
+		},
 	}
 
 	layoutPath := filepath.Join(templatesDir, "layout.html")
@@ -140,8 +177,21 @@ func handleMembers(w http.ResponseWriter, r *http.Request) {
 	isHTML := isHTMLRequest(r)
 
 	if r.Method == "GET" {
-		// GET: List members
-		query := projections.GetMemberListQuery{Program: ""}
+		// GET: List members with pagination, sorting, search, and filtering
+		lp := listutil.ParseListParams(r.URL.Query(),
+			[]string{"name", "email", "program", "status"},
+			[]string{"program", "status"},
+		)
+
+		query := projections.GetMemberListQuery{
+			Program: lp.Filters["program"],
+			Status:  lp.Filters["status"],
+			Search:  lp.Search,
+			Sort:    lp.Sort,
+			Dir:     lp.Dir,
+			Page:    lp.Page,
+			PerPage: lp.PerPage,
+		}
 		deps := projections.GetMemberListDeps{
 			MemberStore: stores.MemberStore,
 			InjuryStore: stores.InjuryStore,
@@ -155,13 +205,21 @@ func handleMembers(w http.ResponseWriter, r *http.Request) {
 
 		if isHTML {
 			renderTemplate(w, r, "get_member_list.html", map[string]any{
-				"Members": result.Members,
+				"Members":        result.Members,
+				"PageInfo":       result.PageInfo,
+				"Sort":           lp.Sort,
+				"Dir":            lp.Dir,
+				"Search":         lp.Search,
+				"Program":        lp.Filters["program"],
+				"Status":         lp.Filters["status"],
+				"PerPageOptions": listutil.PerPageOptions,
+				"HasFilters":     lp.Search != "" || lp.Filters["program"] != "" || lp.Filters["status"] != "",
 			})
 			return
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(result.Members)
+		json.NewEncoder(w).Encode(result)
 		return
 	}
 

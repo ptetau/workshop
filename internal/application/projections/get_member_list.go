@@ -6,12 +6,19 @@ import (
 
 	"workshop/internal/adapters/storage/injury"
 	"workshop/internal/adapters/storage/member"
+	"workshop/internal/application/listutil"
 	domainInjury "workshop/internal/domain/injury"
 )
 
 // GetMemberListQuery carries query parameters.
 type GetMemberListQuery struct {
 	Program string
+	Search  string
+	Status  string
+	Sort    string
+	Dir     string
+	Page    int
+	PerPage int
 }
 
 // MemberWithInjury represents a member with injury status.
@@ -27,7 +34,8 @@ type MemberWithInjury struct {
 
 // GetMemberListResult carries the query result.
 type GetMemberListResult struct {
-	Members []MemberWithInjury
+	Members  []MemberWithInjury
+	PageInfo listutil.PageInfo
 }
 
 // GetMemberListDeps holds dependencies for GetMemberList.
@@ -38,14 +46,37 @@ type GetMemberListDeps struct {
 
 // QueryGetMemberList retrieves members with injury flags.
 // PRE: Valid query parameters
-// POST: Returns members filtered by program with active injury indicators
+// POST: Returns paginated members with active injury indicators
 // INVARIANT: Injuries are active if reported within last 7 days
 func QueryGetMemberList(ctx context.Context, query GetMemberListQuery, deps GetMemberListDeps) (GetMemberListResult, error) {
-	// Get all members (or filter by program if specified)
-	members, err := deps.MemberStore.List(ctx, member.ListFilter{
-		Limit:  100,
-		Offset: 0,
-	})
+	// Build the store filter from query params
+	storeFilter := member.ListFilter{
+		Program: query.Program,
+		Status:  query.Status,
+		Search:  query.Search,
+		Sort:    query.Sort,
+		Dir:     query.Dir,
+	}
+
+	// Get total count for pagination
+	total, err := deps.MemberStore.Count(ctx, storeFilter)
+	if err != nil {
+		return GetMemberListResult{}, err
+	}
+
+	// Compute pagination
+	perPage := query.PerPage
+	if perPage <= 0 {
+		perPage = listutil.DefaultPerPage
+	}
+	pageInfo := listutil.NewPageInfo(query.Page, perPage, total)
+
+	// Set limit/offset for the store query
+	storeFilter.Limit = pageInfo.PerPage
+	storeFilter.Offset = pageInfo.Offset()
+
+	// Get the page of members
+	members, err := deps.MemberStore.List(ctx, storeFilter)
 	if err != nil {
 		return GetMemberListResult{}, err
 	}
@@ -72,11 +103,6 @@ func QueryGetMemberList(ctx context.Context, query GetMemberListQuery, deps GetM
 	// Build result with injury flags
 	var result []MemberWithInjury
 	for _, m := range members {
-		// Filter by program if specified
-		if query.Program != "" && m.Program != query.Program {
-			continue
-		}
-
 		mwi := MemberWithInjury{
 			ID:      m.ID,
 			Name:    m.Name,
@@ -94,5 +120,5 @@ func QueryGetMemberList(ctx context.Context, query GetMemberListQuery, deps GetM
 		result = append(result, mwi)
 	}
 
-	return GetMemberListResult{Members: result}, nil
+	return GetMemberListResult{Members: result, PageInfo: pageInfo}, nil
 }
