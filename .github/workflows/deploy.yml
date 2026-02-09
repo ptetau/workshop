@@ -47,8 +47,16 @@ jobs:
             exit 1
           fi
 
-      - name: Test (with race detector)
-        run: go test -race -count=1 ./...
+      - name: Unit tests (with race detector)
+        run: go test -race -count=1 -short ./...
+        env:
+          CGO_ENABLED: "1"
+
+      - name: Install Playwright browsers
+        run: go run github.com/playwright-community/playwright-go/cmd/playwright install --with-deps chromium
+
+      - name: Browser tests
+        run: go test -count=1 -v ./tests/browser/...
         env:
           CGO_ENABLED: "1"
 
