@@ -26,6 +26,7 @@ import (
 	"workshop/internal/application/orchestrators"
 	"workshop/internal/application/projections"
 	accountDomain "workshop/internal/domain/account"
+	"workshop/internal/domain/attendance"
 	clipDomain "workshop/internal/domain/clip"
 	emailDomain "workshop/internal/domain/email"
 	gradingDomain "workshop/internal/domain/grading"
@@ -338,6 +339,68 @@ func handleGetAttendanceGetAttendanceToday(w http.ResponseWriter, r *http.Reques
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(result.Attendees)
+}
+
+// handleMemberAttendanceToday handles GET /api/attendance/member?member_id=X
+// Returns today's check-ins for a specific member (used by kiosk for un-check-in).
+func handleMemberAttendanceToday(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	memberID := r.URL.Query().Get("member_id")
+	if memberID == "" {
+		http.Error(w, "member_id is required", http.StatusBadRequest)
+		return
+	}
+
+	today := time.Now().Format("2006-01-02")
+	records, err := stores.AttendanceStore.ListByMemberIDAndDate(r.Context(), memberID, today)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	if records == nil {
+		records = []attendance.Attendance{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(records)
+}
+
+// handleUndoCheckIn handles DELETE /api/attendance/undo
+// Removes an attendance record (only today's check-ins).
+func handleUndoCheckIn(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "DELETE" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	var input struct {
+		AttendanceID string `json:"AttendanceID"`
+	}
+	if err := strictDecode(r, &input); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	deps := orchestrators.UndoCheckInDeps{
+		AttendanceStore: stores.AttendanceStore,
+	}
+	err := orchestrators.ExecuteUndoCheckIn(r.Context(), orchestrators.UndoCheckInInput{
+		AttendanceID: input.AttendanceID,
+	}, deps)
+	if err != nil {
+		if err.Error() == "can only undo today's check-ins" || err.Error() == "attendance record not found" {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		internalError(w, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // handlePostInjuriesReportInjury handles POST /injuries

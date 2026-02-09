@@ -29,6 +29,8 @@
         .exit-bar { width: 100%; padding: 1rem; text-align: center; }
         .exit-btn { background: none; border: 1px solid #444; color: #666; padding: 0.5rem 1.5rem; border-radius:2px; cursor: pointer; font-size: 0.9rem; }
         .exit-btn:hover { border-color: #e94560; color: #e94560; }
+        .undo-btn { background: #e94560; color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: 600; }
+        .undo-btn:hover { background: #c0392b; }
         .hidden { display: none; }
         .status { color: #666; text-align: center; padding: 1rem; font-size: 1rem; }
     </style>
@@ -49,6 +51,10 @@
 
         <div id="step-classes" class="hidden">
             <p style="text-align: center; font-size: 1.3rem; margin-bottom: 1rem;">Select your class, <strong id="selectedName"></strong></p>
+            <div id="todayCheckins" class="hidden" style="margin-bottom: 1.5rem;">
+                <p style="text-align: center; color: #F9B232; font-size: 1rem; margin-bottom: 0.5rem;">Already checked in today:</p>
+                <ul class="classes" id="checkinList"></ul>
+            </div>
             <ul class="classes" id="classList"></ul>
             <button class="guest-btn" onclick="resetKiosk()" style="margin-top: 1rem;">Back</button>
         </div>
@@ -118,6 +124,37 @@
             stepSearch.classList.add('hidden');
             stepClasses.classList.remove('hidden');
 
+            // Load today's existing check-ins for this member
+            try {
+                const ciResp = await fetch('/api/attendance/member?member_id=' + encodeURIComponent(member.ID));
+                const checkins = await ciResp.json();
+                const checkinList = document.getElementById('checkinList');
+                const todayDiv = document.getElementById('todayCheckins');
+                checkinList.innerHTML = '';
+                if (checkins && checkins.length > 0) {
+                    todayDiv.classList.remove('hidden');
+                    checkins.forEach(ci => {
+                        const li = document.createElement('li');
+                        const time = new Date(ci.CheckInTime).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+                        li.innerHTML = '<span>Checked in at ' + time + '</span> ';
+                        const btn = document.createElement('button');
+                        btn.textContent = 'Un-Check-In';
+                        btn.className = 'undo-btn';
+                        btn.onclick = (e) => { e.stopPropagation(); undoCheckIn(ci.ID); };
+                        li.appendChild(btn);
+                        li.style.display = 'flex';
+                        li.style.justifyContent = 'space-between';
+                        li.style.alignItems = 'center';
+                        li.style.cursor = 'default';
+                        checkinList.appendChild(li);
+                    });
+                } else {
+                    todayDiv.classList.add('hidden');
+                }
+            } catch (err) {
+                // Ignore error loading check-ins — not critical
+            }
+
             try {
                 const response = await fetch('/api/classes/today');
                 const classes = await response.json();
@@ -135,6 +172,25 @@
                 });
             } catch (err) {
                 document.getElementById('classList').innerHTML = '<li style="color: #c00;">Failed to load classes</li>';
+            }
+        }
+
+        async function undoCheckIn(attendanceID) {
+            try {
+                const response = await fetch('/api/attendance/undo', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ AttendanceID: attendanceID })
+                });
+                if (response.ok) {
+                    // Refresh the member view to update check-in list
+                    selectMember(selectedMember);
+                } else {
+                    const text = await response.text();
+                    alert('Un-check-in failed: ' + text);
+                }
+            } catch (err) {
+                alert('Un-check-in failed');
             }
         }
 
@@ -177,6 +233,8 @@
             stepDone.classList.remove('hidden');
             stepDone.classList.add('hidden');
             document.getElementById('trialPrompt').classList.add('hidden');
+            document.getElementById('todayCheckins').classList.add('hidden');
+            document.getElementById('checkinList').innerHTML = '';
             nameInput.focus();
         }
 

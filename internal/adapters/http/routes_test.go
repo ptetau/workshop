@@ -156,6 +156,19 @@ func (m *mockAttendanceStore) List(ctx context.Context, filter attendanceStore.L
 	return list, nil
 }
 
+// ListByMemberIDAndDate implements the attendance store interface for testing.
+// PRE: memberID is non-empty, date is YYYY-MM-DD
+// POST: Returns records matching memberID and date
+func (m *mockAttendanceStore) ListByMemberIDAndDate(ctx context.Context, memberID string, date string) ([]attendanceDomain.Attendance, error) {
+	var list []attendanceDomain.Attendance
+	for _, a := range m.attendances {
+		if a.MemberID == memberID && a.CheckInTime.Format("2006-01-02") == date {
+			list = append(list, a)
+		}
+	}
+	return list, nil
+}
+
 type mockInjuryStore struct {
 	injuries map[string]injuryDomain.Injury
 }

@@ -13,6 +13,7 @@ type Store interface {
 	Delete(ctx context.Context, id string) error
 	List(ctx context.Context, filter ListFilter) ([]domain.Attendance, error)
 	ListByMemberID(ctx context.Context, memberID string) ([]domain.Attendance, error)
+	ListByMemberIDAndDate(ctx context.Context, memberID string, date string) ([]domain.Attendance, error)
 }
 
 // ListFilter carries filtering parameters for List operations.
