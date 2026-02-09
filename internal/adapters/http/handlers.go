@@ -32,6 +32,7 @@ import (
 	messageDomain "workshop/internal/domain/message"
 	milestoneDomain "workshop/internal/domain/milestone"
 	noticeDomain "workshop/internal/domain/notice"
+	rotorDomain "workshop/internal/domain/rotor"
 	scheduleDomain "workshop/internal/domain/schedule"
 	termDomain "workshop/internal/domain/term"
 	themeDomain "workshop/internal/domain/theme"
@@ -3564,4 +3565,701 @@ func handleResendActivation(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "sent", "token": tokenStr})
+}
+
+// --- Phase 6: Curriculum Rotor Handlers ---
+
+// handleCurriculumPage handles GET /curriculum — renders the curriculum management page.
+func handleCurriculumPage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	renderTemplate(w, r, "curriculum.html", map[string]interface{}{
+		"Title": "Curriculum",
+	})
+}
+
+// handleRotors handles GET/POST for /api/rotors
+func handleRotors(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if r.Method == "GET" {
+		classTypeID := r.URL.Query().Get("class_type_id")
+		if classTypeID == "" {
+			http.Error(w, "class_type_id is required", http.StatusBadRequest)
+			return
+		}
+		rotors, err := stores.RotorStore.ListRotorsByClassType(ctx, classTypeID)
+		if err != nil {
+			internalError(w, err)
+			return
+		}
+		if rotors == nil {
+			rotors = []rotorDomain.Rotor{}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(rotors)
+		return
+	}
+
+	if r.Method == "POST" {
+		session, ok := middleware.GetSessionFromContext(ctx)
+		if !ok {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		var input struct {
+			ClassTypeID string `json:"class_type_id"`
+			Name        string `json:"name"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			return
+		}
+
+		// Determine next version number
+		existing, _ := stores.RotorStore.ListRotorsByClassType(ctx, input.ClassTypeID)
+		nextVersion := 1
+		for _, r := range existing {
+			if r.Version >= nextVersion {
+				nextVersion = r.Version + 1
+			}
+		}
+
+		rotor := rotorDomain.Rotor{
+			ID:          generateID(),
+			ClassTypeID: input.ClassTypeID,
+			Name:        input.Name,
+			Version:     nextVersion,
+			Status:      rotorDomain.StatusDraft,
+			CreatedBy:   session.AccountID,
+			CreatedAt:   timeNow(),
+		}
+		if err := rotor.Validate(); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := stores.RotorStore.SaveRotor(ctx, rotor); err != nil {
+			internalError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(rotor)
+		return
+	}
+
+	w.WriteHeader(http.StatusMethodNotAllowed)
+}
+
+// handleRotorByID handles GET/DELETE for /api/rotors/by-id?id=<id>
+func handleRotorByID(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		http.Error(w, "id is required", http.StatusBadRequest)
+		return
+	}
+
+	if r.Method == "GET" {
+		rotor, err := stores.RotorStore.GetRotor(ctx, id)
+		if err != nil {
+			http.Error(w, "Rotor not found", http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(rotor)
+		return
+	}
+
+	if r.Method == "DELETE" {
+		rotor, err := stores.RotorStore.GetRotor(ctx, id)
+		if err != nil {
+			http.Error(w, "Rotor not found", http.StatusNotFound)
+			return
+		}
+		if rotor.IsActive() {
+			http.Error(w, "cannot delete an active rotor", http.StatusBadRequest)
+			return
+		}
+		if err := stores.RotorStore.DeleteRotor(ctx, id); err != nil {
+			internalError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	w.WriteHeader(http.StatusMethodNotAllowed)
+}
+
+// handleRotorActivate handles POST /api/rotors/activate
+func handleRotorActivate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	ctx := r.Context()
+
+	var input struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	rotor, err := stores.RotorStore.GetRotor(ctx, input.ID)
+	if err != nil {
+		http.Error(w, "Rotor not found", http.StatusNotFound)
+		return
+	}
+
+	// Archive any currently active rotor for this class
+	activeRotor, err := stores.RotorStore.GetActiveRotor(ctx, rotor.ClassTypeID)
+	if err == nil && activeRotor.ID != rotor.ID {
+		activeRotor.Archive()
+		stores.RotorStore.SaveRotor(ctx, activeRotor)
+	}
+
+	if err := rotor.Activate(timeNow()); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := stores.RotorStore.SaveRotor(ctx, rotor); err != nil {
+		internalError(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(rotor)
+}
+
+// handleRotorPreview handles POST /api/rotors/preview (toggle preview on/off)
+func handleRotorPreview(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	ctx := r.Context()
+
+	var input struct {
+		ID        string `json:"id"`
+		PreviewOn bool   `json:"preview_on"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	rotor, err := stores.RotorStore.GetRotor(ctx, input.ID)
+	if err != nil {
+		http.Error(w, "Rotor not found", http.StatusNotFound)
+		return
+	}
+
+	rotor.PreviewOn = input.PreviewOn
+	if err := stores.RotorStore.SaveRotor(ctx, rotor); err != nil {
+		internalError(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(rotor)
+}
+
+// handleRotorThemes handles GET/POST/DELETE for /api/rotors/themes
+func handleRotorThemes(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if r.Method == "GET" {
+		rotorID := r.URL.Query().Get("rotor_id")
+		if rotorID == "" {
+			http.Error(w, "rotor_id is required", http.StatusBadRequest)
+			return
+		}
+		themes, err := stores.RotorStore.ListThemesByRotor(ctx, rotorID)
+		if err != nil {
+			internalError(w, err)
+			return
+		}
+		if themes == nil {
+			themes = []rotorDomain.RotorTheme{}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(themes)
+		return
+	}
+
+	if r.Method == "POST" {
+		var input struct {
+			RotorID  string `json:"rotor_id"`
+			Name     string `json:"name"`
+			Position int    `json:"position"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			return
+		}
+
+		// Verify rotor exists and is in draft
+		rotor, err := stores.RotorStore.GetRotor(ctx, input.RotorID)
+		if err != nil {
+			http.Error(w, "Rotor not found", http.StatusNotFound)
+			return
+		}
+		if !rotor.IsDraft() {
+			http.Error(w, "can only add themes to draft rotors", http.StatusBadRequest)
+			return
+		}
+
+		theme := rotorDomain.RotorTheme{
+			ID:       generateID(),
+			RotorID:  input.RotorID,
+			Name:     input.Name,
+			Position: input.Position,
+		}
+		if err := theme.Validate(); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := stores.RotorStore.SaveRotorTheme(ctx, theme); err != nil {
+			internalError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(theme)
+		return
+	}
+
+	if r.Method == "DELETE" {
+		id := r.URL.Query().Get("id")
+		if id == "" {
+			http.Error(w, "id is required", http.StatusBadRequest)
+			return
+		}
+		if err := stores.RotorStore.DeleteRotorTheme(ctx, id); err != nil {
+			internalError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	w.WriteHeader(http.StatusMethodNotAllowed)
+}
+
+// handleTopics handles GET/POST/DELETE for /api/rotors/topics
+func handleTopics(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if r.Method == "GET" {
+		themeID := r.URL.Query().Get("theme_id")
+		if themeID == "" {
+			http.Error(w, "theme_id is required", http.StatusBadRequest)
+			return
+		}
+		topics, err := stores.RotorStore.ListTopicsByTheme(ctx, themeID)
+		if err != nil {
+			internalError(w, err)
+			return
+		}
+		if topics == nil {
+			topics = []rotorDomain.Topic{}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(topics)
+		return
+	}
+
+	if r.Method == "POST" {
+		var input struct {
+			RotorThemeID  string `json:"rotor_theme_id"`
+			Name          string `json:"name"`
+			Description   string `json:"description"`
+			DurationWeeks int    `json:"duration_weeks"`
+			Position      int    `json:"position"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			return
+		}
+		if input.DurationWeeks == 0 {
+			input.DurationWeeks = 1
+		}
+
+		topic := rotorDomain.Topic{
+			ID:            generateID(),
+			RotorThemeID:  input.RotorThemeID,
+			Name:          input.Name,
+			Description:   input.Description,
+			DurationWeeks: input.DurationWeeks,
+			Position:      input.Position,
+		}
+		if err := topic.Validate(); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := stores.RotorStore.SaveTopic(ctx, topic); err != nil {
+			internalError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(topic)
+		return
+	}
+
+	if r.Method == "DELETE" {
+		id := r.URL.Query().Get("id")
+		if id == "" {
+			http.Error(w, "id is required", http.StatusBadRequest)
+			return
+		}
+		if err := stores.RotorStore.DeleteTopic(ctx, id); err != nil {
+			internalError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	w.WriteHeader(http.StatusMethodNotAllowed)
+}
+
+// handleTopicReorder handles POST /api/rotors/topics/reorder
+func handleTopicReorder(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	var input struct {
+		RotorThemeID string   `json:"rotor_theme_id"`
+		TopicIDs     []string `json:"topic_ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if input.RotorThemeID == "" || len(input.TopicIDs) == 0 {
+		http.Error(w, "rotor_theme_id and topic_ids are required", http.StatusBadRequest)
+		return
+	}
+
+	if err := stores.RotorStore.ReorderTopics(r.Context(), input.RotorThemeID, input.TopicIDs); err != nil {
+		internalError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleTopicScheduleAction handles POST /api/rotors/schedule/action
+// Actions: "activate" (start a topic), "complete", "skip", "extend"
+func handleTopicScheduleAction(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	ctx := r.Context()
+
+	var input struct {
+		Action       string `json:"action"` // activate, complete, skip, extend
+		TopicID      string `json:"topic_id"`
+		RotorThemeID string `json:"rotor_theme_id"`
+		ExtendWeeks  int    `json:"extend_weeks"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	now := timeNow()
+
+	switch input.Action {
+	case "activate":
+		// Complete any currently active schedule for this theme
+		activeSched, err := stores.RotorStore.GetActiveScheduleForTheme(ctx, input.RotorThemeID)
+		if err == nil {
+			activeSched.Status = rotorDomain.ScheduleStatusCompleted
+			activeSched.EndDate = now
+			stores.RotorStore.SaveTopicSchedule(ctx, activeSched)
+
+			// Update last_covered on the completed topic
+			completedTopic, topicErr := stores.RotorStore.GetTopic(ctx, activeSched.TopicID)
+			if topicErr == nil {
+				completedTopic.LastCovered = now
+				stores.RotorStore.SaveTopic(ctx, completedTopic)
+			}
+		}
+
+		topic, err := stores.RotorStore.GetTopic(ctx, input.TopicID)
+		if err != nil {
+			http.Error(w, "Topic not found", http.StatusNotFound)
+			return
+		}
+
+		sched := rotorDomain.TopicSchedule{
+			ID:           generateID(),
+			TopicID:      topic.ID,
+			RotorThemeID: topic.RotorThemeID,
+			StartDate:    now,
+			EndDate:      now.AddDate(0, 0, topic.DurationWeeks*7),
+			Status:       rotorDomain.ScheduleStatusActive,
+		}
+		if err := stores.RotorStore.SaveTopicSchedule(ctx, sched); err != nil {
+			internalError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(sched)
+
+	case "complete":
+		sched, err := stores.RotorStore.GetActiveScheduleForTheme(ctx, input.RotorThemeID)
+		if err != nil {
+			http.Error(w, "No active schedule for theme", http.StatusNotFound)
+			return
+		}
+		sched.Status = rotorDomain.ScheduleStatusCompleted
+		sched.EndDate = now
+		if err := stores.RotorStore.SaveTopicSchedule(ctx, sched); err != nil {
+			internalError(w, err)
+			return
+		}
+		// Update last_covered
+		topic, topicErr := stores.RotorStore.GetTopic(ctx, sched.TopicID)
+		if topicErr == nil {
+			topic.LastCovered = now
+			stores.RotorStore.SaveTopic(ctx, topic)
+		}
+		// Clear votes for the completed topic
+		stores.RotorStore.DeleteVotesForTopic(ctx, sched.TopicID)
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(sched)
+
+	case "skip":
+		sched, err := stores.RotorStore.GetActiveScheduleForTheme(ctx, input.RotorThemeID)
+		if err != nil {
+			http.Error(w, "No active schedule for theme", http.StatusNotFound)
+			return
+		}
+		sched.Status = rotorDomain.ScheduleStatusSkipped
+		sched.EndDate = now
+		if err := stores.RotorStore.SaveTopicSchedule(ctx, sched); err != nil {
+			internalError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(sched)
+
+	case "extend":
+		sched, err := stores.RotorStore.GetActiveScheduleForTheme(ctx, input.RotorThemeID)
+		if err != nil {
+			http.Error(w, "No active schedule for theme", http.StatusNotFound)
+			return
+		}
+		weeks := input.ExtendWeeks
+		if weeks < 1 {
+			weeks = 1
+		}
+		sched.EndDate = sched.EndDate.AddDate(0, 0, weeks*7)
+		if err := stores.RotorStore.SaveTopicSchedule(ctx, sched); err != nil {
+			internalError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(sched)
+
+	default:
+		http.Error(w, "invalid action: must be activate, complete, skip, or extend", http.StatusBadRequest)
+	}
+}
+
+// handleVotes handles POST /api/votes (cast a vote) and GET /api/votes?topic_id=<id> (get vote count)
+func handleVotes(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if r.Method == "GET" {
+		topicID := r.URL.Query().Get("topic_id")
+		if topicID == "" {
+			http.Error(w, "topic_id is required", http.StatusBadRequest)
+			return
+		}
+		count, err := stores.RotorStore.CountVotesForTopic(ctx, topicID)
+		if err != nil {
+			internalError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]int{"votes": count})
+		return
+	}
+
+	if r.Method == "POST" {
+		session, ok := middleware.GetSessionFromContext(ctx)
+		if !ok {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		var input struct {
+			TopicID string `json:"topic_id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			return
+		}
+		if input.TopicID == "" {
+			http.Error(w, "topic_id is required", http.StatusBadRequest)
+			return
+		}
+
+		vote := rotorDomain.Vote{
+			ID:        generateID(),
+			TopicID:   input.TopicID,
+			AccountID: session.AccountID,
+			CreatedAt: timeNow(),
+		}
+		if err := stores.RotorStore.SaveVote(ctx, vote); err != nil {
+			if err == rotorDomain.ErrAlreadyVoted {
+				http.Error(w, err.Error(), http.StatusConflict)
+				return
+			}
+			internalError(w, err)
+			return
+		}
+
+		count, _ := stores.RotorStore.CountVotesForTopic(ctx, input.TopicID)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(map[string]interface{}{"status": "voted", "votes": count})
+		return
+	}
+
+	w.WriteHeader(http.StatusMethodNotAllowed)
+}
+
+// handleTopicBump handles POST /api/rotors/topics/bump — bumps a voted topic to current position
+func handleTopicBump(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	ctx := r.Context()
+
+	var input struct {
+		TopicID      string `json:"topic_id"`
+		RotorThemeID string `json:"rotor_theme_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	topic, err := stores.RotorStore.GetTopic(ctx, input.TopicID)
+	if err != nil {
+		http.Error(w, "Topic not found", http.StatusNotFound)
+		return
+	}
+
+	// Complete current active schedule if any
+	activeSched, err := stores.RotorStore.GetActiveScheduleForTheme(ctx, input.RotorThemeID)
+	if err == nil {
+		activeSched.Status = rotorDomain.ScheduleStatusCompleted
+		activeSched.EndDate = timeNow()
+		stores.RotorStore.SaveTopicSchedule(ctx, activeSched)
+	}
+
+	// Activate the bumped topic
+	now := timeNow()
+	sched := rotorDomain.TopicSchedule{
+		ID:           generateID(),
+		TopicID:      topic.ID,
+		RotorThemeID: input.RotorThemeID,
+		StartDate:    now,
+		EndDate:      now.AddDate(0, 0, topic.DurationWeeks*7),
+		Status:       rotorDomain.ScheduleStatusActive,
+	}
+	if err := stores.RotorStore.SaveTopicSchedule(ctx, sched); err != nil {
+		internalError(w, err)
+		return
+	}
+
+	// Clear votes for the bumped topic
+	stores.RotorStore.DeleteVotesForTopic(ctx, input.TopicID)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(sched)
+}
+
+// handleCurriculumView handles GET /api/curriculum/view?class_type_id=<id>
+// Returns the full curriculum state for a class: active rotor, themes, topics, schedules, votes.
+func handleCurriculumView(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	ctx := r.Context()
+
+	classTypeID := r.URL.Query().Get("class_type_id")
+	if classTypeID == "" {
+		http.Error(w, "class_type_id is required", http.StatusBadRequest)
+		return
+	}
+
+	rotor, err := stores.RotorStore.GetActiveRotor(ctx, classTypeID)
+	if err != nil {
+		// No active rotor — return empty state
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"rotor":  nil,
+			"themes": []interface{}{},
+		})
+		return
+	}
+
+	themes, _ := stores.RotorStore.ListThemesByRotor(ctx, rotor.ID)
+
+	type topicWithVotes struct {
+		rotorDomain.Topic
+		Votes    int  `json:"votes"`
+		IsActive bool `json:"is_active"`
+	}
+	type themeView struct {
+		rotorDomain.RotorTheme
+		Topics         []topicWithVotes           `json:"topics"`
+		ActiveSchedule *rotorDomain.TopicSchedule `json:"active_schedule"`
+	}
+
+	var themeViews []themeView
+	for _, th := range themes {
+		tv := themeView{RotorTheme: th}
+		topics, _ := stores.RotorStore.ListTopicsByTheme(ctx, th.ID)
+		activeSched, schedErr := stores.RotorStore.GetActiveScheduleForTheme(ctx, th.ID)
+		if schedErr == nil {
+			tv.ActiveSchedule = &activeSched
+		}
+		for _, tp := range topics {
+			votes, _ := stores.RotorStore.CountVotesForTopic(ctx, tp.ID)
+			isActive := tv.ActiveSchedule != nil && tv.ActiveSchedule.TopicID == tp.ID
+			tv.Topics = append(tv.Topics, topicWithVotes{Topic: tp, Votes: votes, IsActive: isActive})
+		}
+		if tv.Topics == nil {
+			tv.Topics = []topicWithVotes{}
+		}
+		themeViews = append(themeViews, tv)
+	}
+	if themeViews == nil {
+		themeViews = []themeView{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"rotor":  rotor,
+		"themes": themeViews,
+	})
 }

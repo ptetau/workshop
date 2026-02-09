@@ -34,6 +34,7 @@ import (
 	noticeStore "workshop/internal/adapters/storage/notice"
 	observationStore "workshop/internal/adapters/storage/observation"
 	programStore "workshop/internal/adapters/storage/program"
+	rotorStorePkg "workshop/internal/adapters/storage/rotor"
 	scheduleStore "workshop/internal/adapters/storage/schedule"
 	termStore "workshop/internal/adapters/storage/term"
 	themeStore "workshop/internal/adapters/storage/theme"
@@ -100,6 +101,7 @@ func newTestApp(t *testing.T) *testApp {
 		ThemeStore:           themeStore.NewSQLiteStore(db),
 		ClipStore:            clipStore.NewSQLiteStore(db),
 		EmailStore:           emailStore.NewSQLiteStore(db),
+		RotorStore:           rotorStorePkg.NewSQLiteStore(db),
 	}
 
 	// Seed admin (without PasswordChangeRequired so login goes straight to dashboard)
@@ -144,6 +146,9 @@ func newTestApp(t *testing.T) *testApp {
 
 	// Configure noop email sender for tests
 	web.SetEmailSender(emailPkg.NewNoopSender(), "test@test.com", "reply@test.com")
+
+	// Increase rate limit for tests (many rapid API calls)
+	web.RateLimitPerSecond = 1000
 
 	// Start HTTP server
 	mux := web.NewMux("static", stores)

@@ -26,6 +26,7 @@ import (
 	noticeStore "workshop/internal/adapters/storage/notice"
 	observationStore "workshop/internal/adapters/storage/observation"
 	programStore "workshop/internal/adapters/storage/program"
+	rotorStorePkg "workshop/internal/adapters/storage/rotor"
 	scheduleStore "workshop/internal/adapters/storage/schedule"
 	termStore "workshop/internal/adapters/storage/term"
 	themeStorePkg "workshop/internal/adapters/storage/theme"
@@ -89,6 +90,7 @@ func main() {
 		ThemeStore:           themeStorePkg.NewSQLiteStore(db),
 		ClipStore:            clipStorePkg.NewSQLiteStore(db),
 		EmailStore:           emailStorePkg.NewSQLiteStore(db),
+		RotorStore:           rotorStorePkg.NewSQLiteStore(db),
 	}
 
 	// Seed default admin account if no accounts exist

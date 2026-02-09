@@ -94,6 +94,20 @@ func registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/themes", handleThemesPage)
 	mux.HandleFunc("/library", handleLibraryPage)
 
+	// Curriculum rotor system routes
+	mux.HandleFunc("/curriculum", handleCurriculumPage)
+	mux.HandleFunc("/api/rotors", handleRotors)
+	mux.HandleFunc("/api/rotors/by-id", handleRotorByID)
+	mux.HandleFunc("/api/rotors/activate", handleRotorActivate)
+	mux.HandleFunc("/api/rotors/preview", handleRotorPreview)
+	mux.HandleFunc("/api/rotors/themes", handleRotorThemes)
+	mux.HandleFunc("/api/rotors/topics", handleTopics)
+	mux.HandleFunc("/api/rotors/topics/reorder", handleTopicReorder)
+	mux.HandleFunc("/api/rotors/topics/bump", handleTopicBump)
+	mux.HandleFunc("/api/rotors/schedule/action", handleTopicScheduleAction)
+	mux.HandleFunc("/api/votes", handleVotes)
+	mux.HandleFunc("/api/curriculum/view", handleCurriculumView)
+
 	// DevMode routes (admin-only impersonation)
 	mux.HandleFunc("/api/devmode/impersonate", handleDevModeImpersonate)
 	mux.HandleFunc("/api/devmode/restore", handleDevModeRestore)

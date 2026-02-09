@@ -88,10 +88,15 @@ var expectedTables = []string{
 	"milestone",
 	"notice",
 	"program",
+	"rotor",
+	"rotor_theme",
 	"schedule",
 	"schema_version",
 	"term",
+	"topic",
+	"topic_schedule",
 	"training_goal",
+	"vote",
 	"waiver",
 }
 

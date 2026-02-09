@@ -21,6 +21,7 @@ var migrations = []migration{
 	{version: 1, description: "baseline schema", apply: migrate1},
 	{version: 2, description: "email system tables", apply: migrate2},
 	{version: 3, description: "account activation", apply: migrate3},
+	{version: 4, description: "curriculum rotor system", apply: migrate4},
 }
 
 // SchemaVersion returns the current schema version of the database.
@@ -376,6 +377,80 @@ func migrate3(tx *sql.Tx) error {
 
 	CREATE INDEX IF NOT EXISTS idx_activation_token_account ON activation_token(account_id);
 	CREATE INDEX IF NOT EXISTS idx_activation_token_token ON activation_token(token);
+	`
+	_, err := tx.Exec(schema)
+	return err
+}
+
+// --- Migration 4: Curriculum rotor system ---
+// Adds rotor, rotor_theme, topic, topic_schedule, and vote tables for §5/§6 Curriculum & Voting.
+func migrate4(tx *sql.Tx) error {
+	schema := `
+	CREATE TABLE IF NOT EXISTS rotor (
+		id TEXT PRIMARY KEY,
+		class_type_id TEXT NOT NULL,
+		name TEXT NOT NULL,
+		version INTEGER NOT NULL DEFAULT 1,
+		status TEXT NOT NULL DEFAULT 'draft',
+		preview_on INTEGER NOT NULL DEFAULT 0,
+		created_by TEXT NOT NULL,
+		created_at TEXT NOT NULL,
+		activated_at TEXT NOT NULL DEFAULT '',
+		FOREIGN KEY (class_type_id) REFERENCES class_type(id) ON DELETE CASCADE,
+		FOREIGN KEY (created_by) REFERENCES account(id)
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_rotor_class_type ON rotor(class_type_id);
+	CREATE INDEX IF NOT EXISTS idx_rotor_status ON rotor(status);
+
+	CREATE TABLE IF NOT EXISTS rotor_theme (
+		id TEXT PRIMARY KEY,
+		rotor_id TEXT NOT NULL,
+		name TEXT NOT NULL,
+		position INTEGER NOT NULL DEFAULT 0,
+		FOREIGN KEY (rotor_id) REFERENCES rotor(id) ON DELETE CASCADE
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_rotor_theme_rotor ON rotor_theme(rotor_id);
+
+	CREATE TABLE IF NOT EXISTS topic (
+		id TEXT PRIMARY KEY,
+		rotor_theme_id TEXT NOT NULL,
+		name TEXT NOT NULL,
+		description TEXT NOT NULL DEFAULT '',
+		duration_weeks INTEGER NOT NULL DEFAULT 1,
+		position INTEGER NOT NULL DEFAULT 0,
+		last_covered TEXT NOT NULL DEFAULT '',
+		FOREIGN KEY (rotor_theme_id) REFERENCES rotor_theme(id) ON DELETE CASCADE
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_topic_theme ON topic(rotor_theme_id);
+
+	CREATE TABLE IF NOT EXISTS topic_schedule (
+		id TEXT PRIMARY KEY,
+		topic_id TEXT NOT NULL,
+		rotor_theme_id TEXT NOT NULL,
+		start_date TEXT NOT NULL,
+		end_date TEXT NOT NULL DEFAULT '',
+		status TEXT NOT NULL DEFAULT 'scheduled',
+		FOREIGN KEY (topic_id) REFERENCES topic(id) ON DELETE CASCADE,
+		FOREIGN KEY (rotor_theme_id) REFERENCES rotor_theme(id) ON DELETE CASCADE
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_topic_schedule_theme ON topic_schedule(rotor_theme_id);
+	CREATE INDEX IF NOT EXISTS idx_topic_schedule_status ON topic_schedule(status);
+
+	CREATE TABLE IF NOT EXISTS vote (
+		id TEXT PRIMARY KEY,
+		topic_id TEXT NOT NULL,
+		account_id TEXT NOT NULL,
+		created_at TEXT NOT NULL,
+		FOREIGN KEY (topic_id) REFERENCES topic(id) ON DELETE CASCADE,
+		FOREIGN KEY (account_id) REFERENCES account(id) ON DELETE CASCADE,
+		UNIQUE(topic_id, account_id)
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_vote_topic ON vote(topic_id);
 	`
 	_, err := tx.Exec(schema)
 	return err
