@@ -57,6 +57,17 @@ func TestEmail_MarkQueued_FromDraft(t *testing.T) {
 	}
 }
 
+// TestEmail_MarkQueued_FromFailed tests failed→queued retry transition.
+func TestEmail_MarkQueued_FromFailed(t *testing.T) {
+	e := Email{Status: StatusFailed}
+	if err := e.MarkQueued(); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if e.Status != StatusQueued {
+		t.Errorf("expected queued, got %s", e.Status)
+	}
+}
+
 // TestEmail_MarkQueued_FromSent tests that sent emails cannot be queued.
 func TestEmail_MarkQueued_FromSent(t *testing.T) {
 	e := Email{Status: StatusSent}

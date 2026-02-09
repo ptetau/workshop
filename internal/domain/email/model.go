@@ -105,10 +105,10 @@ func (e *Email) IsScheduled() bool {
 }
 
 // MarkQueued transitions the email to queued status for immediate sending.
-// PRE: Email is in draft status
+// PRE: Email is in draft or failed status
 // POST: Status is set to queued
 func (e *Email) MarkQueued() error {
-	if e.Status != StatusDraft {
+	if e.Status != StatusDraft && e.Status != StatusFailed {
 		return ErrNotDraft
 	}
 	e.Status = StatusQueued

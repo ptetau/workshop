@@ -235,7 +235,7 @@ func (s *SQLiteStore) ListByMemberID(ctx context.Context, memberID string) ([]do
 func (s *SQLiteStore) ListByMemberIDAndDate(ctx context.Context, memberID string, date string) ([]domain.Attendance, error) {
 	query := `SELECT id, check_in_time, check_out_time, member_id, schedule_id, class_date, mat_hours
 		FROM attendance
-		WHERE member_id = ? AND DATE(check_in_time) = ?
+		WHERE member_id = ? AND SUBSTR(check_in_time, 1, 10) = ?
 		ORDER BY check_in_time DESC`
 
 	rows, err := s.db.QueryContext(ctx, query, memberID, date)
