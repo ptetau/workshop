@@ -21,7 +21,17 @@
             </div>
             <div class="form-group">
                 <label>Belt</label>
-                <input type="text" id="cfgBelt" placeholder="blue">
+                <select id="cfgBelt" style="width:100%;padding:0.5rem;border:1px solid #ccc;border-radius:4px;">
+                    <option value="white">White</option>
+                    <option value="blue" selected>Blue</option>
+                    <option value="purple">Purple</option>
+                    <option value="brown">Brown</option>
+                    <option value="black">Black</option>
+                    <option value="grey">Grey</option>
+                    <option value="yellow">Yellow</option>
+                    <option value="orange">Orange</option>
+                    <option value="green">Green</option>
+                </select>
             </div>
             <div class="form-group">
                 <label>Flight Time (hrs)</label>
@@ -92,7 +102,7 @@ function createConfig() {
         StripeCount:parseInt(document.getElementById('cfgStripes').value)||4
     })}).then(r=>{if(!r.ok)throw r;return r.json();})
     .then(()=>{document.getElementById('cfgMsg').textContent='Created!';loadConfigs();setTimeout(()=>document.getElementById('cfgMsg').textContent='',2000);})
-    .catch(()=>document.getElementById('cfgMsg').textContent='Error');
+    .catch(r=>{if(r&&r.text)r.text().then(t=>document.getElementById('cfgMsg').textContent=t||'Error');else document.getElementById('cfgMsg').textContent='Error';});
 }
 loadProposals();
 loadReadiness();

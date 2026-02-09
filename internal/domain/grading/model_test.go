@@ -90,6 +90,28 @@ func TestConfig_Validate(t *testing.T) {
 	}
 }
 
+// TestConfig_Validate_AllBelts verifies every valid belt is accepted.
+func TestConfig_Validate_AllBelts(t *testing.T) {
+	allBelts := []string{
+		grading.BeltWhite, grading.BeltBlue, grading.BeltPurple, grading.BeltBrown, grading.BeltBlack,
+		grading.BeltGrey, grading.BeltYellow, grading.BeltOrange, grading.BeltGreen,
+	}
+	for _, belt := range allBelts {
+		config := grading.Config{ID: "t", Program: "adults", Belt: belt, StripeCount: 4}
+		if err := config.Validate(); err != nil {
+			t.Errorf("Config.Validate() rejected valid belt %q: %v", belt, err)
+		}
+	}
+}
+
+// TestConfig_Validate_CaseSensitive verifies uppercase belts are rejected (handler normalizes).
+func TestConfig_Validate_CaseSensitive(t *testing.T) {
+	config := grading.Config{ID: "t", Program: "adults", Belt: "Blue", StripeCount: 4}
+	if err := config.Validate(); err == nil {
+		t.Error("Config.Validate() should reject uppercase belt 'Blue'")
+	}
+}
+
 // TestProposal_Validate tests validation of grading Proposal.
 func TestProposal_Validate(t *testing.T) {
 	tests := []struct {
