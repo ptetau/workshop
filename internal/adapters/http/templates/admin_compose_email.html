@@ -1,0 +1,380 @@
+{{ define "content" }}
+<div class="card">
+    <h1 id="pageTitle">Compose Email</h1>
+
+    <input type="hidden" id="emailID" value="">
+
+    <div class="form-group">
+        <label>Subject</label>
+        <input type="text" id="emailSubject" placeholder="e.g. Schedule Change Notice" style="width:100%;padding:0.5rem;border:1px solid var(--border);border-radius:2px;">
+    </div>
+
+    <div class="form-group">
+        <label>Body <span style="font-size:0.75rem;color:var(--text-muted);">(HTML supported)</span></label>
+        <textarea id="emailBody" rows="10" placeholder="Write your email content here..." style="width:100%;padding:0.5rem;border:1px solid var(--border);border-radius:2px;font-family:inherit;resize:vertical;"></textarea>
+    </div>
+
+    <div class="form-group">
+        <label>Recipients</label>
+        <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.5rem;flex-wrap:wrap;">
+            <input type="text" id="recipientSearch" placeholder="Search members by name..." oninput="searchRecipients()" style="flex:1;min-width:200px;padding:0.5rem;border:1px solid var(--border);border-radius:2px;">
+            <select id="programFilter" onchange="filterByProgram()" style="padding:0.5rem;border:1px solid var(--border);border-radius:2px;">
+                <option value="">Filter by program...</option>
+                <option value="adults">Adults</option>
+                <option value="kids">Kids</option>
+            </select>
+            <span id="recipientCount" style="font-size:0.85rem;font-weight:600;color:var(--orange);white-space:nowrap;">0 selected</span>
+        </div>
+        <div id="filterResults" style="max-height:250px;overflow-y:auto;border:1px solid var(--border);border-radius:2px;display:none;margin-bottom:0.5rem;">
+            <div style="display:flex;gap:0.5rem;padding:0.4rem 0.5rem;background:#f5f5f5;border-bottom:1px solid #eee;">
+                <button id="selectAllBtn" onclick="selectAllFiltered()" style="background:var(--orange);color:#fff;border:none;padding:0.25rem 0.75rem;border-radius:2px;cursor:pointer;font-size:0.8rem;font-weight:600;">Select All</button>
+                <button id="invertBtn" onclick="invertSelection()" style="background:var(--dark);color:#fff;border:none;padding:0.25rem 0.75rem;border-radius:2px;cursor:pointer;font-size:0.8rem;font-weight:600;">Invert Selection</button>
+                <button onclick="clearFilter()" style="background:none;border:1px solid var(--border);padding:0.25rem 0.75rem;border-radius:2px;cursor:pointer;font-size:0.8rem;">Clear</button>
+            </div>
+            <div id="filterResultsList"></div>
+        </div>
+        <div id="searchResults" style="max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:2px;display:none;"></div>
+        <div id="selectedRecipients" style="display:flex;flex-wrap:wrap;gap:0.4rem;margin-top:0.5rem;"></div>
+    </div>
+
+    <div class="form-group" style="margin-top:1rem;">
+        <label>Schedule (optional)</label>
+        <div style="display:flex;gap:0.5rem;align-items:center;">
+            <input type="datetime-local" id="scheduleAt" style="padding:0.5rem;border:1px solid var(--border);border-radius:2px;">
+            <button id="scheduleBtn" onclick="scheduleEmail()" style="background:#8e44ad;color:#fff;padding:0.5rem 1.25rem;border:none;border-radius:2px;cursor:pointer;font-weight:600;">Schedule</button>
+        </div>
+    </div>
+
+    <div style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;margin-top:1.5rem;">
+        <button onclick="saveDraft()" style="background:#2980b9;color:#fff;padding:0.5rem 1.25rem;border:none;border-radius:2px;cursor:pointer;font-weight:600;">Save Draft</button>
+        <button onclick="sendEmail()" style="background:var(--green,#27ae60);color:#fff;padding:0.5rem 1.25rem;border:none;border-radius:2px;cursor:pointer;font-weight:600;">Send Now</button>
+        <button onclick="previewEmail()" style="background:#f8f9fa;color:#333;padding:0.5rem 1.25rem;border:1px solid var(--border);border-radius:2px;cursor:pointer;font-weight:600;">Preview</button>
+        <button id="cancelScheduleBtn" onclick="cancelScheduledEmail()" style="background:#c0392b;color:#fff;padding:0.5rem 1.25rem;border:none;border-radius:2px;cursor:pointer;font-weight:600;display:none;">Cancel Schedule</button>
+        <a href="/admin/emails" style="color:var(--text-muted);text-decoration:none;font-weight:600;">Cancel</a>
+        <span id="formMsg" style="margin-left:0.5rem;color:var(--orange);font-weight:600;"></span>
+    </div>
+
+    <div id="previewModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;justify-content:center;align-items:center;">
+        <div style="background:#fff;max-width:700px;width:90%;max-height:80vh;overflow-y:auto;border-radius:4px;padding:2rem;position:relative;">
+            <button onclick="document.getElementById('previewModal').style.display='none'" style="position:absolute;top:0.5rem;right:0.5rem;background:transparent;border:none;font-size:1.5rem;cursor:pointer;color:#999;">&times;</button>
+            <h3 style="margin-top:0;">Email Preview</h3>
+            <div id="previewContent" style="border:1px solid #dee2e6;padding:1rem;border-radius:2px;background:#f8f9fa;"></div>
+        </div>
+    </div>
+
+    <p style="margin-top:2rem;"><a href="/admin/emails" style="color:var(--orange);text-decoration:none;font-weight:600;">&larr; Back to Emails</a></p>
+</div>
+
+<script>
+var selectedMembers = {};
+var searchTimeout = null;
+var filteredMembers = [];
+
+function updateCount() {
+    var count = Object.keys(selectedMembers).length;
+    document.getElementById('recipientCount').textContent = count + ' selected';
+}
+
+function renderSelected() {
+    var el = document.getElementById('selectedRecipients');
+    var html = '';
+    Object.keys(selectedMembers).forEach(function(id) {
+        var m = selectedMembers[id];
+        html += '<span style="display:inline-flex;align-items:center;gap:0.3rem;background:#e3f2fd;color:#1565c0;padding:0.2rem 0.6rem;border-radius:12px;font-size:0.8rem;">'+
+            escHtml(m.Name)+
+            '<button onclick="removeRecipient(\''+id+'\')" style="background:none;border:none;color:#c62828;cursor:pointer;font-size:1rem;padding:0;line-height:1;">&times;</button></span>';
+    });
+    el.innerHTML = html;
+    updateCount();
+}
+
+function addRecipient(id, name, email) {
+    selectedMembers[id] = {Name: name, Email: email};
+    renderSelected();
+}
+
+function removeRecipient(id) {
+    delete selectedMembers[id];
+    renderSelected();
+}
+
+function searchRecipients() {
+    clearTimeout(searchTimeout);
+    var query = document.getElementById('recipientSearch').value.trim();
+    var el = document.getElementById('searchResults');
+    if (query.length < 2) { el.style.display = 'none'; return; }
+
+    searchTimeout = setTimeout(function() {
+        fetch('/api/emails/recipients/search?q='+encodeURIComponent(query))
+        .then(function(r){return r.json();})
+        .then(function(data) {
+            if (!data || data.length === 0) {
+                el.innerHTML = '<div style="padding:0.5rem;color:#999;font-style:italic;">No members found</div>';
+                el.style.display = 'block';
+                return;
+            }
+            var html = '';
+            data.forEach(function(m) {
+                var selected = selectedMembers[m.ID] ? ' (selected)' : '';
+                var bg = selectedMembers[m.ID] ? '#e8f5e9' : '#fff';
+                html += '<div onclick="addRecipient(\''+m.ID+'\',\''+escAttr(m.Name)+'\',\''+escAttr(m.Email)+'\')" style="padding:0.5rem;cursor:pointer;border-bottom:1px solid #eee;background:'+bg+';">'+
+                    '<strong>'+escHtml(m.Name)+'</strong> <span style="color:#999;font-size:0.85rem;">'+escHtml(m.Email)+selected+'</span></div>';
+            });
+            el.innerHTML = html;
+            el.style.display = 'block';
+        });
+    }, 300);
+}
+
+function escHtml(s) { var d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+function escAttr(s) { return s.replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
+
+function filterByProgram() {
+    var program = document.getElementById('programFilter').value;
+    var el = document.getElementById('filterResults');
+    if (!program) { el.style.display = 'none'; filteredMembers = []; return; }
+
+    fetch('/api/emails/recipients/filter?program='+encodeURIComponent(program))
+    .then(function(r){return r.json();})
+    .then(function(data) {
+        filteredMembers = data || [];
+        renderFilterResults();
+        el.style.display = 'block';
+    });
+}
+
+function renderFilterResults() {
+    var el = document.getElementById('filterResultsList');
+    if (filteredMembers.length === 0) {
+        el.innerHTML = '<div style="padding:0.5rem;color:#999;font-style:italic;">No members found</div>';
+        return;
+    }
+    var html = '';
+    filteredMembers.forEach(function(m) {
+        var checked = selectedMembers[m.ID] ? ' checked' : '';
+        html += '<label style="display:flex;align-items:center;gap:0.5rem;padding:0.4rem 0.5rem;border-bottom:1px solid #eee;cursor:pointer;">' +
+            '<input type="checkbox" data-member-id="'+m.ID+'" data-member-name="'+escAttr(m.Name)+'" data-member-email="'+escAttr(m.Email)+'"' + checked +
+            ' onchange="toggleFilteredMember(this)" style="margin:0;">' +
+            '<span><strong>'+escHtml(m.Name)+'</strong> <span style="color:#999;font-size:0.85rem;">'+escHtml(m.Email)+'</span></span></label>';
+    });
+    el.innerHTML = html;
+}
+
+function toggleFilteredMember(cb) {
+    var id = cb.getAttribute('data-member-id');
+    if (cb.checked) {
+        selectedMembers[id] = {Name: cb.getAttribute('data-member-name'), Email: cb.getAttribute('data-member-email')};
+    } else {
+        delete selectedMembers[id];
+    }
+    renderSelected();
+}
+
+function selectAllFiltered() {
+    filteredMembers.forEach(function(m) {
+        selectedMembers[m.ID] = {Name: m.Name, Email: m.Email};
+    });
+    renderFilterResults();
+    renderSelected();
+}
+
+function invertSelection() {
+    filteredMembers.forEach(function(m) {
+        if (selectedMembers[m.ID]) {
+            delete selectedMembers[m.ID];
+        } else {
+            selectedMembers[m.ID] = {Name: m.Name, Email: m.Email};
+        }
+    });
+    renderFilterResults();
+    renderSelected();
+}
+
+function clearFilter() {
+    document.getElementById('programFilter').value = '';
+    document.getElementById('filterResults').style.display = 'none';
+    filteredMembers = [];
+}
+
+function scheduleEmail() {
+    var dt = document.getElementById('scheduleAt').value;
+    if (!dt) { showMsg('Please select a date and time', '#c62828'); return; }
+
+    var emailID = document.getElementById('emailID').value;
+    var scheduledAt = new Date(dt).toISOString();
+
+    function doSchedule(id) {
+        fetch('/api/emails/schedule',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({EmailID:id,ScheduledAt:scheduledAt})})
+        .then(function(r){if(!r.ok) return r.text().then(function(t){throw new Error(t);}); return r.json();})
+        .then(function() {
+            showMsg('Email scheduled!', '#8e44ad');
+            setTimeout(function(){window.location.href='/admin/emails';}, 1500);
+        })
+        .catch(function(e){showMsg(e.message || 'Schedule failed','#c62828');});
+    }
+
+    if (!emailID) {
+        // Save draft first then schedule
+        var body = {
+            Subject: document.getElementById('emailSubject').value,
+            Body: document.getElementById('emailBody').value,
+            MemberIDs: getSelectedMemberIDs()
+        };
+        fetch('/api/emails/compose',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+        .then(function(r){if(!r.ok) return r.text().then(function(t){throw new Error(t);}); return r.json();})
+        .then(function(em) {
+            document.getElementById('emailID').value = em.ID;
+            doSchedule(em.ID);
+        })
+        .catch(function(e){showMsg(e.message || 'Error saving draft','#c62828');});
+    } else {
+        // Update draft then schedule
+        var body = {
+            EmailID: emailID,
+            Subject: document.getElementById('emailSubject').value,
+            Body: document.getElementById('emailBody').value,
+            MemberIDs: getSelectedMemberIDs()
+        };
+        fetch('/api/emails/compose',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+        .then(function(r){if(!r.ok) return r.text().then(function(t){throw new Error(t);}); return r.json();})
+        .then(function(em) { doSchedule(em.ID); })
+        .catch(function(e){showMsg(e.message || 'Error','#c62828');});
+    }
+}
+
+function cancelScheduledEmail() {
+    var emailID = document.getElementById('emailID').value;
+    if (!emailID) { showMsg('No email to cancel', '#c62828'); return; }
+
+    fetch('/api/emails/cancel',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({EmailID:emailID})})
+    .then(function(r){if(!r.ok) return r.text().then(function(t){throw new Error(t);}); return r.json();})
+    .then(function() {
+        showMsg('Schedule cancelled', '#c0392b');
+        document.getElementById('cancelScheduleBtn').style.display = 'none';
+        setTimeout(function(){window.location.href='/admin/emails';}, 1500);
+    })
+    .catch(function(e){showMsg(e.message || 'Cancel failed','#c62828');});
+}
+
+function previewEmail() {
+    var body = document.getElementById('emailBody').value;
+    if (!body) { showMsg('Enter email body to preview', '#c62828'); return; }
+    fetch('/api/emails/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({Body:body})})
+    .then(function(r){return r.json();})
+    .then(function(data){
+        document.getElementById('previewContent').innerHTML = data.HTML;
+        document.getElementById('previewModal').style.display = 'flex';
+    });
+}
+
+function showMsg(text, color) {
+    var el = document.getElementById('formMsg');
+    el.textContent = text;
+    el.style.color = color || 'var(--orange)';
+    setTimeout(function(){el.textContent='';}, 3000);
+}
+
+function getSelectedMemberIDs() {
+    return Object.keys(selectedMembers);
+}
+
+function saveDraft() {
+    var body = {
+        EmailID: document.getElementById('emailID').value || undefined,
+        Subject: document.getElementById('emailSubject').value,
+        Body: document.getElementById('emailBody').value,
+        MemberIDs: getSelectedMemberIDs()
+    };
+    fetch('/api/emails/compose',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+    .then(function(r){if(!r.ok) return r.text().then(function(t){throw new Error(t);}); return r.json();})
+    .then(function(em) {
+        document.getElementById('emailID').value = em.ID;
+        showMsg('Draft saved!');
+    })
+    .catch(function(e){showMsg(e.message || 'Error saving draft','#c62828');});
+}
+
+function sendEmail() {
+    var emailID = document.getElementById('emailID').value;
+    if (!emailID) {
+        // Save draft first, then send
+        var body = {
+            Subject: document.getElementById('emailSubject').value,
+            Body: document.getElementById('emailBody').value,
+            MemberIDs: getSelectedMemberIDs()
+        };
+        fetch('/api/emails/compose',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+        .then(function(r){if(!r.ok) return r.text().then(function(t){throw new Error(t);}); return r.json();})
+        .then(function(em) {
+            document.getElementById('emailID').value = em.ID;
+            return doSend(em.ID);
+        })
+        .catch(function(e){showMsg(e.message || 'Error','#c62828');});
+    } else {
+        // Update draft then send
+        var body = {
+            EmailID: emailID,
+            Subject: document.getElementById('emailSubject').value,
+            Body: document.getElementById('emailBody').value,
+            MemberIDs: getSelectedMemberIDs()
+        };
+        fetch('/api/emails/compose',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+        .then(function(r){if(!r.ok) return r.text().then(function(t){throw new Error(t);}); return r.json();})
+        .then(function(em) {
+            return doSend(em.ID);
+        })
+        .catch(function(e){showMsg(e.message || 'Error','#c62828');});
+    }
+}
+
+function doSend(id) {
+    fetch('/api/emails/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({EmailID:id})})
+    .then(function(r){if(!r.ok) return r.text().then(function(t){throw new Error(t);}); return r.json();})
+    .then(function() {
+        showMsg('Email sent!', 'var(--green,#27ae60)');
+        setTimeout(function(){window.location.href='/admin/emails';}, 1500);
+    })
+    .catch(function(e){showMsg(e.message || 'Send failed','#c62828');});
+}
+
+// Load existing draft/scheduled email if editing
+(function() {
+    var params = new URLSearchParams(window.location.search);
+    var id = params.get('id');
+    if (id) {
+        fetch('/api/emails/detail?id='+encodeURIComponent(id))
+        .then(function(r){return r.json();})
+        .then(function(data) {
+            var em = data.Email;
+            var recs = data.Recipients || [];
+            document.getElementById('emailID').value = em.ID;
+            document.getElementById('emailSubject').value = em.Subject;
+            document.getElementById('emailBody').value = em.Body;
+            recs.forEach(function(r) {
+                selectedMembers[r.MemberID] = {Name: r.MemberName, Email: r.MemberEmail};
+            });
+            renderSelected();
+
+            if (em.Status === 'scheduled') {
+                document.getElementById('pageTitle').textContent = 'Scheduled Email';
+                document.getElementById('cancelScheduleBtn').style.display = 'inline-block';
+                if (em.ScheduledAt) {
+                    var d = new Date(em.ScheduledAt);
+                    var local = new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,16);
+                    document.getElementById('scheduleAt').value = local;
+                }
+            } else {
+                document.getElementById('pageTitle').textContent = 'Edit Draft';
+            }
+        });
+    }
+})();
+
+// Close search results when clicking outside
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('#recipientSearch') && !e.target.closest('#searchResults')) {
+        document.getElementById('searchResults').style.display = 'none';
+    }
+});
+</script>
+{{ end }}

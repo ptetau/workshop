@@ -1,0 +1,138 @@
+{{ define "content" }}
+<div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem;margin-bottom:1.5rem;">
+        <h1 style="margin:0;">Email Management</h1>
+        <div style="display:flex;gap:0.5rem;">
+            <a href="/admin/emails/template" style="display:inline-block;background:#f8f9fa;color:#333;padding:0.5rem 1.25rem;border:1px solid var(--border);border-radius:2px;text-decoration:none;font-weight:600;">Template Settings</a>
+            <a href="/admin/emails/compose" style="display:inline-block;background:var(--orange);color:#fff;padding:0.5rem 1.25rem;border-radius:2px;text-decoration:none;font-weight:600;">+ Compose Email</a>
+        </div>
+    </div>
+
+    <div style="display:flex;gap:0.5rem;margin-bottom:1rem;flex-wrap:wrap;align-items:center;">
+        <button onclick="filterEmails('')" class="filter-btn" data-filter="all" style="background:var(--orange);color:#fff;padding:0.3rem 0.8rem;border:none;border-radius:2px;cursor:pointer;font-size:0.85rem;">All</button>
+        <button onclick="filterEmails('draft')" class="filter-btn" data-filter="draft" style="background:#f8f9fa;color:#333;padding:0.3rem 0.8rem;border:1px solid var(--border);border-radius:2px;cursor:pointer;font-size:0.85rem;">Drafts</button>
+        <button onclick="filterEmails('sent')" class="filter-btn" data-filter="sent" style="background:#f8f9fa;color:#333;padding:0.3rem 0.8rem;border:1px solid var(--border);border-radius:2px;cursor:pointer;font-size:0.85rem;">Sent</button>
+        <button onclick="filterEmails('scheduled')" class="filter-btn" data-filter="scheduled" style="background:#f8f9fa;color:#333;padding:0.3rem 0.8rem;border:1px solid var(--border);border-radius:2px;cursor:pointer;font-size:0.85rem;">Scheduled</button>
+    </div>
+    <div style="margin-bottom:1.5rem;">
+        <input type="text" id="emailSearch" placeholder="Search emails by subject or content..." oninput="debounceSearch()" style="width:100%;max-width:400px;padding:0.5rem;border:1px solid var(--border);border-radius:2px;">
+    </div>
+
+    <div id="emailList" style="color:#6c757d;">Loading...</div>
+
+    <p style="margin-top:2rem;"><a href="/dashboard" style="color:var(--orange);text-decoration:none;font-weight:600;">&larr; Back to Dashboard</a></p>
+</div>
+
+<script>
+var currentFilter = '';
+var searchTimer = null;
+
+function debounceSearch() {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(function(){ loadEmails(); }, 300);
+}
+
+function filterEmails(status) {
+    currentFilter = status;
+    document.querySelectorAll('.filter-btn').forEach(function(b) {
+        if ((status === '' && b.dataset.filter === 'all') || b.dataset.filter === status) {
+            b.style.background = 'var(--orange)';
+            b.style.color = '#fff';
+            b.style.border = 'none';
+        } else {
+            b.style.background = '#f8f9fa';
+            b.style.color = '#333';
+            b.style.border = '1px solid var(--border)';
+        }
+    });
+    loadEmails();
+}
+
+function escHtml(s) { var d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+function statusBadge(status) {
+    var colors = {draft:['#fff3e0','#e65100'],sent:['#e8f5e9','#2e7d32'],scheduled:['#e3f2fd','#1565c0'],cancelled:['#fce4ec','#c62828'],failed:['#fce4ec','#c62828'],queued:['#f3e5f5','#6a1b9a']};
+    var c = colors[status] || ['#f5f5f5','#616161'];
+    return '<span style="font-size:0.75rem;padding:0.15rem 0.5rem;border-radius:12px;background:'+c[0]+';color:'+c[1]+';font-weight:600;">'+status+'</span>';
+}
+
+function deleteEmail(id) {
+    if (!confirm('Delete this draft?')) return;
+    fetch('/api/emails/delete?id='+encodeURIComponent(id),{method:'DELETE'})
+    .then(function(r){ if(!r.ok) throw r; loadEmails(); })
+    .catch(function(){ alert('Failed to delete'); });
+}
+
+function viewDetail(id) {
+    fetch('/api/emails/detail?id='+encodeURIComponent(id))
+    .then(function(r){return r.json();})
+    .then(function(data) {
+        var em = data.Email;
+        var recs = data.Recipients || [];
+        var recList = recs.map(function(r){return escHtml(r.MemberName)+' &lt;'+escHtml(r.MemberEmail)+'&gt;';}).join('<br>');
+        if (!recList) recList = '<em>No recipients</em>';
+
+        var modal = document.getElementById('detailModal');
+        document.getElementById('detailSubject').textContent = em.Subject;
+        document.getElementById('detailBody').innerHTML = em.Body;
+        document.getElementById('detailRecipients').innerHTML = recList;
+        document.getElementById('detailStatus').innerHTML = statusBadge(em.Status);
+        document.getElementById('detailDate').textContent = em.SentAt && em.SentAt !== '0001-01-01T00:00:00Z' ? new Date(em.SentAt).toLocaleString() : new Date(em.CreatedAt).toLocaleString();
+        modal.style.display = 'flex';
+    });
+}
+
+function closeDetail() {
+    document.getElementById('detailModal').style.display = 'none';
+}
+
+function loadEmails() {
+    var url = '/api/emails';
+    var params = [];
+    if (currentFilter) params.push('status=' + currentFilter);
+    var q = document.getElementById('emailSearch').value.trim();
+    if (q) params.push('q=' + encodeURIComponent(q));
+    if (params.length) url += '?' + params.join('&');
+    fetch(url).then(function(r){return r.json();}).then(function(data) {
+        var el = document.getElementById('emailList');
+        if (!data || data.length === 0) {
+            el.innerHTML = '<p style="color:#6c757d;font-style:italic;">No emails found.</p>';
+            return;
+        }
+        var html = '';
+        data.forEach(function(em) {
+            var date = em.SentAt && em.SentAt !== '0001-01-01T00:00:00Z' ? new Date(em.SentAt).toLocaleString() : new Date(em.CreatedAt).toLocaleString();
+            var actions = '<button onclick="viewDetail(\''+em.ID+'\')" style="background:transparent;color:var(--orange);border:1px solid var(--orange);padding:0.2rem 0.6rem;font-size:0.75rem;cursor:pointer;">View</button>';
+            if (em.Status === 'draft' || em.Status === 'scheduled') {
+                actions += ' <a href="/admin/emails/compose?id='+em.ID+'" style="display:inline-block;background:transparent;color:#2980b9;border:1px solid #2980b9;padding:0.2rem 0.6rem;font-size:0.75rem;text-decoration:none;border-radius:2px;">Edit</a>';
+            }
+            if (em.Status === 'draft') {
+                actions += ' <button onclick="deleteEmail(\''+em.ID+'\')" style="background:transparent;color:#c62828;border:1px solid #c62828;padding:0.2rem 0.6rem;font-size:0.75rem;cursor:pointer;">Delete</button>';
+            }
+            html += '<div style="background:#fff;border:1px solid #dee2e6;padding:1rem;border-radius:2px;margin-bottom:0.75rem;">'+
+                '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;">'+
+                '<strong>'+escHtml(em.Subject || '(No subject)')+'</strong>'+
+                '<div style="display:flex;gap:0.4rem;align-items:center;">'+statusBadge(em.Status)+' <span style="font-size:0.75rem;color:var(--text-muted);">'+date+'</span></div></div>'+
+                '<div style="margin-top:0.5rem;display:flex;gap:0.4rem;flex-wrap:wrap;">'+actions+'</div></div>';
+        });
+        el.innerHTML = html;
+    });
+}
+
+loadEmails();
+</script>
+
+<div id="detailModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;justify-content:center;align-items:center;">
+    <div style="background:#fff;max-width:700px;width:90%;max-height:80vh;overflow-y:auto;border-radius:4px;padding:2rem;position:relative;">
+        <button onclick="closeDetail()" style="position:absolute;top:0.5rem;right:0.5rem;background:transparent;border:none;font-size:1.5rem;cursor:pointer;color:#999;">&times;</button>
+        <h2 id="detailSubject" style="margin-top:0;"></h2>
+        <div style="display:flex;gap:1rem;margin-bottom:1rem;font-size:0.85rem;color:var(--text-muted);">
+            <span id="detailStatus"></span>
+            <span id="detailDate"></span>
+        </div>
+        <div style="margin-bottom:1rem;padding:1rem;background:#f8f9fa;border-radius:2px;" id="detailBody"></div>
+        <h4 style="margin-bottom:0.5rem;">Recipients</h4>
+        <div id="detailRecipients" style="font-size:0.85rem;color:#555;"></div>
+    </div>
+</div>
+{{ end }}

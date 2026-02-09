@@ -11,6 +11,9 @@ func registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/login", handleLogin)
 	mux.HandleFunc("/logout", handleLogout)
 	mux.HandleFunc("/change-password", handleChangePassword)
+	mux.HandleFunc("/activate", handleActivatePage)
+	mux.HandleFunc("/api/activate", handleActivateAccount)
+	mux.HandleFunc("/api/admin/resend-activation", handleResendActivation)
 
 	// Existing routes
 	mux.HandleFunc("/attendance", handleGetAttendanceGetAttendanceToday)
@@ -65,6 +68,8 @@ func registerRoutes(mux *http.ServeMux) {
 	// Member pages
 	mux.HandleFunc("/training-log", handleTrainingLogPage)
 	mux.HandleFunc("/messages", handleMessagesPage)
+	mux.HandleFunc("/inbox", handleMemberInboxPage)
+	mux.HandleFunc("/api/inbox", handleMemberInboxAPI)
 
 	// Class types API
 	mux.HandleFunc("/api/class-types", handleClassTypes)
@@ -89,7 +94,44 @@ func registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/themes", handleThemesPage)
 	mux.HandleFunc("/library", handleLibraryPage)
 
+	// Curriculum rotor system routes
+	mux.HandleFunc("/curriculum", handleCurriculumPage)
+	mux.HandleFunc("/api/rotors", handleRotors)
+	mux.HandleFunc("/api/rotors/by-id", handleRotorByID)
+	mux.HandleFunc("/api/rotors/activate", handleRotorActivate)
+	mux.HandleFunc("/api/rotors/preview", handleRotorPreview)
+	mux.HandleFunc("/api/rotors/themes", handleRotorThemes)
+	mux.HandleFunc("/api/rotors/topics", handleTopics)
+	mux.HandleFunc("/api/rotors/topics/reorder", handleTopicReorder)
+	mux.HandleFunc("/api/rotors/topics/bump", handleTopicBump)
+	mux.HandleFunc("/api/rotors/schedule/action", handleTopicScheduleAction)
+	mux.HandleFunc("/api/votes", handleVotes)
+	mux.HandleFunc("/api/curriculum/view", handleCurriculumView)
+
 	// DevMode routes (admin-only impersonation)
 	mux.HandleFunc("/api/devmode/impersonate", handleDevModeImpersonate)
 	mux.HandleFunc("/api/devmode/restore", handleDevModeRestore)
+
+	// Email system routes
+	mux.HandleFunc("/admin/emails", handleAdminEmailsPage)
+	mux.HandleFunc("/admin/emails/compose", handleAdminComposeEmailPage)
+	mux.HandleFunc("/api/emails", handleEmailList)
+	mux.HandleFunc("/api/emails/compose", handleEmailCompose)
+	mux.HandleFunc("/api/emails/send", handleEmailSend)
+	mux.HandleFunc("/api/emails/detail", handleEmailDetail)
+	mux.HandleFunc("/api/emails/delete", handleEmailDelete)
+	mux.HandleFunc("/api/emails/schedule", handleEmailSchedule)
+	mux.HandleFunc("/api/emails/cancel", handleEmailCancel)
+	mux.HandleFunc("/api/emails/reschedule", handleEmailReschedule)
+	mux.HandleFunc("/api/emails/recipients/search", handleMemberSearchForEmail)
+	mux.HandleFunc("/api/emails/recipients/filter", handleMemberFilterForEmail)
+	mux.HandleFunc("/admin/emails/template", handleEmailTemplatePage)
+	mux.HandleFunc("/api/emails/template", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" {
+			handleEmailTemplateSave(w, r)
+		} else {
+			handleEmailTemplateGet(w, r)
+		}
+	})
+	mux.HandleFunc("/api/emails/preview", handleEmailPreview)
 }

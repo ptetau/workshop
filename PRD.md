@@ -1,6 +1,6 @@
 # Workshop Jiu Jitsu — Product Requirements Document
 
-Organised by **feature area**. Each feature includes a description, role access, detailed user stories, and acceptance criteria.
+Organised by **feature area**. Each feature includes a description and role access. **User stories and acceptance criteria are tracked in [GitHub Issues](https://github.com/ptetau/workshop/issues)** (labels: `type:epic`, `type:story`; milestones: Phase 0–10).
 
 ---
 
@@ -203,55 +203,6 @@ All list view state is reflected in the URL query string so that views are **boo
 
 Navigating back/forward in the browser restores the exact list state.
 
-#### User Stories
-
-**US-1.5.1: Paginate a list**
-As an Admin, I want list views to be paginated so that large lists load quickly and are easy to navigate.
-
-- *Given* there are 85 members and I have selected 20 rows per page
-- *When* I view the member list
-- *Then* I see rows 1–20 with "Showing 1–20 of 85 results"
-- *And* I can click "Next" or page 2/3/4/5 to navigate
-
-**US-1.5.2: Change row count**
-As an Admin, I want to choose how many rows per page so that I can see more or fewer items at once.
-
-- *Given* I am on the member list showing 20 rows
-- *When* I select "50" from the Rows dropdown
-- *Then* the list reloads showing 50 rows per page, starting from page 1
-- *And* next time I visit, it still shows 50
-
-**US-1.5.3: Sort by column**
-As a Coach, I want to sort any list by clicking column headers so that I can find what I need quickly.
-
-- *Given* I am viewing the attendance list sorted by Time
-- *When* I click the "Name" column header
-- *Then* the list re-sorts alphabetically by name (ascending) with a ▲ indicator
-- *And* clicking "Name" again sorts descending with a ▼ indicator
-
-**US-1.5.4: Search and filter**
-As an Admin, I want to search and filter list views so that I can narrow down results.
-
-- *Given* I am on the member list with 200 members
-- *When* I type "smith" in the search box and select "Adults" from the program filter
-- *Then* the list shows only Adult members matching "smith"
-- *And* "Showing 1–3 of 3 results" is displayed
-- *And* the URL updates to reflect the active filters
-
-**US-1.5.5: Clear filters**
-As an Admin, I want to clear all active filters with one click so that I can return to the full list quickly.
-
-- *Given* I have active search text and a program filter applied
-- *When* I click "Clear filters"
-- *Then* all filters are removed and the full list is displayed
-
-**US-1.5.6: Bookmark a filtered view**
-As a Coach, I want to bookmark a filtered and sorted list view so that I can return to it later.
-
-- *Given* I have filtered attendance to "Nuts & Bolts" class sorted by name
-- *When* I copy the URL and open it in a new tab
-- *Then* the same filtered, sorted view is displayed
-
 ---
 
 ## 2. Kiosk & Check-In
@@ -273,67 +224,11 @@ A locked check-in screen for the front-desk tablet. Launched by a Coach or Admin
 
 For **Guests**: a "Guest Check-In" button launches the waiver flow (creating a lightweight account), then records attendance. Returning guests are recognised and prompted to convert.
 
-#### User Stories
-
-**US-2.1.1: Launch kiosk mode**
-As a Coach, I want to launch kiosk mode from my logged-in account so that the tablet is locked into the check-in screen for members.
-
-- *Given* I am logged in as Coach or Admin
-- *When* I tap "Launch Kiosk Mode"
-- *Then* the tablet locks into the kiosk view, tied to my account
-- *And* only my password (or another Coach/Admin authenticating) can exit it
-
-**US-2.1.2: Exit kiosk mode**
-As a Coach, I want to exit kiosk mode with my password so that I can return to the full app.
-
-- *Given* the kiosk is running, launched by my account
-- *When* I tap "Exit Kiosk" and enter my password
-- *Then* the kiosk closes and I am returned to the normal app
-
-**US-2.1.3: Different coach exits kiosk**
-As a Coach, I want to exit a kiosk launched by another coach so that I can take over if needed.
-
-- *Given* the kiosk was launched by Coach A
-- *When* Coach B taps "Exit Kiosk" and authenticates with their own credentials
-- *Then* the kiosk closes and Coach B is logged in
-
 ### 2.2 Check-In by Name Search
 
 The **only** way to check in is by typing your name. Fuzzy search presents a shortlist of matching Active members as the user types. No member ID, email, or barcode is ever required. Inactive and Archived members are hidden from results.
 
 **Access:** Admin — | Coach — | Member ✓ | Trial ✓ | Guest ✓ (via waiver flow)
-
-#### User Stories
-
-**US-2.2.1: Member check-in**
-As a Member, I want to type my name at the kiosk and see myself in the suggestions so that I can check in quickly.
-
-- *Given* the kiosk is active and I am an Active member
-- *When* I type the first few characters of my name
-- *Then* a shortlist of matching Active members appears as I type
-- *And* I can tap my name to proceed to session selection
-
-**US-2.2.2: Inactive members hidden**
-As a Coach, I want Inactive and Archived members hidden from kiosk search so that only current members can check in.
-
-- *Given* a member has been marked Inactive or Archived
-- *When* anyone searches for that name at the kiosk
-- *Then* the member does not appear in search results
-
-**US-2.2.3: Guest check-in**
-As a Guest, I want to check in at the kiosk even though I don't have an account so that I can get on the mats.
-
-- *Given* I tap "Guest Check-In" on the kiosk
-- *When* I enter my name and email and complete the waiver
-- *Then* a lightweight Guest account is created and my attendance is recorded
-- *And* the whole process takes under 60 seconds
-
-**US-2.2.4: Returning guest recognised**
-As a returning Guest, I want the kiosk to recognise me so that I don't have to fill out the waiver again.
-
-- *Given* I visited previously and my Guest account exists
-- *When* I type my name at the kiosk
-- *Then* my existing record is found and I am prompted to convert to Trial or Member
 
 ### 2.3 Session Auto-Select
 
@@ -341,62 +236,17 @@ After selecting their name, the system auto-selects the session closest to the c
 
 **Access:** All check-in users (Member, Trial, Guest)
 
-#### User Stories
-
-**US-2.3.1: Auto-select closest session**
-As a Member, I want the system to auto-select the closest session when I check in so that check-in is as fast as possible.
-
-- *Given* it is 6:05 PM and today's sessions include "6:00 PM Nuts & Bolts" and "7:15 PM Feet-to-Floor"
-- *When* I select my name at the kiosk
-- *Then* "6:00 PM Nuts & Bolts" is pre-selected (highlighted)
-- *And* I can confirm with a single tap
-
-**US-2.3.2: Change auto-selected session**
-As a Member, I want to change the auto-selected session so that I can check into the correct class if I arrived early.
-
-- *Given* the system auto-selected "6:00 PM Nuts & Bolts"
-- *When* I tap "7:15 PM Feet-to-Floor" instead
-- *Then* my selection changes to the 7:15 session
-- *And* I can confirm check-in for that session
-
 ### 2.4 Multi-Session Check-In
 
 Members can check into more than one session in a single visit. Each session is recorded as a separate attendance entry.
 
 **Access:** Member ✓ | Trial ✓ | Guest —
 
-#### User Stories
-
-**US-2.4.1: Check into multiple sessions**
-As a Member staying for back-to-back classes, I want to select multiple sessions at check-in so that I don't have to check in twice.
-
-- *Given* today has "6:00 PM Nuts & Bolts" and "7:15 PM Feet-to-Floor"
-- *When* I select both sessions and confirm
-- *Then* two separate attendance records are created (one per session)
-- *And* both sessions show me as checked in
-
 ### 2.5 Un-Check-In
 
 If a member checked into the wrong session by mistake, they can undo their check-in from the kiosk. Only available for the current day.
 
 **Access:** Member ✓ | Trial ✓ | Guest —
-
-#### User Stories
-
-**US-2.5.1: Undo accidental check-in**
-As a Member, I want to un-check-in from a session I selected by mistake so that my attendance record is accurate.
-
-- *Given* I just checked into "6:00 PM Nuts & Bolts" by mistake
-- *When* I search my name again and tap "Un-Check-In" next to that session
-- *Then* my attendance record for that session is removed (soft delete)
-- *And* I can select the correct session instead
-
-**US-2.5.2: Un-check-in limited to today**
-As a Member, I should only be able to un-check-in from today's sessions so that historical records remain intact.
-
-- *Given* I checked into a session yesterday
-- *When* I try to un-check-in today
-- *Then* yesterday's sessions are not available for un-check-in
 
 ---
 
@@ -408,44 +258,11 @@ Each check-in creates an attendance record linking a member to a resolved sessio
 
 **Access:** Admin ✓ (view all) | Coach ✓ (view all) | Member ✓ (own) | Trial ✓ (own) | Guest —
 
-#### User Stories
-
-**US-3.1.1: Attendance creates mat hours**
-As a Member, I want my check-in to automatically add the session's duration to my mat hours so that my training is tracked.
-
-- *Given* I check into "6:00 PM Nuts & Bolts" (60 min)
-- *When* the attendance record is created
-- *Then* 1 hour is added to my recorded mat hours
-
-**US-3.1.2: Coach views today's attendance**
-As a Coach, I want to see who has checked in for today's sessions so that I know who is on the mat.
-
-- *Given* it is Tuesday and 5 members have checked into "6:30 PM Gi Express"
-- *When* I view the attendance screen
-- *Then* I see a list of 5 members with their names, belt icons, and any red flags
-
 ### 3.2 Historical Attendance View
 
 Admin and Coach can navigate to view attendance for other days. A prominent "Back to Today" button allows quick return.
 
 **Access:** Admin ✓ | Coach ✓ | Member — | Trial — | Guest —
-
-#### User Stories
-
-**US-3.2.1: Browse past attendance**
-As a Coach, I want to view attendance for a past date so that I can check who came to a specific class.
-
-- *Given* I am on the attendance screen showing today
-- *When* I use the date picker or prev/next arrows to navigate to last Wednesday
-- *Then* I see Wednesday's sessions with their check-in lists and injury flags
-- *And* the data is read-only (I cannot modify past attendance)
-
-**US-3.2.2: Back to Today**
-As a Coach, I want a prominent "Back to Today" button so that I can quickly return to the live view after browsing history.
-
-- *Given* I am viewing last Wednesday's attendance
-- *When* I tap "Back to Today"
-- *Then* I am immediately returned to today's live attendance view
 
 ### 3.3 Training Log
 
@@ -453,92 +270,17 @@ A member-facing projection of their attendance data: classes attended, mat hours
 
 **Access:** Admin — | Coach — | Member ✓ | Trial ✓ | Guest —
 
-#### User Stories
-
-**US-3.3.1: View training log**
-As a Member, I want to see my training log so that I know how much I've trained and how close I am to my next grade.
-
-- *Given* I have attended 47 classes this year
-- *When* I open my training log
-- *Then* I see: 47 classes, 120 mat hours shown as "flight time" (108 recorded + 12 estimated), current 3-week streak, Blue belt with 2 inferred stripes, and a progress bar toward Purple eligibility
-
-**US-3.3.2: Milestone achievement**
-As a Member, I want to earn milestone badges so that I feel rewarded for consistent training.
-
-- *Given* Admin has configured a "100 classes" milestone
-- *When* I check into my 100th class
-- *Then* a "100 Classes" badge appears on my training log
-- *And* I see a congratulatory notification on my dashboard
-
-**US-3.3.3: Configure milestones**
-As an Admin, I want to configure milestone thresholds so that the club can celebrate member achievements.
-
-- *Given* I navigate to milestone configuration
-- *When* I create a new milestone: "200 mat hours"
-- *Then* any member who reaches 200 mat hours will receive the badge
-
 ### 3.4 Estimated Training Hours
 
 For members with incomplete records, Admin or Coach can bulk-add estimated mat hours by selecting a date range and entering estimated weekly hours. Overlaps with existing recorded training are handled explicitly.
 
 **Access:** Admin ✓ | Coach ✓ | Member — (see §3.5 for self-estimates)
 
-#### User Stories
-
-**US-3.4.1: Bulk-add estimated hours**
-As a Coach, I want to add estimated training hours for a member who hasn't been checking in so that their mat hours reflect reality.
-
-- *Given* a member trained Jan–Mar without checking in
-- *When* I select the member, set the date range to Jan 1 – Mar 31, and enter "3 hours/week"
-- *Then* the system calculates 13 weeks × 3 hours = 39 estimated hours
-- *And* adds them to the member's mat hours, tagged as `source: estimate`
-
-**US-3.4.2: Overlap warning — replace**
-As an Admin, I want to be warned about overlapping training data so that I can choose how to handle it.
-
-- *Given* I am adding estimated hours for Feb–Apr, but the member has recorded check-ins during February
-- *When* I submit the estimate
-- *Then* the system warns me about the overlap
-- *And* I can choose "Replace" to remove February's recorded hours and substitute the estimate
-
-**US-3.4.3: Overlap warning — add**
-As an Admin, I want to add estimated hours on top of existing records when the member was training extra.
-
-- *Given* the same overlap scenario
-- *When* I choose "Add" instead of "Replace"
-- *Then* the estimated hours are added in addition to the recorded hours for February
-- *And* both recorded and estimated hours appear separately in the member's training log
-
 ### 3.5 Member Self-Estimates
 
 Members can submit their own estimated training periods. Self-estimates require a note and are flagged for Admin review.
 
 **Access:** Admin ✓ (review) | Coach — | Member ✓ (submit) | Trial — | Guest —
-
-#### User Stories
-
-**US-3.5.1: Submit self-estimate**
-As a Member who trained elsewhere while travelling, I want to submit an estimated training period so that my mat hours stay accurate.
-
-- *Given* I trained 3×/week for 6 weeks at a partner gym in São Paulo
-- *When* I submit an estimate: date range, "3 hours/week", note: "Trained at Checkmat SP while travelling"
-- *Then* the estimate appears in Admin's review queue with status "pending"
-- *And* it is **not** added to my mat hours until approved
-
-**US-3.5.2: Admin reviews self-estimate**
-As an Admin, I want to review member-submitted estimates so that I can verify their accuracy.
-
-- *Given* a member submitted an estimate of 18 hours
-- *When* I open the review queue and view the submission
-- *Then* I see the date range, weekly hours, total, and the member's note
-- *And* I can approve as-is, adjust the hours (e.g., reduce to 12), or reject with a reason
-
-**US-3.5.3: Approved estimate tagged**
-As an Admin, I want approved self-estimates to be clearly marked so that they are distinguishable from recorded hours.
-
-- *Given* I approve a self-estimate
-- *When* the hours are added to the member's mat hours
-- *Then* they are tagged as `source: self_estimate` and appear separately in the training log
 
 ---
 
@@ -563,30 +305,6 @@ Tracks each member's current belt and progress toward their next grade. IBJJF-al
 
 **Access:** Admin ✓ (approve/override/configure) | Coach ✓ (propose) | Member ✓ (view own) | Trial ✓ (view own) | Guest —
 
-#### User Stories
-
-**US-4.1.1: View grading progress (adult)**
-As a Member, I want to see my grading progress so that I know how close I am to my next belt.
-
-- *Given* I am a Blue belt with 85 hours since my last promotion
-- *When* I view my training log
-- *Then* I see "Blue belt — 85/150 hours toward Purple eligibility" with a progress bar
-- *And* my belt icon shows 2 inferred stripes
-
-**US-4.1.2: View grading progress (kids)**
-As a parent viewing my child's profile, I want to see their grading progress in term-based format.
-
-- *Given* my child is a Grey belt in the Kids program, Sessions mode
-- *When* I view their training log
-- *Then* I see "Grey belt — 26/30 sessions this term (87%) — eligible for promotion"
-
-**US-4.1.3: Member sees grading note**
-As a Member, I want to understand the grading criteria so that I know what's expected.
-
-- *Given* I view my grading progress
-- *When* I look at the progress section
-- *Then* a note is displayed: *"Belt progression requires minimum mat hours. Exceptions may apply for active competitors at Admin's discretion."*
-
 ### 4.2 Stripe Inference (Adults)
 
 Stripes are automatically inferred by pro-rating accumulated mat hours across the configured threshold. No manual stripe awards needed — the system calculates stripe count from hours.
@@ -601,23 +319,6 @@ Formula: `stripe = floor(hours / (threshold / stripe_count))`
 | 150h | 112–149h | Stripe 3 |
 | 150h | 150h+ | Stripe 4 (eligible for promotion) |
 
-#### User Stories
-
-**US-4.2.1: Stripes inferred automatically**
-As a Member, I want my stripes to be calculated automatically from my mat hours so that I always see my current progress.
-
-- *Given* I am a Blue belt with a 150h threshold and I have 85 mat hours
-- *When* I view my profile or training log
-- *Then* my belt icon shows 2 stripes (floor(85 / 37.5) = 2)
-- *And* no manual stripe award was needed
-
-**US-4.2.2: Stripe updates as hours accumulate**
-As a Member, I want my stripe count to update automatically when I train more so that my progress is always current.
-
-- *Given* I have 74 hours (Stripe 1) and I check into a 1-hour session
-- *When* my mat hours reach 75
-- *Then* my stripe count updates to Stripe 2 across all views (training log, profile, attendance)
-
 ### 4.3 Term-Based Grading (Kids/Youth)
 
 For term-based programs, Admin can toggle the grading metric between sessions attended and hours.
@@ -631,32 +332,6 @@ For term-based programs, Admin can toggle the grading metric between sessions at
 
 **Access:** Admin ✓ (configure) | Coach ✓ (view) | Member ✓ (view own) | Trial — | Guest —
 
-#### User Stories
-
-**US-4.3.1: Kids grading by term attendance**
-As an Admin, I want to see kids' grading eligibility by term attendance percentage so that I can identify who is ready for promotion.
-
-- *Given* the Kids program is in Sessions mode with an 80% threshold
-- *When* I view the kids grading readiness list during Term 2
-- *Then* I see each child's attendance count, total available sessions, and percentage
-- *And* children at or above 80% are marked as eligible
-
-**US-4.3.2: Toggle grading metric**
-As an Admin, I want to toggle a specific child's grading metric from sessions to hours so that I can handle edge cases.
-
-- *Given* a child trains at Workshop and another gym
-- *When* I toggle their grading metric to Hours mode
-- *Then* their eligibility is based on accumulated mat hours instead of term attendance %
-- *And* estimated hours from the other gym can be added to their record
-
-**US-4.3.3: Term attendance counts reset**
-As an Admin, I want term attendance counts to reset each term so that eligibility reflects current engagement.
-
-- *Given* a child had 95% attendance in Term 1
-- *When* Term 2 begins
-- *Then* their term attendance starts fresh at 0/0
-- *And* Term 1 results are preserved in their grading history
-
 ### 4.4 Belt & Stripe Icons
 
 Visual CSS/SVG icons for all belt levels, displayed wherever a member's rank is shown.
@@ -669,59 +344,11 @@ Visual CSS/SVG icons for all belt levels, displayed wherever a member's rank is 
 
 **Access:** Admin ✓ (configure) | Coach ✓ (view) | Member ✓ (view own) | Trial ✓ (view own) | Guest —
 
-#### User Stories
-
-**US-4.4.1: Belt icon on training log**
-As a Member, I want to see my belt icon with stripes on my training log so that I have a visual representation of my rank.
-
-- *Given* I am a Blue belt with 2 inferred stripes
-- *When* I open my training log
-- *Then* I see a Blue belt icon with 2 stripe markers
-
-**US-4.4.2: Belt icons on attendance**
-As a Coach, I want to see belt icons next to members on the attendance list so that I know everyone's level at a glance.
-
-- *Given* 8 members have checked in for today's Gi Express
-- *When* I view the attendance list
-- *Then* each member's name is accompanied by their belt/stripe icon
-
-**US-4.4.3: Kids dual-colour belt icon**
-As a parent, I want to see my child's dual-colour belt icon so that I can tell which belt they're on.
-
-- *Given* my child is a Yellow/Black belt with 3 stripes
-- *When* I view their profile
-- *Then* the belt icon shows a split Yellow/Black colour with 3 stripe markers
-
 ### 4.5 Grading Readiness List
 
 Auto-generated list of members approaching promotion eligibility. Shows belt icon, progress metric, and coach notes.
 
 **Access:** Admin ✓ | Coach ✓ | Member — | Trial — | Guest —
-
-#### User Stories
-
-**US-4.5.1: View readiness list**
-As a Coach, I want to see which members are approaching promotion eligibility so that I can prepare for the next grading day.
-
-- *Given* several members are within 80% of their mat hours threshold
-- *When* I open the grading readiness list
-- *Then* I see each member's name, belt/stripe icon, mat hours progress (or term attendance %), and any grading notes
-- *And* the list is sorted by proximity to eligibility
-
-**US-4.5.2: Add grading notes**
-As a Coach, I want to add notes to a member's grading readiness entry so that I can track areas for improvement.
-
-- *Given* I am viewing a member's readiness entry
-- *When* I add a note: "Needs to work on guard retention before promotion"
-- *Then* the note is saved and visible to Admin and other coaches
-
-**US-4.5.3: Propose promotion from readiness list**
-As a Coach, I want to propose a promotion directly from the readiness list so that I don't have to navigate elsewhere.
-
-- *Given* Sarah has 155 mat hours at Blue belt (threshold: 150h)
-- *When* I click "Propose Promotion" and confirm "Blue → Purple"
-- *Then* a promotion proposal is created with status "pending"
-- *And* Admin receives a notification to review the proposal
 
 ### 4.6 Grading Proposals & Promotions
 
@@ -729,63 +356,11 @@ Coaches propose promotions; Admin approves to make them official. The workflow p
 
 **Access:** Admin ✓ (approve/reject) | Coach ✓ (propose) | Member — | Trial — | Guest —
 
-#### User Stories
-
-**US-4.6.1: Coach proposes promotion**
-As a Coach, I want to propose a promotion for a member so that the process is formalised and requires Admin sign-off.
-
-- *Given* I believe a member is ready for promotion
-- *When* I create a grading proposal with the target belt and optional notes
-- *Then* the proposal is saved with status "pending"
-- *And* Admin can see it in their grading review queue
-
-**US-4.6.2: Admin approves promotion**
-As an Admin, I want to approve a coach's promotion proposal so that the member's belt is officially updated.
-
-- *Given* a pending grading proposal for Sarah: Blue → Purple
-- *When* I review the proposal and click "Approve"
-- *Then* Sarah's belt is updated to Purple stripe 0
-- *And* the promotion is recorded in her grading history with date, proposed_by, and approved_by
-
-**US-4.6.3: Admin rejects proposal**
-As an Admin, I want to reject a promotion proposal with a reason so that the coach understands why.
-
-- *Given* a pending proposal I disagree with
-- *When* I click "Reject" and enter: "Needs 3 more months of consistent training"
-- *Then* the proposal is marked as rejected
-- *And* the coach can see the rejection reason
-
 ### 4.7 Admin Overrides
 
 Admin can bypass normal grading thresholds for special circumstances.
 
 **Access:** Admin ✓ | Coach — | Member — | Trial — | Guest —
-
-#### User Stories
-
-**US-4.7.1: Add mat hours credit**
-As an Admin, I want to add mat hours credit to a competitor's record so that they aren't sandbagging.
-
-- *Given* a member is competing at Blue belt but dominating their division
-- *When* I add 20 hours of mat hours credit to their record
-- *Then* their mat hours increase, pushing them closer to Purple eligibility
-- *And* the credit is logged with my Admin ID and a reason
-
-**US-4.7.2: Force immediate promotion**
-As an Admin, I want to force a promotion bypassing thresholds so that I can handle exceptional cases.
-
-- *Given* a member is clearly above their belt level but hasn't met the hour threshold
-- *When* I force a promotion from Blue to Purple
-- *Then* their belt is updated immediately
-- *And* the grading record shows method: "override" with my notes
-
-**US-4.7.3: Adjust individual thresholds**
-As an Admin, I want to adjust belt progression thresholds for a specific member so that competitors can be fast-tracked.
-
-- *Given* a member is actively competing and training at a higher level
-- *When* I reduce their mat hours threshold from 150h to 120h for Blue → Purple
-- *Then* their belt progression recalculates using the new threshold
-- *And* the override is logged
 
 ---
 
@@ -814,30 +389,6 @@ Each week, one topic per theme is scheduled. Topics auto-advance when their dura
 
 **Access:** Admin ✓ (create/manage/override) | Coach ✓ (edit/advance for own classes) | Member ✓ (view if preview on) | Trial — | Guest —
 
-#### User Stories
-
-**US-5.1.1: Create rotor for a class**
-As an Admin, I want to create a rotor for a class so that I can define its curriculum structure.
-
-- *Given* the "Gi Express" class has no rotor
-- *When* I create a new rotor with 4 theme categories: Standing, Guard, Pinning, In-Between Game
-- *Then* the rotor is saved as v1 and attached to "Gi Express"
-- *And* I can add topics to each theme category
-
-**US-5.1.2: View this week's curriculum**
-As a Member, I want to see what topics are scheduled this week so that I can prepare before class.
-
-- *Given* the Gi Express rotor has 4 themes, each with a currently scheduled topic
-- *When* I view the Gi Express class page
-- *Then* I see: Standing: "Single Leg Takedown", Guard: "Closed Guard Attacks", Pinning: "Side Control Submissions", In-Between: "Turtle Escapes"
-
-**US-5.1.3: Topic queues cycle**
-As a Coach, I want topic queues to wrap around so that the curriculum repeats.
-
-- *Given* the "Standing" theme has 6 topics and I am on the last one
-- *When* the topic auto-advances
-- *Then* the queue cycles back to the first topic
-
 ### 5.2 Themes (Concurrent Categories)
 
 Themes are positional or tactical categories that run **concurrently** within a rotor. Every week, all themes are active — each with its own currently scheduled topic.
@@ -845,22 +396,6 @@ Themes are positional or tactical categories that run **concurrently** within a 
 Example categories: **Standing** (takedowns, clinch work), **Guard** (bottom game, sweeps), **Pinning** (top control, submissions from top), **In-Between Game** (transitions, scrambles, turtle).
 
 Admin defines the theme categories per rotor. Themes are extensible — Admin can add, rename, or remove categories.
-
-#### User Stories
-
-**US-5.2.1: Add a theme category**
-As an Admin, I want to add a new theme category to a rotor so that the curriculum covers a new area.
-
-- *Given* the Gi Express rotor has 4 themes
-- *When* I add a 5th theme: "Submission Defense"
-- *Then* the rotor now has 5 concurrent themes and I can populate its topic queue
-
-**US-5.2.2: Hidden / surprise theme**
-As a Coach, I want to mark a theme category as hidden so that members don't see it in previews.
-
-- *Given* I add a special "Fun Day" theme to the Kids rotor
-- *When* I mark it as hidden
-- *Then* it does not appear in member previews and is only revealed when active
 
 ### 5.3 Topics & Topic Queues
 
@@ -871,104 +406,17 @@ Each topic has:
 - **Duration**: how long it stays scheduled (default: 1 week, configurable per topic)
 - **Description**: optional notes for the coach
 
-#### User Stories
-
-**US-5.3.1: Add topics to a theme**
-As a Coach, I want to populate a theme's topic queue so that the weekly curriculum is defined.
-
-- *Given* I am editing the "Standing" theme in the Gi Express rotor
-- *When* I add 6 topics: "Single Leg", "Double Leg", "Arm Drag to Back", "Collar Drag", "Snap Down", "Clinch Takedowns"
-- *Then* the topic queue is populated and the first topic is scheduled for this week
-
-**US-5.3.2: Reorder topic queue**
-As a Coach, I want to reorder the topic queue so that I can control the curriculum sequence.
-
-- *Given* the Standing theme has 6 topics
-- *When* I drag "Arm Drag to Back" to position 2
-- *Then* it will be the second topic scheduled in the rotation
-
-**US-5.3.3: Member views scheduled topics**
-As a Member, I want to see the topics scheduled for each theme this week so that I know what class will cover.
-
-- *Given* Gi Express has 4 themes, each with a currently scheduled topic
-- *When* I view the class page (and preview is enabled)
-- *Then* I see all 4 themes with their current topic
-
-**US-5.3.4: Custom topic duration**
-As a Coach, I want to set a topic's duration to 2 weeks so that complex techniques get more time.
-
-- *Given* "Leg Lasso Series" is a complex topic
-- *When* I set its duration to 2 weeks
-- *Then* it stays as the scheduled topic for 2 weeks before auto-advancing
-
 ### 5.4 Rotor Advancement
 
 Topics **auto-advance by default** when their configured duration expires. Coaches can override: extend a topic, skip to the next, or manually advance early.
 
 **Access:** Admin ✓ (override all) | Coach ✓ (for classes they own) | Member — | Trial — | Guest —
 
-#### User Stories
-
-**US-5.4.1: Auto-advance**
-As a Coach, I want topics to auto-advance when their duration expires so that the curriculum progresses without manual intervention.
-
-- *Given* "Single Leg Takedown" in the Standing theme has a 1-week duration
-- *When* the week ends
-- *Then* the next topic in the queue ("Double Leg") automatically becomes the scheduled topic
-
-**US-5.4.2: Extend a topic**
-As a Coach, I want to extend a topic beyond its configured duration so that the class can spend more time on it.
-
-- *Given* "Single Leg" was configured for 1 week but the class needs more time
-- *When* I click "Extend" and add 1 more week
-- *Then* the topic stays scheduled for a total of 2 weeks before auto-advancing
-
-**US-5.4.3: Skip a topic**
-As a Coach, I want to skip the next topic in the queue so that I can jump to something more relevant.
-
-- *Given* "Double Leg" is next in the Standing queue but I want to skip to "Arm Drag"
-- *When* I skip "Double Leg"
-- *Then* "Arm Drag to Back" becomes the next scheduled topic
-- *And* "Double Leg" moves to its normal position in the next rotation cycle
-
-**US-5.4.4: Coach can only advance own classes**
-As a Coach, I should only be able to advance rotors for classes I'm assigned to.
-
-- *Given* I am assigned to Monday 6 PM Nuts & Bolts and Wednesday 6 PM Nuts & Bolts
-- *When* I try to advance the rotor for Thursday NoGi Express (not my class)
-- *Then* the system denies the action
-- *And* only Admin can override
-
 ### 5.5 Rotor Versioning
 
 Rotors are versioned to support drafting improvements without disrupting the live curriculum.
 
 **Access:** Admin ✓ | Coach ✓ (for own classes) | Member — | Trial — | Guest —
-
-#### User Stories
-
-**US-5.5.1: Draft a new rotor version**
-As a Coach, I want to create a draft version of a rotor so that I can plan curriculum changes without affecting the live schedule.
-
-- *Given* the Gi Express rotor is on v2 (active)
-- *When* I create a new draft (v3) and add a "Submission Defense" theme with 4 topics
-- *Then* v2 remains active and members see no change
-- *And* v3 is saved as a draft that I can continue editing
-
-**US-5.5.2: Activate a draft rotor**
-As an Admin, I want to activate a draft rotor version so that the new curriculum goes live.
-
-- *Given* v3 of the Gi Express rotor is ready
-- *When* I activate v3
-- *Then* v3 becomes the active rotor and members see the updated themes/topics
-- *And* v2 is preserved in version history
-
-**US-5.5.3: View rotor history**
-As an Admin, I want to see previous rotor versions so that I can review curriculum evolution.
-
-- *Given* the Gi Express rotor has versions v1, v2, v3
-- *When* I view rotor history
-- *Then* I see all three versions with their themes, topics, and activation dates
 
 ### 5.6 Member Rotor Preview
 
@@ -980,22 +428,6 @@ Admin can toggle whether members can see the upcoming topic schedule for each cl
 Hidden themes are never shown in previews regardless of the toggle.
 
 **Access:** Admin ✓ (toggle) | Coach ✓ (view) | Member ✓ (view if enabled) | Trial — | Guest —
-
-#### User Stories
-
-**US-5.6.1: Toggle preview off**
-As an Admin, I want to disable rotor preview for Kids classes so that the schedule is always a surprise.
-
-- *Given* the Workshop Kids rotor preview is enabled
-- *When* I toggle it off
-- *Then* kids can only see the current topics, not upcoming ones
-
-**US-5.6.2: View upcoming topics**
-As a Member, I want to see what topics are coming up so that I can plan my training.
-
-- *Given* the Gi Express rotor has preview enabled
-- *When* I view the Gi Express class page
-- *Then* I see each theme's current topic and the next 3–4 upcoming topics in each queue
 
 ---
 
@@ -1014,67 +446,11 @@ Each topic in the queue shows:
 
 **Access:** Admin ✓ (view/override) | Coach ✓ (view/triage) | Member ✓ (vote) | Trial — | Guest —
 
-#### User Stories
-
-**US-6.1.1: Vote for a topic**
-As a Member, I want to vote for an upcoming topic so that the class covers what I want to work on.
-
-- *Given* the "Guard" theme's topic queue shows: [1. Closed Guard Attacks ←scheduled] → [2. DLR Sweeps] → [3. Leg Lasso Series] → [4. Half Guard]
-- *When* I vote for "Leg Lasso Series" (currently position 3)
-- *Then* my vote is recorded and the topic's vote count increases by 1
-- *And* I cannot vote for "Leg Lasso Series" again until the next rotation cycle
-
-**US-6.1.2: View vote rankings**
-As a Member, I want to see which topics have the most votes so that I know what's popular.
-
-- *Given* several members have voted on topics in the "Guard" theme
-- *When* I view the topic queue
-- *Then* I see each topic's vote count alongside its queue position
-
-**US-6.1.3: See last covered date**
-As a Member, I want to see when a topic was last covered so that I can vote for things we haven't done recently.
-
-- *Given* "DLR Sweeps" was last covered 6 weeks ago and "Leg Lasso" 2 weeks ago
-- *When* I view the topic queue
-- *Then* I see the last-covered dates and can make an informed vote
-
 ### 6.2 Vote-Driven Topic Bump
 
 When a topic accumulates enough votes (or Coach/Admin decides to honour the vote), it is **inserted before** the currently scheduled topic. The scheduled topic remains in its queue position and runs on the next rotation.
 
 **Access:** Admin ✓ (override) | Coach ✓ (for own classes) | Member — | Trial — | Guest —
-
-#### User Stories
-
-**US-6.2.1: Bump the scheduled topic**
-As a Coach, I want to bring forward a voted topic so that the class covers what members requested.
-
-- *Given* "Leg Lasso Series" has 12 votes in the Guard theme, and "DLR Sweeps" is the next scheduled topic
-- *When* I choose to bring forward "Leg Lasso Series"
-- *Then* "Leg Lasso Series" is inserted as the current scheduled topic
-- *And* "DLR Sweeps" stays in its queue position and will run on the next rotation
-
-**US-6.2.2: Bumped topic not lost**
-As a Coach, I want the bumped topic to remain in the queue so that it still gets covered.
-
-- *Given* "DLR Sweeps" was bumped by "Leg Lasso Series"
-- *When* the rotor completes the current cycle and returns to this position
-- *Then* "DLR Sweeps" runs as originally planned
-
-**US-6.2.3: Vote counts reset after bump**
-As a Member, I want vote counts to reset after a topic is brought forward so that voting starts fresh.
-
-- *Given* "Leg Lasso Series" was brought forward with 12 votes
-- *When* it finishes its scheduled run
-- *Then* all vote counts for that theme's topics reset to 0
-- *And* members can vote again for the next cycle
-
-**US-6.2.4: Admin overrides vote**
-As an Admin, I want to override the vote and bring forward any topic regardless of vote count.
-
-- *Given* "Rubber Guard" has only 2 votes but I want to schedule it
-- *When* I override and bring it forward
-- *Then* it becomes the scheduled topic, same bump mechanics apply
 
 ---
 

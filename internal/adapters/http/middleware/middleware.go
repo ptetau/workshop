@@ -104,15 +104,21 @@ func SecurityHeaders(next http.Handler) http.Handler {
 	})
 }
 
+// ExtraTrustedOrigins allows tests to add origins (e.g. "127.0.0.1:12345")
+// before CSRF() is called. Not for production use.
+var ExtraTrustedOrigins []string
+
 // CSRFMiddleware returns a handler that protects against CSRF attacks.
 // It assumes an encryption key is passed (32 bytes).
 // JSON API requests (Content-Type: application/json) are exempted from CSRF.
 func CSRF(authKey []byte) func(http.Handler) http.Handler {
+	origins := []string{"localhost:8080", "127.0.0.1:8080"}
+	origins = append(origins, ExtraTrustedOrigins...)
 	csrfProtect := csrf.Protect(
 		authKey,
 		csrf.Secure(false), // Allow HTTP for local development
 		csrf.Path("/"),
-		csrf.TrustedOrigins([]string{"localhost:8080", "127.0.0.1:8080"}), // Trust local origins
+		csrf.TrustedOrigins(origins),
 	)
 
 	return func(next http.Handler) http.Handler {

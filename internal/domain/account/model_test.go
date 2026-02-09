@@ -266,3 +266,68 @@ func TestAccount_RoleChecks(t *testing.T) {
 		})
 	}
 }
+
+// TestAccount_Activate tests the Activate state transition.
+func TestAccount_Activate(t *testing.T) {
+	t.Run("pending to active", func(t *testing.T) {
+		a := &account.Account{Status: account.StatusPendingActivation}
+		if err := a.Activate(); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if a.Status != account.StatusActive {
+			t.Errorf("Status = %q, want %q", a.Status, account.StatusActive)
+		}
+	})
+
+	t.Run("already active", func(t *testing.T) {
+		a := &account.Account{Status: account.StatusActive}
+		err := a.Activate()
+		if err != account.ErrAlreadyActivated {
+			t.Errorf("error = %v, want ErrAlreadyActivated", err)
+		}
+	})
+
+	t.Run("empty status", func(t *testing.T) {
+		a := &account.Account{Status: ""}
+		err := a.Activate()
+		if err != account.ErrNotPending {
+			t.Errorf("error = %v, want ErrNotPending", err)
+		}
+	})
+}
+
+// TestAccount_IsPendingActivation tests the IsPendingActivation check.
+func TestAccount_IsPendingActivation(t *testing.T) {
+	a := &account.Account{Status: account.StatusPendingActivation}
+	if !a.IsPendingActivation() {
+		t.Error("expected IsPendingActivation() to be true")
+	}
+	a.Status = account.StatusActive
+	if a.IsPendingActivation() {
+		t.Error("expected IsPendingActivation() to be false")
+	}
+}
+
+// TestActivationToken_IsExpired tests token expiry checks.
+func TestActivationToken_IsExpired(t *testing.T) {
+	now := time.Date(2025, 6, 15, 12, 0, 0, 0, time.UTC)
+	tok := &account.ActivationToken{
+		ExpiresAt: time.Date(2025, 6, 18, 12, 0, 0, 0, time.UTC), // 72h later
+	}
+
+	if tok.IsExpired(now) {
+		t.Error("token should not be expired")
+	}
+	if !tok.IsExpired(now.Add(73 * time.Hour)) {
+		t.Error("token should be expired after 73h")
+	}
+}
+
+// TestActivationToken_Invalidate tests token invalidation.
+func TestActivationToken_Invalidate(t *testing.T) {
+	tok := &account.ActivationToken{Used: false}
+	tok.Invalidate()
+	if !tok.Used {
+		t.Error("expected Used to be true after Invalidate()")
+	}
+}

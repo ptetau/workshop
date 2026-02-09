@@ -1,0 +1,301 @@
+{{ define "content" }}
+<div class="card">
+    <h1>Curriculum Management</h1>
+
+    <div style="margin-bottom:1.5rem;">
+        <label style="font-weight:600;">Select Class:</label>
+        <select id="classSelect" style="padding:0.5rem;border:1px solid #ccc;border-radius:4px;min-width:200px;" onchange="onClassChange()">
+            <option value="">Loading...</option>
+        </select>
+    </div>
+
+    <div id="rotorSection" style="display:none;">
+        <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem;">
+            <h2 style="margin:0;" id="rotorTitle">Rotors</h2>
+            <button onclick="showCreateRotor()" style="padding:0.25rem 0.75rem;font-size:0.85rem;">+ New Rotor</button>
+        </div>
+
+        <div id="createRotorForm" style="display:none;background:#f8f9fa;padding:1rem;border-radius:2px;margin-bottom:1rem;">
+            <div class="form-group">
+                <label>Rotor Name</label>
+                <input type="text" id="rotorName" placeholder="e.g. Gi Express v2" style="width:100%;padding:0.5rem;border:1px solid #ccc;border-radius:4px;">
+            </div>
+            <button onclick="createRotor()">Create Draft</button>
+            <button onclick="hideCreateRotor()" style="background:#6c757d;">Cancel</button>
+            <span id="rotorMsg" style="margin-left:0.5rem;color:#F9B232;"></span>
+        </div>
+
+        <div id="rotorList"></div>
+    </div>
+
+    <div id="rotorDetail" style="display:none;margin-top:1.5rem;">
+        <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem;">
+            <h2 style="margin:0;" id="detailTitle"></h2>
+            <span id="detailStatus" style="padding:0.15rem 0.5rem;border-radius:4px;font-size:0.8rem;font-weight:600;"></span>
+            <button id="activateBtn" onclick="activateRotor()" style="display:none;background:#28a745;padding:0.25rem 0.75rem;font-size:0.85rem;">Activate</button>
+            <button id="deleteRotorBtn" onclick="deleteRotor()" style="display:none;background:#dc3545;padding:0.25rem 0.75rem;font-size:0.85rem;">Delete</button>
+            <label id="previewLabel" style="display:none;margin-left:auto;cursor:pointer;">
+                <input type="checkbox" id="previewToggle" onchange="togglePreview()"> Member Preview
+            </label>
+        </div>
+        <a href="#" onclick="backToRotors();return false;" style="color:#F9B232;text-decoration:none;font-size:0.9rem;">← Back to rotors</a>
+
+        <div style="margin-top:1rem;">
+            <div style="display:flex;align-items:center;gap:1rem;margin-bottom:0.5rem;">
+                <h3 style="margin:0;">Themes</h3>
+                <button id="addThemeBtn" onclick="showAddTheme()" style="padding:0.2rem 0.5rem;font-size:0.8rem;">+ Add Theme</button>
+            </div>
+            <div id="addThemeForm" style="display:none;background:#f8f9fa;padding:0.75rem;border-radius:2px;margin-bottom:0.75rem;">
+                <input type="text" id="themeName" placeholder="Theme name (e.g. Standing)" style="padding:0.4rem;border:1px solid #ccc;border-radius:4px;">
+                <button onclick="addTheme()" style="padding:0.3rem 0.6rem;font-size:0.85rem;">Add</button>
+                <button onclick="document.getElementById('addThemeForm').style.display='none'" style="background:#6c757d;padding:0.3rem 0.6rem;font-size:0.85rem;">Cancel</button>
+            </div>
+            <div id="themesContainer"></div>
+        </div>
+    </div>
+
+    <p style="margin-top:2rem;"><a href="/dashboard" style="color:#F9B232;text-decoration:none;font-weight:600;">← Back to Dashboard</a></p>
+</div>
+
+<script>
+var classTypes = [];
+var currentClassID = '';
+var currentRotorID = '';
+var currentRotor = null;
+
+function loadClassTypes() {
+    fetch('/api/class-types').then(r=>r.json()).then(data => {
+        classTypes = data || [];
+        var sel = document.getElementById('classSelect');
+        sel.innerHTML = '<option value="">— Select a class —</option>';
+        classTypes.forEach(ct => {
+            sel.innerHTML += '<option value="'+ct.ID+'">'+ct.Name+'</option>';
+        });
+    });
+}
+
+function onClassChange() {
+    currentClassID = document.getElementById('classSelect').value;
+    if (!currentClassID) {
+        document.getElementById('rotorSection').style.display = 'none';
+        document.getElementById('rotorDetail').style.display = 'none';
+        return;
+    }
+    document.getElementById('rotorSection').style.display = 'block';
+    document.getElementById('rotorDetail').style.display = 'none';
+    loadRotors();
+}
+
+function loadRotors() {
+    fetch('/api/rotors?class_type_id='+currentClassID).then(r=>r.json()).then(data => {
+        var list = document.getElementById('rotorList');
+        if (!data || data.length === 0) {
+            list.innerHTML = '<p style="color:#6c757d;">No rotors yet. Create one to get started.</p>';
+            return;
+        }
+        var html = '<table style="width:100%;border-collapse:collapse;">';
+        html += '<thead><tr style="background:#f8f9fa;border-bottom:2px solid #dee2e6;">';
+        html += '<th style="padding:0.5rem;text-align:left;">Name</th>';
+        html += '<th style="padding:0.5rem;text-align:left;">Version</th>';
+        html += '<th style="padding:0.5rem;text-align:left;">Status</th>';
+        html += '<th style="padding:0.5rem;text-align:right;">Actions</th>';
+        html += '</tr></thead><tbody>';
+        data.forEach(r => {
+            var statusColor = r.Status === 'active' ? '#28a745' : r.Status === 'draft' ? '#F9B232' : '#6c757d';
+            html += '<tr style="border-bottom:1px solid #dee2e6;">';
+            html += '<td style="padding:0.5rem;font-weight:600;">'+r.Name+'</td>';
+            html += '<td style="padding:0.5rem;">v'+r.Version+'</td>';
+            html += '<td style="padding:0.5rem;"><span style="color:'+statusColor+';font-weight:600;text-transform:uppercase;font-size:0.85rem;">'+r.Status+'</span></td>';
+            html += '<td style="padding:0.5rem;text-align:right;"><button onclick="openRotor(\''+r.ID+'\')" style="padding:0.25rem 0.75rem;font-size:0.85rem;">Manage</button></td>';
+            html += '</tr>';
+        });
+        html += '</tbody></table>';
+        list.innerHTML = html;
+    });
+}
+
+function showCreateRotor() { document.getElementById('createRotorForm').style.display='block'; }
+function hideCreateRotor() { document.getElementById('createRotorForm').style.display='none'; }
+
+function createRotor() {
+    var name = document.getElementById('rotorName').value.trim();
+    if (!name) { document.getElementById('rotorMsg').textContent='Name required'; return; }
+    fetch('/api/rotors', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({class_type_id:currentClassID,name:name})})
+        .then(r=>{if(!r.ok) throw r; return r.json();})
+        .then(()=>{hideCreateRotor();document.getElementById('rotorName').value='';loadRotors();})
+        .catch(()=>document.getElementById('rotorMsg').textContent='Error creating rotor');
+}
+
+function openRotor(id) {
+    currentRotorID = id;
+    fetch('/api/rotors/by-id?id='+id).then(r=>r.json()).then(r => {
+        currentRotor = r;
+        document.getElementById('rotorSection').style.display = 'none';
+        document.getElementById('rotorDetail').style.display = 'block';
+        document.getElementById('detailTitle').textContent = r.Name + ' (v' + r.Version + ')';
+        var statusEl = document.getElementById('detailStatus');
+        statusEl.textContent = r.Status.toUpperCase();
+        statusEl.style.background = r.Status==='active'?'#28a745':r.Status==='draft'?'#F9B232':'#6c757d';
+        statusEl.style.color = '#fff';
+        document.getElementById('activateBtn').style.display = r.Status==='draft'?'inline-block':'none';
+        document.getElementById('deleteRotorBtn').style.display = r.Status!=='active'?'inline-block':'none';
+        document.getElementById('addThemeBtn').style.display = r.Status==='draft'?'inline-block':'none';
+        document.getElementById('previewLabel').style.display = r.Status==='active'?'inline-block':'none';
+        document.getElementById('previewToggle').checked = r.PreviewOn;
+        loadThemes();
+    });
+}
+
+function backToRotors() {
+    document.getElementById('rotorDetail').style.display = 'none';
+    document.getElementById('rotorSection').style.display = 'block';
+    loadRotors();
+}
+
+function activateRotor() {
+    if (!confirm('Activate this rotor? Any currently active rotor will be archived.')) return;
+    fetch('/api/rotors/activate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:currentRotorID})})
+        .then(r=>{if(!r.ok) throw r; return r.json();})
+        .then(()=>openRotor(currentRotorID));
+}
+
+function deleteRotor() {
+    if (!confirm('Delete this rotor?')) return;
+    fetch('/api/rotors/by-id?id='+currentRotorID,{method:'DELETE'})
+        .then(r=>{if(!r.ok) throw r;})
+        .then(()=>backToRotors());
+}
+
+function togglePreview() {
+    var on = document.getElementById('previewToggle').checked;
+    fetch('/api/rotors/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:currentRotorID,preview_on:on})});
+}
+
+function showAddTheme() { document.getElementById('addThemeForm').style.display='block'; }
+
+function addTheme() {
+    var name = document.getElementById('themeName').value.trim();
+    if (!name) return;
+    fetch('/api/rotors/themes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rotor_id:currentRotorID,name:name,position:0})})
+        .then(r=>{if(!r.ok) throw r; return r.json();})
+        .then(()=>{document.getElementById('addThemeForm').style.display='none';document.getElementById('themeName').value='';loadThemes();});
+}
+
+function loadThemes() {
+    fetch('/api/rotors/themes?rotor_id='+currentRotorID).then(r=>r.json()).then(themes => {
+        var container = document.getElementById('themesContainer');
+        if (!themes || themes.length === 0) {
+            container.innerHTML = '<p style="color:#6c757d;">No themes yet.</p>';
+            return;
+        }
+        var html = '';
+        themes.forEach(th => {
+            html += '<div style="border:1px solid #dee2e6;border-radius:4px;padding:1rem;margin-bottom:1rem;" id="theme-'+th.ID+'">';
+            html += '<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem;">';
+            html += '<h4 style="margin:0;">'+th.Name+'</h4>';
+            if (currentRotor && currentRotor.Status === 'draft') {
+                html += '<button onclick="deleteTheme(\''+th.ID+'\')" style="background:#dc3545;padding:0.15rem 0.5rem;font-size:0.75rem;">Delete</button>';
+            }
+            html += '<button onclick="showAddTopic(\''+th.ID+'\')" style="padding:0.15rem 0.5rem;font-size:0.75rem;">+ Topic</button>';
+            html += '</div>';
+            html += '<div id="addTopicForm-'+th.ID+'" style="display:none;background:#f8f9fa;padding:0.5rem;border-radius:2px;margin-bottom:0.5rem;">';
+            html += '<input type="text" id="topicName-'+th.ID+'" placeholder="Topic name" style="padding:0.3rem;border:1px solid #ccc;border-radius:4px;margin-right:0.25rem;">';
+            html += '<input type="number" id="topicDuration-'+th.ID+'" value="1" min="1" max="8" style="width:3rem;padding:0.3rem;border:1px solid #ccc;border-radius:4px;margin-right:0.25rem;" title="Duration (weeks)">';
+            html += '<button onclick="addTopic(\''+th.ID+'\')" style="padding:0.2rem 0.5rem;font-size:0.8rem;">Add</button>';
+            html += '<button onclick="document.getElementById(\'addTopicForm-'+th.ID+'\').style.display=\'none\'" style="background:#6c757d;padding:0.2rem 0.5rem;font-size:0.8rem;">Cancel</button>';
+            html += '</div>';
+            html += '<div id="topicList-'+th.ID+'"><span style="color:#6c757d;font-size:0.85rem;">Loading topics...</span></div>';
+            html += '</div>';
+        });
+        container.innerHTML = html;
+        themes.forEach(th => loadTopics(th.ID));
+    });
+}
+
+function deleteTheme(id) {
+    if (!confirm('Delete this theme and all its topics?')) return;
+    fetch('/api/rotors/themes?id='+id,{method:'DELETE'}).then(()=>loadThemes());
+}
+
+function showAddTopic(themeID) { document.getElementById('addTopicForm-'+themeID).style.display='block'; }
+
+function addTopic(themeID) {
+    var name = document.getElementById('topicName-'+themeID).value.trim();
+    var dur = parseInt(document.getElementById('topicDuration-'+themeID).value) || 1;
+    if (!name) return;
+    fetch('/api/rotors/topics',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rotor_theme_id:themeID,name:name,duration_weeks:dur})})
+        .then(r=>{if(!r.ok) throw r; return r.json();})
+        .then(()=>{document.getElementById('addTopicForm-'+themeID).style.display='none';document.getElementById('topicName-'+themeID).value='';loadTopics(themeID);});
+}
+
+function loadTopics(themeID) {
+    fetch('/api/rotors/topics?theme_id='+themeID).then(r=>r.json()).then(topics => {
+        var el = document.getElementById('topicList-'+themeID);
+        if (!topics || topics.length === 0) {
+            el.innerHTML = '<span style="color:#6c757d;font-size:0.85rem;">No topics yet.</span>';
+            return;
+        }
+        var html = '<table style="width:100%;border-collapse:collapse;font-size:0.9rem;"><tbody>';
+        topics.forEach((tp,i) => {
+            html += '<tr style="border-bottom:1px solid #eee;">';
+            html += '<td style="padding:0.3rem 0.5rem;width:2rem;color:#6c757d;">'+(i+1)+'.</td>';
+            html += '<td style="padding:0.3rem 0.5rem;font-weight:600;">'+tp.Name+'</td>';
+            html += '<td style="padding:0.3rem 0.5rem;color:#6c757d;">'+tp.DurationWeeks+'w</td>';
+            if (currentRotor && currentRotor.Status === 'active') {
+                html += '<td style="padding:0.3rem 0.5rem;text-align:right;">';
+                html += '<button onclick="scheduleAction(\'activate\',\''+tp.ID+'\',\''+themeID+'\')" style="padding:0.1rem 0.4rem;font-size:0.75rem;background:#28a745;">Start</button> ';
+                html += '</td>';
+            }
+            html += '<td style="padding:0.3rem 0.5rem;text-align:right;"><button onclick="deleteTopic(\''+tp.ID+'\',\''+themeID+'\')" style="background:#dc3545;padding:0.1rem 0.4rem;font-size:0.75rem;">×</button></td>';
+            html += '</tr>';
+        });
+        html += '</tbody></table>';
+
+        if (currentRotor && currentRotor.Status === 'active') {
+            fetch('/api/rotors/schedule/action',{method:'POST'}).catch(()=>{});
+            // Show active schedule controls
+            html += '<div id="schedControls-'+themeID+'" style="margin-top:0.5rem;"></div>';
+        }
+        el.innerHTML = html;
+
+        if (currentRotor && currentRotor.Status === 'active') {
+            loadScheduleControls(themeID);
+        }
+    });
+}
+
+function loadScheduleControls(themeID) {
+    fetch('/api/curriculum/view?class_type_id='+currentClassID).then(r=>r.json()).then(data => {
+        if (!data.themes) return;
+        var theme = data.themes.find(t => t.ID === themeID);
+        if (!theme || !theme.active_schedule) return;
+        var ctrl = document.getElementById('schedControls-'+themeID);
+        if (!ctrl) return;
+        var sched = theme.active_schedule;
+        var activeTopic = theme.topics.find(t => t.is_active);
+        var name = activeTopic ? activeTopic.Name : 'Unknown';
+        ctrl.innerHTML = '<div style="background:#e8f5e9;padding:0.5rem;border-radius:4px;font-size:0.85rem;">' +
+            '<strong>Active:</strong> '+name+' (until '+new Date(sched.EndDate).toLocaleDateString()+') ' +
+            '<button onclick="scheduleAction(\'extend\',\'\',\''+themeID+'\')" style="padding:0.1rem 0.4rem;font-size:0.75rem;">Extend</button> ' +
+            '<button onclick="scheduleAction(\'skip\',\'\',\''+themeID+'\')" style="padding:0.1rem 0.4rem;font-size:0.75rem;background:#F9B232;">Skip</button> ' +
+            '<button onclick="scheduleAction(\'complete\',\'\',\''+themeID+'\')" style="padding:0.1rem 0.4rem;font-size:0.75rem;background:#dc3545;">Complete</button>' +
+            '</div>';
+    });
+}
+
+function deleteTopic(id, themeID) {
+    fetch('/api/rotors/topics?id='+id,{method:'DELETE'}).then(()=>loadTopics(themeID));
+}
+
+function scheduleAction(action, topicID, themeID) {
+    var body = {action:action, rotor_theme_id:themeID};
+    if (topicID) body.topic_id = topicID;
+    if (action === 'extend') body.extend_weeks = 1;
+    fetch('/api/rotors/schedule/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+        .then(r=>{if(!r.ok) throw r; return r.json();})
+        .then(()=>loadTopics(themeID));
+}
+
+loadClassTypes();
+</script>
+{{ end }}

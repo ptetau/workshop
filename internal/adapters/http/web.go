@@ -8,11 +8,13 @@ import (
 	"os"
 	"time"
 
+	"workshop/internal/adapters/email"
 	"workshop/internal/adapters/http/middleware"
 	accountStore "workshop/internal/adapters/storage/account"
 	attendanceStore "workshop/internal/adapters/storage/attendance"
 	classTypeStore "workshop/internal/adapters/storage/classtype"
 	clipStore "workshop/internal/adapters/storage/clip"
+	emailStore "workshop/internal/adapters/storage/email"
 	gradingStore "workshop/internal/adapters/storage/grading"
 	holidayStore "workshop/internal/adapters/storage/holiday"
 	injuryStore "workshop/internal/adapters/storage/injury"
@@ -22,6 +24,7 @@ import (
 	noticeStore "workshop/internal/adapters/storage/notice"
 	observationStore "workshop/internal/adapters/storage/observation"
 	programStore "workshop/internal/adapters/storage/program"
+	rotorStore "workshop/internal/adapters/storage/rotor"
 	scheduleStore "workshop/internal/adapters/storage/schedule"
 	termStore "workshop/internal/adapters/storage/term"
 	themeStore "workshop/internal/adapters/storage/theme"
@@ -51,6 +54,8 @@ type Stores struct {
 	TrainingGoalStore    trainingGoalStore.Store
 	ThemeStore           themeStore.Store
 	ClipStore            clipStore.Store
+	EmailStore           emailStore.Store
+	RotorStore           rotorStore.Store
 }
 
 // loadCSRFKey reads the CSRF secret from WORKSHOP_CSRF_KEY (hex-encoded, 32 bytes).
@@ -80,6 +85,23 @@ var stores *Stores
 // Global session store instance
 var sessions *middleware.SessionStore
 
+// RateLimitPerSecond controls the per-IP rate limit. Tests can increase this.
+var RateLimitPerSecond = 10
+
+// Global email sender instance (set by SetEmailSender)
+var emailSender email.Sender
+
+// Email configuration
+var emailFromAddress string
+var emailReplyTo string
+
+// SetEmailSender sets the global email sender for the application.
+func SetEmailSender(sender email.Sender, from, replyTo string) {
+	emailSender = sender
+	emailFromAddress = from
+	emailReplyTo = replyTo
+}
+
 // NewMux wires HTTP handlers for the app.
 func NewMux(staticDir string, s *Stores) http.Handler {
 	stores = s
@@ -93,8 +115,8 @@ func NewMux(staticDir string, s *Stores) http.Handler {
 	// CSRF key: 32-byte hex-encoded secret from env var
 	csrfKey := loadCSRFKey()
 
-	// Rate limiter: 10 requests per second per IP (OWASP A04)
-	limiter := middleware.NewRateLimiter(10, time.Second)
+	// Rate limiter: configurable requests per second per IP (OWASP A04)
+	limiter := middleware.NewRateLimiter(RateLimitPerSecond, time.Second)
 
 	// Apply middleware: Auth -> CSRF -> SecurityHeaders -> RateLimit -> Mux
 	return middleware.Chain(mux,

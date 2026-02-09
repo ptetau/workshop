@@ -9,12 +9,14 @@ import (
 
 	_ "modernc.org/sqlite"
 
+	emailPkg "workshop/internal/adapters/email"
 	web "workshop/internal/adapters/http"
 	"workshop/internal/adapters/storage"
 	accountStore "workshop/internal/adapters/storage/account"
 	attendanceStore "workshop/internal/adapters/storage/attendance"
 	classTypeStore "workshop/internal/adapters/storage/classtype"
 	clipStorePkg "workshop/internal/adapters/storage/clip"
+	emailStorePkg "workshop/internal/adapters/storage/email"
 	gradingStore "workshop/internal/adapters/storage/grading"
 	holidayStore "workshop/internal/adapters/storage/holiday"
 	injuryStore "workshop/internal/adapters/storage/injury"
@@ -24,6 +26,7 @@ import (
 	noticeStore "workshop/internal/adapters/storage/notice"
 	observationStore "workshop/internal/adapters/storage/observation"
 	programStore "workshop/internal/adapters/storage/program"
+	rotorStorePkg "workshop/internal/adapters/storage/rotor"
 	scheduleStore "workshop/internal/adapters/storage/schedule"
 	termStore "workshop/internal/adapters/storage/term"
 	themeStorePkg "workshop/internal/adapters/storage/theme"
@@ -32,9 +35,13 @@ import (
 	"workshop/internal/application/orchestrators"
 )
 
+// version is set at build time via -ldflags "-X main.version=..."
+var version = "dev"
+
 func main() {
 	// Initialize database with WAL mode, foreign keys, and busy timeout per DB_GUIDE
-	dsn := "workshop.db?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(ON)&_pragma=synchronous(NORMAL)"
+	dbPath := "workshop.db"
+	dsn := dbPath + "?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(ON)&_pragma=synchronous(NORMAL)"
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		log.Fatalf("failed to open database: %v", err)
@@ -50,9 +57,9 @@ func main() {
 		log.Fatalf("database unreachable: %v", err)
 	}
 
-	// Initialize database schema
-	if err := storage.InitDB(db); err != nil {
-		log.Fatalf("failed to initialize database: %v", err)
+	// Run database migrations
+	if err := storage.MigrateDB(db, dbPath); err != nil {
+		log.Fatalf("failed to migrate database: %v", err)
 	}
 
 	log.Println("Database initialized successfully!")
@@ -82,6 +89,8 @@ func main() {
 		TrainingGoalStore:    trainingGoalStore.NewSQLiteStore(db),
 		ThemeStore:           themeStorePkg.NewSQLiteStore(db),
 		ClipStore:            clipStorePkg.NewSQLiteStore(db),
+		EmailStore:           emailStorePkg.NewSQLiteStore(db),
+		RotorStore:           rotorStorePkg.NewSQLiteStore(db),
 	}
 
 	// Seed default admin account if no accounts exist
@@ -131,12 +140,24 @@ func main() {
 		log.Println("Synthetic seed data loaded (dev mode)")
 	}
 
+	// Configure email sender
+	resendKey := os.Getenv("WORKSHOP_RESEND_KEY")
+	emailFrom := envOrDefault("WORKSHOP_RESEND_FROM", "Workshop Jiu Jitsu <noreply@workshopjiujitsu.co.nz>")
+	emailReply := envOrDefault("WORKSHOP_REPLY_TO", "info@workshopjiujitsu.co.nz")
+	if resendKey != "" {
+		web.SetEmailSender(emailPkg.NewResendSender(resendKey, emailFrom), emailFrom, emailReply)
+		log.Println("Email sender configured (Resend)")
+	} else {
+		web.SetEmailSender(emailPkg.NewNoopSender(), emailFrom, emailReply)
+		log.Println("Email sender configured (noop — set WORKSHOP_RESEND_KEY for real delivery)")
+	}
+
 	// Create HTTP handler with middleware
 	mux := web.NewMux("static", stores)
 
 	// Start server
 	addr := envOrDefault("WORKSHOP_ADDR", ":8080")
-	log.Printf("Server starting on %s (env=%s)", addr, envOrDefault("WORKSHOP_ENV", "development"))
+	log.Printf("Workshop %s starting on %s (env=%s, schema=%d)", version, addr, envOrDefault("WORKSHOP_ENV", "development"), storage.LatestSchemaVersion())
 
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Fatalf("Server failed: %v", err)

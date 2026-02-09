@@ -2,6 +2,7 @@ package web
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -18,18 +19,20 @@ import (
 
 	"workshop/internal/adapters/http/middleware"
 	accountStore "workshop/internal/adapters/storage/account"
+	emailStoreImport "workshop/internal/adapters/storage/email"
 	memberStore "workshop/internal/adapters/storage/member"
 	noticeStore "workshop/internal/adapters/storage/notice"
 	"workshop/internal/application/orchestrators"
 	"workshop/internal/application/projections"
 	accountDomain "workshop/internal/domain/account"
 	clipDomain "workshop/internal/domain/clip"
+	emailDomain "workshop/internal/domain/email"
 	gradingDomain "workshop/internal/domain/grading"
 	holidayDomain "workshop/internal/domain/holiday"
 	messageDomain "workshop/internal/domain/message"
 	milestoneDomain "workshop/internal/domain/milestone"
 	noticeDomain "workshop/internal/domain/notice"
-	observationDomain "workshop/internal/domain/observation"
+	rotorDomain "workshop/internal/domain/rotor"
 	scheduleDomain "workshop/internal/domain/schedule"
 	termDomain "workshop/internal/domain/term"
 	themeDomain "workshop/internal/domain/theme"
@@ -1110,19 +1113,17 @@ func handleObservations(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "invalid JSON", http.StatusBadRequest)
 			return
 		}
-		obs := observationDomain.Observation{
-			ID:        generateID(),
-			MemberID:  input.MemberID,
-			AuthorID:  sess.AccountID,
-			Content:   input.Content,
-			CreatedAt: timeNow(),
-		}
-		if err := obs.Validate(); err != nil {
+		obs, err := orchestrators.ExecuteCreateObservation(ctx, orchestrators.CreateObservationInput{
+			MemberID: input.MemberID,
+			Content:  input.Content,
+			AuthorID: sess.AccountID,
+		}, orchestrators.CreateObservationDeps{
+			ObservationStore: stores.ObservationStore,
+			GenerateID:       generateID,
+			Now:              timeNow,
+		})
+		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		if err := stores.ObservationStore.Save(ctx, obs); err != nil {
-			internalError(w, err)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -1440,13 +1441,14 @@ func handleAccounts(w http.ResponseWriter, r *http.Request) {
 		}
 		// Strip password hashes from response
 		type safeAccount struct {
-			ID    string `json:"ID"`
-			Email string `json:"Email"`
-			Role  string `json:"Role"`
+			ID     string `json:"ID"`
+			Email  string `json:"Email"`
+			Role   string `json:"Role"`
+			Status string `json:"Status"`
 		}
 		var safe []safeAccount
 		for _, a := range accounts {
-			safe = append(safe, safeAccount{ID: a.ID, Email: a.Email, Role: a.Role})
+			safe = append(safe, safeAccount{ID: a.ID, Email: a.Email, Role: a.Role, Status: a.Status})
 		}
 		w.Header().Set("Content-Type", "application/json")
 		if safe == nil {
@@ -1480,21 +1482,56 @@ func handleAccounts(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		if err := acct.SetPassword(input.Password); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		if err := stores.AccountStore.Save(ctx, acct); err != nil {
-			internalError(w, err)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(map[string]string{
+
+		response := map[string]string{
 			"ID":    acct.ID,
 			"Email": acct.Email,
 			"Role":  acct.Role,
-		})
+		}
+
+		// Non-admin accounts use activation flow (no password required)
+		if input.Role != accountDomain.RoleAdmin {
+			acct.Status = accountDomain.StatusPendingActivation
+			// Set a random placeholder password (will be replaced on activation)
+			acct.PasswordHash = "pending_activation"
+			if err := stores.AccountStore.Save(ctx, acct); err != nil {
+				internalError(w, err)
+				return
+			}
+			// Generate activation token
+			tokenStr := generateID()
+			tok := accountDomain.ActivationToken{
+				ID:        generateID(),
+				AccountID: acct.ID,
+				Token:     tokenStr,
+				ExpiresAt: timeNow().Add(72 * time.Hour),
+				CreatedAt: timeNow(),
+			}
+			if err := stores.AccountStore.SaveActivationToken(ctx, tok); err != nil {
+				internalError(w, err)
+				return
+			}
+			response["Status"] = accountDomain.StatusPendingActivation
+			response["ActivationToken"] = tokenStr
+			slog.Info("auth_event", "event", "account_created_pending", "email", acct.Email, "role", acct.Role)
+		} else {
+			// Admin accounts require a password and are active immediately
+			if err := acct.SetPassword(input.Password); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			acct.Status = accountDomain.StatusActive
+			if err := stores.AccountStore.Save(ctx, acct); err != nil {
+				internalError(w, err)
+				return
+			}
+			response["Status"] = accountDomain.StatusActive
+			slog.Info("auth_event", "event", "account_created", "email", acct.Email, "role", acct.Role)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(response)
 		return
 	}
 
@@ -2281,6 +2318,74 @@ func handleMessagesPage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleMemberInboxPage handles GET /inbox — shows emails sent to the current member.
+func handleMemberInboxPage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	sess, ok := middleware.GetSessionFromContext(r.Context())
+	if !ok {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	m, err := stores.MemberStore.GetByEmail(r.Context(), sess.Email)
+	memberID := ""
+	if err == nil {
+		memberID = m.ID
+	}
+	renderTemplate(w, r, "member_inbox.html", map[string]any{
+		"Email":    sess.Email,
+		"MemberID": memberID,
+	})
+}
+
+// handleMemberInboxAPI handles GET /api/inbox?member_id=...
+func handleMemberInboxAPI(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	sess, ok := middleware.GetSessionFromContext(r.Context())
+	if !ok {
+		http.Error(w, "not authenticated", http.StatusUnauthorized)
+		return
+	}
+
+	// Members can only view their own inbox; admins can view any
+	memberID := r.URL.Query().Get("member_id")
+	if memberID == "" {
+		// Look up member by session email
+		m, err := stores.MemberStore.GetByEmail(r.Context(), sess.Email)
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte("[]"))
+			return
+		}
+		memberID = m.ID
+	} else if sess.Role != "admin" {
+		// Non-admin trying to view another member's inbox
+		m, err := stores.MemberStore.GetByEmail(r.Context(), sess.Email)
+		if err != nil || m.ID != memberID {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+	}
+
+	emails, err := stores.EmailStore.ListByRecipientMemberID(r.Context(), memberID)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if emails == nil {
+		w.Write([]byte("[]"))
+		return
+	}
+	json.NewEncoder(w).Encode(emails)
+}
+
 // --- Phase 3: Dashboard & Kiosk Handlers ---
 
 // handleDashboard handles GET /dashboard — renders role-appropriate dashboard.
@@ -2752,4 +2857,1409 @@ func handleDevModeRestore(w http.ResponseWriter, r *http.Request) {
 	)
 
 	http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
+}
+
+// --- Phase 3: Email System Handlers ---
+
+// memberLookupAdapter bridges the member store to the orchestrator's MemberLookup interface.
+type memberLookupAdapter struct{}
+
+// GetEmailByMemberID resolves a member's name and email from the member store.
+// PRE: memberID is non-empty
+// POST: Returns member name and email, or error if not found
+func (a *memberLookupAdapter) GetEmailByMemberID(ctx context.Context, memberID string) (string, string, error) {
+	m, err := stores.MemberStore.GetByID(ctx, memberID)
+	if err != nil {
+		return "", "", err
+	}
+	return m.Name, m.Email, nil
+}
+
+// handleAdminEmailsPage handles GET /admin/emails
+func handleAdminEmailsPage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if _, ok := requireAdmin(w, r); !ok {
+		return
+	}
+
+	ctx := r.Context()
+	emails, err := stores.EmailStore.List(ctx, emailStoreImport.ListFilter{})
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+
+	renderTemplate(w, r, "admin_emails.html", map[string]any{
+		"Emails": emails,
+	})
+}
+
+// handleAdminComposeEmailPage handles GET /admin/emails/compose
+func handleAdminComposeEmailPage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if _, ok := requireAdmin(w, r); !ok {
+		return
+	}
+
+	emailID := r.URL.Query().Get("id")
+	var draft emailDomain.Email
+	var recipients []emailDomain.Recipient
+	if emailID != "" {
+		var err error
+		draft, err = stores.EmailStore.GetByID(r.Context(), emailID)
+		if err != nil {
+			http.Error(w, "email not found", http.StatusNotFound)
+			return
+		}
+		recipients, _ = stores.EmailStore.GetRecipients(r.Context(), emailID)
+	}
+
+	renderTemplate(w, r, "admin_compose_email.html", map[string]any{
+		"Draft":      draft,
+		"Recipients": recipients,
+	})
+}
+
+// handleEmailCompose handles POST /api/emails/compose (save draft)
+func handleEmailCompose(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	sess, ok := requireAdmin(w, r)
+	if !ok {
+		return
+	}
+
+	var input struct {
+		EmailID   string   `json:"EmailID"`
+		Subject   string   `json:"Subject"`
+		Body      string   `json:"Body"`
+		MemberIDs []string `json:"MemberIDs"`
+	}
+	if err := strictDecode(r, &input); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	em, err := orchestrators.ExecuteComposeEmail(r.Context(), orchestrators.ComposeEmailInput{
+		EmailID:   input.EmailID,
+		Subject:   input.Subject,
+		Body:      input.Body,
+		SenderID:  sess.AccountID,
+		MemberIDs: input.MemberIDs,
+	}, orchestrators.ComposeEmailDeps{
+		EmailStore:   stores.EmailStore,
+		MemberLookup: &memberLookupAdapter{},
+		GenerateID:   generateID,
+		Now:          timeNow,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(em)
+}
+
+// handleEmailSend handles POST /api/emails/send
+func handleEmailSend(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	sess, ok := requireAdmin(w, r)
+	if !ok {
+		return
+	}
+
+	var input struct {
+		EmailID string `json:"EmailID"`
+	}
+	if err := strictDecode(r, &input); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	if emailSender == nil {
+		http.Error(w, "email sending is not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	em, err := orchestrators.ExecuteSendEmail(r.Context(), orchestrators.SendEmailInput{
+		EmailID:  input.EmailID,
+		SenderID: sess.AccountID,
+	}, orchestrators.SendEmailDeps{
+		EmailStore:  stores.EmailStore,
+		EmailSender: emailSender,
+		Now:         timeNow,
+		FromAddress: emailFromAddress,
+		ReplyTo:     emailReplyTo,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(em)
+}
+
+// handleEmailList handles GET /api/emails
+func handleEmailList(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if _, ok := requireAdmin(w, r); !ok {
+		return
+	}
+
+	status := r.URL.Query().Get("status")
+	search := r.URL.Query().Get("q")
+	emails, err := stores.EmailStore.List(r.Context(), emailStoreImport.ListFilter{Status: status, Search: search})
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if emails == nil {
+		w.Write([]byte("[]"))
+		return
+	}
+	json.NewEncoder(w).Encode(emails)
+}
+
+// handleEmailDetail handles GET /api/emails/detail?id=...
+func handleEmailDetail(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if _, ok := requireAdmin(w, r); !ok {
+		return
+	}
+
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		http.Error(w, "id is required", http.StatusBadRequest)
+		return
+	}
+
+	em, err := stores.EmailStore.GetByID(r.Context(), id)
+	if err != nil {
+		http.Error(w, "email not found", http.StatusNotFound)
+		return
+	}
+
+	recipients, _ := stores.EmailStore.GetRecipients(r.Context(), id)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"Email":      em,
+		"Recipients": recipients,
+	})
+}
+
+// handleEmailDelete handles DELETE /api/emails?id=...
+func handleEmailDelete(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "DELETE" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if _, ok := requireAdmin(w, r); !ok {
+		return
+	}
+
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		http.Error(w, "id is required", http.StatusBadRequest)
+		return
+	}
+
+	em, err := stores.EmailStore.GetByID(r.Context(), id)
+	if err != nil {
+		http.Error(w, "email not found", http.StatusNotFound)
+		return
+	}
+	if !em.IsDraft() {
+		http.Error(w, "only draft emails can be deleted", http.StatusBadRequest)
+		return
+	}
+
+	if err := stores.EmailStore.Delete(r.Context(), id); err != nil {
+		internalError(w, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleEmailSchedule handles POST /api/emails/schedule
+func handleEmailSchedule(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	sess, ok := requireAdmin(w, r)
+	if !ok {
+		return
+	}
+
+	var input struct {
+		EmailID     string `json:"EmailID"`
+		ScheduledAt string `json:"ScheduledAt"` // RFC3339
+	}
+	if err := strictDecode(r, &input); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if input.EmailID == "" || input.ScheduledAt == "" {
+		http.Error(w, "EmailID and ScheduledAt are required", http.StatusBadRequest)
+		return
+	}
+
+	scheduledAt, err := time.Parse(time.RFC3339, input.ScheduledAt)
+	if err != nil {
+		http.Error(w, "ScheduledAt must be in RFC3339 format", http.StatusBadRequest)
+		return
+	}
+
+	_ = sess // sender verified via requireAdmin
+	em, err := orchestrators.ExecuteScheduleEmail(r.Context(), orchestrators.ScheduleEmailInput{
+		EmailID:     input.EmailID,
+		ScheduledAt: scheduledAt,
+	}, orchestrators.ScheduleEmailDeps{
+		EmailStore: stores.EmailStore,
+		Now:        timeNow,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(em)
+}
+
+// handleEmailCancel handles POST /api/emails/cancel
+func handleEmailCancel(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if _, ok := requireAdmin(w, r); !ok {
+		return
+	}
+
+	var input struct {
+		EmailID string `json:"EmailID"`
+	}
+	if err := strictDecode(r, &input); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if input.EmailID == "" {
+		http.Error(w, "EmailID is required", http.StatusBadRequest)
+		return
+	}
+
+	em, err := orchestrators.ExecuteCancelEmail(r.Context(), orchestrators.CancelEmailInput{
+		EmailID: input.EmailID,
+	}, orchestrators.CancelEmailDeps{
+		EmailStore: stores.EmailStore,
+		Now:        timeNow,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(em)
+}
+
+// handleEmailReschedule handles POST /api/emails/reschedule
+func handleEmailReschedule(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if _, ok := requireAdmin(w, r); !ok {
+		return
+	}
+
+	var input struct {
+		EmailID     string `json:"EmailID"`
+		ScheduledAt string `json:"ScheduledAt"` // RFC3339
+	}
+	if err := strictDecode(r, &input); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if input.EmailID == "" || input.ScheduledAt == "" {
+		http.Error(w, "EmailID and ScheduledAt are required", http.StatusBadRequest)
+		return
+	}
+
+	scheduledAt, err := time.Parse(time.RFC3339, input.ScheduledAt)
+	if err != nil {
+		http.Error(w, "ScheduledAt must be in RFC3339 format", http.StatusBadRequest)
+		return
+	}
+
+	em, err := orchestrators.ExecuteRescheduleEmail(r.Context(), orchestrators.RescheduleEmailInput{
+		EmailID:     input.EmailID,
+		ScheduledAt: scheduledAt,
+	}, orchestrators.RescheduleEmailDeps{
+		EmailStore: stores.EmailStore,
+		Now:        timeNow,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(em)
+}
+
+// handleEmailTemplatePage handles GET /admin/emails/template
+func handleEmailTemplatePage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if _, ok := requireAdmin(w, r); !ok {
+		return
+	}
+	renderTemplate(w, r, "admin_email_template.html", nil)
+}
+
+// handleEmailTemplateGet handles GET /api/emails/template
+func handleEmailTemplateGet(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if _, ok := requireAdmin(w, r); !ok {
+		return
+	}
+
+	t, err := stores.EmailStore.GetActiveTemplate(r.Context())
+	if err != nil {
+		// No template yet — return empty defaults
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"ID": "", "Header": "", "Footer": ""})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(t)
+}
+
+// handleEmailTemplateSave handles POST /api/emails/template
+func handleEmailTemplateSave(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if _, ok := requireAdmin(w, r); !ok {
+		return
+	}
+
+	var input struct {
+		Header string `json:"Header"`
+		Footer string `json:"Footer"`
+	}
+	if err := strictDecode(r, &input); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	t := emailDomain.EmailTemplate{
+		ID:        generateID(),
+		Header:    input.Header,
+		Footer:    input.Footer,
+		CreatedAt: timeNow(),
+		Active:    true,
+	}
+
+	if err := stores.EmailStore.SaveTemplate(r.Context(), t); err != nil {
+		internalError(w, err)
+		return
+	}
+
+	slog.Info("email_event", "event", "template_saved", "template_id", t.ID)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(t)
+}
+
+// handleEmailPreview handles POST /api/emails/preview — wraps body with active template
+func handleEmailPreview(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if _, ok := requireAdmin(w, r); !ok {
+		return
+	}
+
+	var input struct {
+		Body string `json:"Body"`
+	}
+	if err := strictDecode(r, &input); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	t, err := stores.EmailStore.GetActiveTemplate(r.Context())
+	if err != nil {
+		// No template — return body as-is
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"HTML": input.Body})
+		return
+	}
+
+	wrapped := t.WrapBody(input.Body)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"HTML": wrapped})
+}
+
+// handleMemberFilterForEmail handles GET /api/emails/recipients/filter?program=...
+func handleMemberFilterForEmail(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if _, ok := requireAdmin(w, r); !ok {
+		return
+	}
+
+	program := r.URL.Query().Get("program")
+
+	filter := memberStore.ListFilter{
+		Status: "active",
+	}
+	if program != "" {
+		filter.Program = program
+	}
+
+	members, err := stores.MemberStore.List(r.Context(), filter)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+
+	type memberResult struct {
+		ID    string `json:"ID"`
+		Name  string `json:"Name"`
+		Email string `json:"Email"`
+	}
+	var results []memberResult
+	for _, m := range members {
+		results = append(results, memberResult{ID: m.ID, Name: m.Name, Email: m.Email})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if results == nil {
+		w.Write([]byte("[]"))
+		return
+	}
+	json.NewEncoder(w).Encode(results)
+}
+
+// handleMemberSearchForEmail handles GET /api/emails/recipients/search?q=...
+func handleMemberSearchForEmail(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if _, ok := requireAdmin(w, r); !ok {
+		return
+	}
+
+	query := r.URL.Query().Get("q")
+	if query == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte("[]"))
+		return
+	}
+
+	members, err := stores.MemberStore.SearchByName(r.Context(), query, 20)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+
+	type memberResult struct {
+		ID    string `json:"ID"`
+		Name  string `json:"Name"`
+		Email string `json:"Email"`
+	}
+	var results []memberResult
+	for _, m := range members {
+		results = append(results, memberResult{ID: m.ID, Name: m.Name, Email: m.Email})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if results == nil {
+		w.Write([]byte("[]"))
+		return
+	}
+	json.NewEncoder(w).Encode(results)
+}
+
+// handleActivatePage handles GET /activate?token=... — shows the password-setting form.
+func handleActivatePage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	token := r.URL.Query().Get("token")
+	if token == "" {
+		http.Error(w, "Missing activation token", http.StatusBadRequest)
+		return
+	}
+
+	tok, err := stores.AccountStore.GetActivationTokenByToken(r.Context(), token)
+	if err != nil {
+		renderTemplate(w, r, "activate.html", map[string]any{"Error": "Invalid activation link."})
+		return
+	}
+	if tok.Used {
+		renderTemplate(w, r, "activate.html", map[string]any{"Error": "This activation link has already been used."})
+		return
+	}
+	if tok.IsExpired(timeNow()) {
+		renderTemplate(w, r, "activate.html", map[string]any{"Error": "This activation link has expired. Please contact the gym to resend."})
+		return
+	}
+
+	renderTemplate(w, r, "activate.html", map[string]any{"Token": token})
+}
+
+// handleActivateAccount handles POST /api/activate — sets password and activates account.
+func handleActivateAccount(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var input struct {
+		Token    string `json:"Token"`
+		Password string `json:"Password"`
+	}
+	if err := strictDecode(r, &input); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if input.Token == "" || input.Password == "" {
+		http.Error(w, "Token and Password are required", http.StatusBadRequest)
+		return
+	}
+
+	tok, err := stores.AccountStore.GetActivationTokenByToken(r.Context(), input.Token)
+	if err != nil {
+		http.Error(w, "Invalid activation token", http.StatusBadRequest)
+		return
+	}
+	if tok.Used {
+		http.Error(w, "This activation link has already been used", http.StatusBadRequest)
+		return
+	}
+	if tok.IsExpired(timeNow()) {
+		http.Error(w, "Link expired - contact your gym to resend", http.StatusBadRequest)
+		return
+	}
+
+	acct, err := stores.AccountStore.GetByID(r.Context(), tok.AccountID)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+
+	if err := acct.Activate(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if err := acct.SetPassword(input.Password); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	acct.PasswordChangeRequired = false
+
+	if err := stores.AccountStore.Save(r.Context(), acct); err != nil {
+		internalError(w, err)
+		return
+	}
+
+	tok.Invalidate()
+	stores.AccountStore.SaveActivationToken(r.Context(), tok)
+	stores.AccountStore.InvalidateTokensForAccount(r.Context(), tok.AccountID)
+
+	slog.Info("auth_event", "event", "account_activated", "account_id", acct.ID, "email", acct.Email)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "activated"})
+}
+
+// handleResendActivation handles POST /api/admin/resend-activation — admin resends activation email.
+func handleResendActivation(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if _, ok := requireAdmin(w, r); !ok {
+		return
+	}
+
+	var input struct {
+		AccountID string `json:"AccountID"`
+	}
+	if err := strictDecode(r, &input); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if input.AccountID == "" {
+		http.Error(w, "AccountID is required", http.StatusBadRequest)
+		return
+	}
+
+	acct, err := stores.AccountStore.GetByID(r.Context(), input.AccountID)
+	if err != nil {
+		http.Error(w, "Account not found", http.StatusNotFound)
+		return
+	}
+	if acct.Status != accountDomain.StatusPendingActivation {
+		http.Error(w, "Account is already activated", http.StatusBadRequest)
+		return
+	}
+
+	stores.AccountStore.InvalidateTokensForAccount(r.Context(), acct.ID)
+
+	tokenStr := generateID()
+	tok := accountDomain.ActivationToken{
+		ID:        generateID(),
+		AccountID: acct.ID,
+		Token:     tokenStr,
+		ExpiresAt: timeNow().Add(72 * time.Hour),
+		CreatedAt: timeNow(),
+	}
+	if err := stores.AccountStore.SaveActivationToken(r.Context(), tok); err != nil {
+		internalError(w, err)
+		return
+	}
+
+	slog.Info("auth_event", "event", "activation_resent", "account_id", acct.ID, "email", acct.Email)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "sent", "token": tokenStr})
+}
+
+// --- Phase 6: Curriculum Rotor Handlers ---
+
+// handleCurriculumPage handles GET /curriculum — renders the curriculum management page.
+func handleCurriculumPage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	renderTemplate(w, r, "curriculum.html", map[string]interface{}{
+		"Title": "Curriculum",
+	})
+}
+
+// handleRotors handles GET/POST for /api/rotors
+func handleRotors(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if r.Method == "GET" {
+		classTypeID := r.URL.Query().Get("class_type_id")
+		if classTypeID == "" {
+			http.Error(w, "class_type_id is required", http.StatusBadRequest)
+			return
+		}
+		rotors, err := stores.RotorStore.ListRotorsByClassType(ctx, classTypeID)
+		if err != nil {
+			internalError(w, err)
+			return
+		}
+		if rotors == nil {
+			rotors = []rotorDomain.Rotor{}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(rotors)
+		return
+	}
+
+	if r.Method == "POST" {
+		session, ok := middleware.GetSessionFromContext(ctx)
+		if !ok {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		var input struct {
+			ClassTypeID string `json:"class_type_id"`
+			Name        string `json:"name"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			return
+		}
+
+		// Determine next version number
+		existing, _ := stores.RotorStore.ListRotorsByClassType(ctx, input.ClassTypeID)
+		nextVersion := 1
+		for _, r := range existing {
+			if r.Version >= nextVersion {
+				nextVersion = r.Version + 1
+			}
+		}
+
+		rotor := rotorDomain.Rotor{
+			ID:          generateID(),
+			ClassTypeID: input.ClassTypeID,
+			Name:        input.Name,
+			Version:     nextVersion,
+			Status:      rotorDomain.StatusDraft,
+			CreatedBy:   session.AccountID,
+			CreatedAt:   timeNow(),
+		}
+		if err := rotor.Validate(); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := stores.RotorStore.SaveRotor(ctx, rotor); err != nil {
+			internalError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(rotor)
+		return
+	}
+
+	w.WriteHeader(http.StatusMethodNotAllowed)
+}
+
+// handleRotorByID handles GET/DELETE for /api/rotors/by-id?id=<id>
+func handleRotorByID(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		http.Error(w, "id is required", http.StatusBadRequest)
+		return
+	}
+
+	if r.Method == "GET" {
+		rotor, err := stores.RotorStore.GetRotor(ctx, id)
+		if err != nil {
+			http.Error(w, "Rotor not found", http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(rotor)
+		return
+	}
+
+	if r.Method == "DELETE" {
+		rotor, err := stores.RotorStore.GetRotor(ctx, id)
+		if err != nil {
+			http.Error(w, "Rotor not found", http.StatusNotFound)
+			return
+		}
+		if rotor.IsActive() {
+			http.Error(w, "cannot delete an active rotor", http.StatusBadRequest)
+			return
+		}
+		if err := stores.RotorStore.DeleteRotor(ctx, id); err != nil {
+			internalError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	w.WriteHeader(http.StatusMethodNotAllowed)
+}
+
+// handleRotorActivate handles POST /api/rotors/activate
+func handleRotorActivate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	ctx := r.Context()
+
+	var input struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	rotor, err := stores.RotorStore.GetRotor(ctx, input.ID)
+	if err != nil {
+		http.Error(w, "Rotor not found", http.StatusNotFound)
+		return
+	}
+
+	// Archive any currently active rotor for this class
+	activeRotor, err := stores.RotorStore.GetActiveRotor(ctx, rotor.ClassTypeID)
+	if err == nil && activeRotor.ID != rotor.ID {
+		activeRotor.Archive()
+		stores.RotorStore.SaveRotor(ctx, activeRotor)
+	}
+
+	if err := rotor.Activate(timeNow()); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := stores.RotorStore.SaveRotor(ctx, rotor); err != nil {
+		internalError(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(rotor)
+}
+
+// handleRotorPreview handles POST /api/rotors/preview (toggle preview on/off)
+func handleRotorPreview(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	ctx := r.Context()
+
+	var input struct {
+		ID        string `json:"id"`
+		PreviewOn bool   `json:"preview_on"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	rotor, err := stores.RotorStore.GetRotor(ctx, input.ID)
+	if err != nil {
+		http.Error(w, "Rotor not found", http.StatusNotFound)
+		return
+	}
+
+	rotor.PreviewOn = input.PreviewOn
+	if err := stores.RotorStore.SaveRotor(ctx, rotor); err != nil {
+		internalError(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(rotor)
+}
+
+// handleRotorThemes handles GET/POST/DELETE for /api/rotors/themes
+func handleRotorThemes(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if r.Method == "GET" {
+		rotorID := r.URL.Query().Get("rotor_id")
+		if rotorID == "" {
+			http.Error(w, "rotor_id is required", http.StatusBadRequest)
+			return
+		}
+		themes, err := stores.RotorStore.ListThemesByRotor(ctx, rotorID)
+		if err != nil {
+			internalError(w, err)
+			return
+		}
+		if themes == nil {
+			themes = []rotorDomain.RotorTheme{}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(themes)
+		return
+	}
+
+	if r.Method == "POST" {
+		var input struct {
+			RotorID  string `json:"rotor_id"`
+			Name     string `json:"name"`
+			Position int    `json:"position"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			return
+		}
+
+		// Verify rotor exists and is in draft
+		rotor, err := stores.RotorStore.GetRotor(ctx, input.RotorID)
+		if err != nil {
+			http.Error(w, "Rotor not found", http.StatusNotFound)
+			return
+		}
+		if !rotor.IsDraft() {
+			http.Error(w, "can only add themes to draft rotors", http.StatusBadRequest)
+			return
+		}
+
+		theme := rotorDomain.RotorTheme{
+			ID:       generateID(),
+			RotorID:  input.RotorID,
+			Name:     input.Name,
+			Position: input.Position,
+		}
+		if err := theme.Validate(); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := stores.RotorStore.SaveRotorTheme(ctx, theme); err != nil {
+			internalError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(theme)
+		return
+	}
+
+	if r.Method == "DELETE" {
+		id := r.URL.Query().Get("id")
+		if id == "" {
+			http.Error(w, "id is required", http.StatusBadRequest)
+			return
+		}
+		if err := stores.RotorStore.DeleteRotorTheme(ctx, id); err != nil {
+			internalError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	w.WriteHeader(http.StatusMethodNotAllowed)
+}
+
+// handleTopics handles GET/POST/DELETE for /api/rotors/topics
+func handleTopics(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if r.Method == "GET" {
+		themeID := r.URL.Query().Get("theme_id")
+		if themeID == "" {
+			http.Error(w, "theme_id is required", http.StatusBadRequest)
+			return
+		}
+		topics, err := stores.RotorStore.ListTopicsByTheme(ctx, themeID)
+		if err != nil {
+			internalError(w, err)
+			return
+		}
+		if topics == nil {
+			topics = []rotorDomain.Topic{}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(topics)
+		return
+	}
+
+	if r.Method == "POST" {
+		var input struct {
+			RotorThemeID  string `json:"rotor_theme_id"`
+			Name          string `json:"name"`
+			Description   string `json:"description"`
+			DurationWeeks int    `json:"duration_weeks"`
+			Position      int    `json:"position"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			return
+		}
+		if input.DurationWeeks == 0 {
+			input.DurationWeeks = 1
+		}
+
+		topic := rotorDomain.Topic{
+			ID:            generateID(),
+			RotorThemeID:  input.RotorThemeID,
+			Name:          input.Name,
+			Description:   input.Description,
+			DurationWeeks: input.DurationWeeks,
+			Position:      input.Position,
+		}
+		if err := topic.Validate(); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := stores.RotorStore.SaveTopic(ctx, topic); err != nil {
+			internalError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(topic)
+		return
+	}
+
+	if r.Method == "DELETE" {
+		id := r.URL.Query().Get("id")
+		if id == "" {
+			http.Error(w, "id is required", http.StatusBadRequest)
+			return
+		}
+		if err := stores.RotorStore.DeleteTopic(ctx, id); err != nil {
+			internalError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	w.WriteHeader(http.StatusMethodNotAllowed)
+}
+
+// handleTopicReorder handles POST /api/rotors/topics/reorder
+func handleTopicReorder(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	var input struct {
+		RotorThemeID string   `json:"rotor_theme_id"`
+		TopicIDs     []string `json:"topic_ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if input.RotorThemeID == "" || len(input.TopicIDs) == 0 {
+		http.Error(w, "rotor_theme_id and topic_ids are required", http.StatusBadRequest)
+		return
+	}
+
+	if err := stores.RotorStore.ReorderTopics(r.Context(), input.RotorThemeID, input.TopicIDs); err != nil {
+		internalError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleTopicScheduleAction handles POST /api/rotors/schedule/action
+// Actions: "activate" (start a topic), "complete", "skip", "extend"
+func handleTopicScheduleAction(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	ctx := r.Context()
+
+	var input struct {
+		Action       string `json:"action"` // activate, complete, skip, extend
+		TopicID      string `json:"topic_id"`
+		RotorThemeID string `json:"rotor_theme_id"`
+		ExtendWeeks  int    `json:"extend_weeks"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	now := timeNow()
+
+	switch input.Action {
+	case "activate":
+		// Complete any currently active schedule for this theme
+		activeSched, err := stores.RotorStore.GetActiveScheduleForTheme(ctx, input.RotorThemeID)
+		if err == nil {
+			activeSched.Status = rotorDomain.ScheduleStatusCompleted
+			activeSched.EndDate = now
+			stores.RotorStore.SaveTopicSchedule(ctx, activeSched)
+
+			// Update last_covered on the completed topic
+			completedTopic, topicErr := stores.RotorStore.GetTopic(ctx, activeSched.TopicID)
+			if topicErr == nil {
+				completedTopic.LastCovered = now
+				stores.RotorStore.SaveTopic(ctx, completedTopic)
+			}
+		}
+
+		topic, err := stores.RotorStore.GetTopic(ctx, input.TopicID)
+		if err != nil {
+			http.Error(w, "Topic not found", http.StatusNotFound)
+			return
+		}
+
+		sched := rotorDomain.TopicSchedule{
+			ID:           generateID(),
+			TopicID:      topic.ID,
+			RotorThemeID: topic.RotorThemeID,
+			StartDate:    now,
+			EndDate:      now.AddDate(0, 0, topic.DurationWeeks*7),
+			Status:       rotorDomain.ScheduleStatusActive,
+		}
+		if err := stores.RotorStore.SaveTopicSchedule(ctx, sched); err != nil {
+			internalError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(sched)
+
+	case "complete":
+		sched, err := stores.RotorStore.GetActiveScheduleForTheme(ctx, input.RotorThemeID)
+		if err != nil {
+			http.Error(w, "No active schedule for theme", http.StatusNotFound)
+			return
+		}
+		sched.Status = rotorDomain.ScheduleStatusCompleted
+		sched.EndDate = now
+		if err := stores.RotorStore.SaveTopicSchedule(ctx, sched); err != nil {
+			internalError(w, err)
+			return
+		}
+		// Update last_covered
+		topic, topicErr := stores.RotorStore.GetTopic(ctx, sched.TopicID)
+		if topicErr == nil {
+			topic.LastCovered = now
+			stores.RotorStore.SaveTopic(ctx, topic)
+		}
+		// Clear votes for the completed topic
+		stores.RotorStore.DeleteVotesForTopic(ctx, sched.TopicID)
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(sched)
+
+	case "skip":
+		sched, err := stores.RotorStore.GetActiveScheduleForTheme(ctx, input.RotorThemeID)
+		if err != nil {
+			http.Error(w, "No active schedule for theme", http.StatusNotFound)
+			return
+		}
+		sched.Status = rotorDomain.ScheduleStatusSkipped
+		sched.EndDate = now
+		if err := stores.RotorStore.SaveTopicSchedule(ctx, sched); err != nil {
+			internalError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(sched)
+
+	case "extend":
+		sched, err := stores.RotorStore.GetActiveScheduleForTheme(ctx, input.RotorThemeID)
+		if err != nil {
+			http.Error(w, "No active schedule for theme", http.StatusNotFound)
+			return
+		}
+		weeks := input.ExtendWeeks
+		if weeks < 1 {
+			weeks = 1
+		}
+		sched.EndDate = sched.EndDate.AddDate(0, 0, weeks*7)
+		if err := stores.RotorStore.SaveTopicSchedule(ctx, sched); err != nil {
+			internalError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(sched)
+
+	default:
+		http.Error(w, "invalid action: must be activate, complete, skip, or extend", http.StatusBadRequest)
+	}
+}
+
+// handleVotes handles POST /api/votes (cast a vote) and GET /api/votes?topic_id=<id> (get vote count)
+func handleVotes(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if r.Method == "GET" {
+		topicID := r.URL.Query().Get("topic_id")
+		if topicID == "" {
+			http.Error(w, "topic_id is required", http.StatusBadRequest)
+			return
+		}
+		count, err := stores.RotorStore.CountVotesForTopic(ctx, topicID)
+		if err != nil {
+			internalError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]int{"votes": count})
+		return
+	}
+
+	if r.Method == "POST" {
+		session, ok := middleware.GetSessionFromContext(ctx)
+		if !ok {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		var input struct {
+			TopicID string `json:"topic_id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			return
+		}
+		if input.TopicID == "" {
+			http.Error(w, "topic_id is required", http.StatusBadRequest)
+			return
+		}
+
+		vote := rotorDomain.Vote{
+			ID:        generateID(),
+			TopicID:   input.TopicID,
+			AccountID: session.AccountID,
+			CreatedAt: timeNow(),
+		}
+		if err := stores.RotorStore.SaveVote(ctx, vote); err != nil {
+			if err == rotorDomain.ErrAlreadyVoted {
+				http.Error(w, err.Error(), http.StatusConflict)
+				return
+			}
+			internalError(w, err)
+			return
+		}
+
+		count, _ := stores.RotorStore.CountVotesForTopic(ctx, input.TopicID)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(map[string]interface{}{"status": "voted", "votes": count})
+		return
+	}
+
+	w.WriteHeader(http.StatusMethodNotAllowed)
+}
+
+// handleTopicBump handles POST /api/rotors/topics/bump — bumps a voted topic to current position
+func handleTopicBump(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	ctx := r.Context()
+
+	var input struct {
+		TopicID      string `json:"topic_id"`
+		RotorThemeID string `json:"rotor_theme_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	topic, err := stores.RotorStore.GetTopic(ctx, input.TopicID)
+	if err != nil {
+		http.Error(w, "Topic not found", http.StatusNotFound)
+		return
+	}
+
+	// Complete current active schedule if any
+	activeSched, err := stores.RotorStore.GetActiveScheduleForTheme(ctx, input.RotorThemeID)
+	if err == nil {
+		activeSched.Status = rotorDomain.ScheduleStatusCompleted
+		activeSched.EndDate = timeNow()
+		stores.RotorStore.SaveTopicSchedule(ctx, activeSched)
+	}
+
+	// Activate the bumped topic
+	now := timeNow()
+	sched := rotorDomain.TopicSchedule{
+		ID:           generateID(),
+		TopicID:      topic.ID,
+		RotorThemeID: input.RotorThemeID,
+		StartDate:    now,
+		EndDate:      now.AddDate(0, 0, topic.DurationWeeks*7),
+		Status:       rotorDomain.ScheduleStatusActive,
+	}
+	if err := stores.RotorStore.SaveTopicSchedule(ctx, sched); err != nil {
+		internalError(w, err)
+		return
+	}
+
+	// Clear votes for the bumped topic
+	stores.RotorStore.DeleteVotesForTopic(ctx, input.TopicID)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(sched)
+}
+
+// handleCurriculumView handles GET /api/curriculum/view?class_type_id=<id>
+// Returns the full curriculum state for a class: active rotor, themes, topics, schedules, votes.
+func handleCurriculumView(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	ctx := r.Context()
+
+	classTypeID := r.URL.Query().Get("class_type_id")
+	if classTypeID == "" {
+		http.Error(w, "class_type_id is required", http.StatusBadRequest)
+		return
+	}
+
+	rotor, err := stores.RotorStore.GetActiveRotor(ctx, classTypeID)
+	if err != nil {
+		// No active rotor — return empty state
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"rotor":  nil,
+			"themes": []interface{}{},
+		})
+		return
+	}
+
+	themes, _ := stores.RotorStore.ListThemesByRotor(ctx, rotor.ID)
+
+	type topicWithVotes struct {
+		rotorDomain.Topic
+		Votes    int  `json:"votes"`
+		IsActive bool `json:"is_active"`
+	}
+	type themeView struct {
+		rotorDomain.RotorTheme
+		Topics         []topicWithVotes           `json:"topics"`
+		ActiveSchedule *rotorDomain.TopicSchedule `json:"active_schedule"`
+	}
+
+	var themeViews []themeView
+	for _, th := range themes {
+		tv := themeView{RotorTheme: th}
+		topics, _ := stores.RotorStore.ListTopicsByTheme(ctx, th.ID)
+		activeSched, schedErr := stores.RotorStore.GetActiveScheduleForTheme(ctx, th.ID)
+		if schedErr == nil {
+			tv.ActiveSchedule = &activeSched
+		}
+		for _, tp := range topics {
+			votes, _ := stores.RotorStore.CountVotesForTopic(ctx, tp.ID)
+			isActive := tv.ActiveSchedule != nil && tv.ActiveSchedule.TopicID == tp.ID
+			tv.Topics = append(tv.Topics, topicWithVotes{Topic: tp, Votes: votes, IsActive: isActive})
+		}
+		if tv.Topics == nil {
+			tv.Topics = []topicWithVotes{}
+		}
+		themeViews = append(themeViews, tv)
+	}
+	if themeViews == nil {
+		themeViews = []themeView{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"rotor":  rotor,
+		"themes": themeViews,
+	})
 }

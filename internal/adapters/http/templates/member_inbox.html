@@ -1,0 +1,49 @@
+{{ define "content" }}
+<div class="card">
+    <h1>Inbox</h1>
+    <p style="color:var(--text-muted);font-size:0.9rem;">Emails sent to you by the club.</p>
+
+    <div id="inboxList" style="color:#6c757d;margin-top:1rem;">Loading...</div>
+
+    <p style="margin-top:2rem;"><a href="/dashboard" style="color:var(--orange);text-decoration:none;font-weight:600;">&larr; Back to Dashboard</a></p>
+</div>
+
+<script>
+function escHtml(s) { var d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+function loadInbox() {
+    var memberID = '{{.MemberID}}';
+    var url = '/api/inbox';
+    if (memberID) url += '?member_id=' + encodeURIComponent(memberID);
+
+    fetch(url).then(function(r){return r.json();}).then(function(data) {
+        var el = document.getElementById('inboxList');
+        if (!data || data.length === 0) {
+            el.innerHTML = '<p style="color:#6c757d;font-style:italic;">No emails yet.</p>';
+            return;
+        }
+        var html = '';
+        data.forEach(function(em) {
+            var date = em.SentAt && em.SentAt !== '0001-01-01T00:00:00Z' ? new Date(em.SentAt).toLocaleString() : new Date(em.CreatedAt).toLocaleString();
+            html += '<div onclick="toggleEmail(this)" style="background:#fff;border:1px solid #dee2e6;padding:1rem;border-radius:2px;margin-bottom:0.75rem;cursor:pointer;">' +
+                '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;">' +
+                '<strong>' + escHtml(em.Subject || '(No subject)') + '</strong>' +
+                '<span style="font-size:0.75rem;color:var(--text-muted);">' + date + '</span></div>' +
+                '<div class="email-body" style="display:none;margin-top:0.75rem;padding-top:0.75rem;border-top:1px solid #eee;">' + em.Body + '</div></div>';
+        });
+        el.innerHTML = html;
+    });
+}
+
+function toggleEmail(el) {
+    var body = el.querySelector('.email-body');
+    if (body.style.display === 'none') {
+        body.style.display = 'block';
+    } else {
+        body.style.display = 'none';
+    }
+}
+
+loadInbox();
+</script>
+{{ end }}

@@ -168,9 +168,26 @@ func (s *SQLiteStore) SearchByName(ctx context.Context, query string, limit int)
 // PRE: filter has valid parameters
 // POST: Returns matching entities
 func (s *SQLiteStore) List(ctx context.Context, filter ListFilter) ([]domain.Member, error) {
-	query := "SELECT id, account_id, email, fee, frequency, name, program, status FROM member LIMIT ? OFFSET ?"
+	query := "SELECT id, account_id, email, fee, frequency, name, program, status FROM member WHERE 1=1"
+	var args []any
 
-	rows, err := s.db.QueryContext(ctx, query, filter.Limit, filter.Offset)
+	if filter.Program != "" {
+		query += " AND program = ?"
+		args = append(args, filter.Program)
+	}
+	if filter.Status != "" {
+		query += " AND status = ?"
+		args = append(args, filter.Status)
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 1000
+	}
+	query += " LIMIT ? OFFSET ?"
+	args = append(args, limit, filter.Offset)
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
