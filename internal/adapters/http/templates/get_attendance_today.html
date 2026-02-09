@@ -13,13 +13,32 @@
     .belt-orange { background: #e65100; border-color: #e65100; }
     .belt-green  { background: #2e7d32; border-color: #2e7d32; }
     .stripe-dot { display: inline-block; width: 6px; height: 6px; background: #fff; border: 1px solid #999; border-radius: 50%; margin-left: 2px; vertical-align: middle; }
+    .date-nav { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+    .date-nav a, .date-nav button { text-decoration: none; font-weight: 600; padding: 0.4rem 0.75rem; border-radius: 2px; cursor: pointer; font-size: 0.9rem; }
+    .date-nav-arrow { background: var(--dark, #333); color: #fff; border: none; }
+    .date-nav-arrow:hover { opacity: 0.8; }
+    .date-nav-today { background: var(--orange, #e67e22); color: #fff; border: none; }
+    .read-only-banner { background: #fff3cd; color: #856404; padding: 0.5rem 1rem; border-radius: 2px; font-size: 0.85rem; font-weight: 600; margin-bottom: 1rem; }
 </style>
 <div class="card">
-    <h1>📊 Today's Attendance</h1>
+    <h1>{{ if .IsToday }}📊 Today's Attendance{{ else }}📊 Attendance{{ end }}</h1>
+
+    <div class="date-nav">
+        <a href="/attendance?date={{ .PrevDate }}" class="date-nav-arrow" title="Previous day">&larr;</a>
+        <input type="date" id="datePicker" value="{{ .DisplayDate }}" onchange="window.location.href='/attendance?date='+this.value" style="padding:0.4rem;border:1px solid var(--border);border-radius:2px;font-size:0.9rem;">
+        <a href="/attendance?date={{ .NextDate }}" class="date-nav-arrow" title="Next day">&rarr;</a>
+        {{ if not .IsToday }}
+        <a href="/attendance" class="date-nav-today">Back to Today</a>
+        {{ end }}
+    </div>
+
+    {{ if not .IsToday }}
+    <div class="read-only-banner">Viewing past attendance (read-only)</div>
+    {{ end }}
 
     {{ if .Attendees }}
     <p style="color: #666; margin-bottom: 1.5rem;">
-        <strong>{{ len .Attendees }}</strong> member(s) checked in today
+        <strong>{{ len .Attendees }}</strong> member(s) checked in{{ if .IsToday }} today{{ else }} on {{ .DisplayDate }}{{ end }}
     </p>
 
     <table style="width: 100%; border-collapse: collapse; margin: 1rem 0;">
@@ -69,11 +88,13 @@
     </table>
     {{ else }}
     <div style="padding: 3rem; text-align: center; background: #f8f9fa; border-radius:2px;">
-        <p style="color: #6c757d; font-size: 1.1rem; margin-bottom: 1rem;">No check-ins recorded today</p>
+        <p style="color: #6c757d; font-size: 1.1rem; margin-bottom: 1rem;">No check-ins recorded{{ if .IsToday }} today{{ else }} on {{ .DisplayDate }}{{ end }}</p>
+        {{ if .IsToday }}
         <a href="/checkin"
             style="display: inline-block; background: #2196f3; color: white; padding: 0.75rem 1.5rem; border-radius:2px; text-decoration: none; font-weight: 600;">
             Check In Member
         </a>
+        {{ end }}
     </div>
     {{ end }}
 
