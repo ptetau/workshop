@@ -3144,6 +3144,48 @@ func handleEmailSend(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(em)
 }
 
+// handleEmailTestSend handles POST /api/emails/test-send
+func handleEmailTestSend(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if _, ok := requireAdmin(w, r); !ok {
+		return
+	}
+
+	var input struct {
+		EmailID     string `json:"EmailID"`
+		TestAddress string `json:"TestAddress"`
+	}
+	if err := strictDecode(r, &input); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	if emailSender == nil {
+		http.Error(w, "email sending is not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	err := orchestrators.ExecuteTestSendEmail(r.Context(), orchestrators.TestSendEmailInput{
+		EmailID:     input.EmailID,
+		TestAddress: input.TestAddress,
+	}, orchestrators.TestSendEmailDeps{
+		EmailStore:  stores.EmailStore,
+		EmailSender: emailSender,
+		FromAddress: emailFromAddress,
+		ReplyTo:     emailReplyTo,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "sent", "address": input.TestAddress})
+}
+
 // handleEmailList handles GET /api/emails
 func handleEmailList(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {

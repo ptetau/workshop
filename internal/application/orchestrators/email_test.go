@@ -162,6 +162,7 @@ func newMockEmailSender() *mockEmailSender {
 // POST: Increments sent counter
 func (m *mockEmailSender) Send(_ context.Context, req emailAdapter.SendRequest) (emailAdapter.SendResult, error) {
 	m.sent++
+	m.sentReqs = append(m.sentReqs, req)
 	if m.failAt >= 0 && m.sent >= m.failAt {
 		return emailAdapter.SendResult{}, errors.New("send failed")
 	}
@@ -681,5 +682,175 @@ func TestRescheduleEmail_NotScheduled(t *testing.T) {
 	_, err := ExecuteRescheduleEmail(context.Background(), input, deps)
 	if err != emailDomain.ErrNotScheduled {
 		t.Errorf("expected ErrNotScheduled, got: %v", err)
+	}
+}
+
+// --- Test Send Email tests ---
+
+// TestTestSendEmail_Success tests sending a test email to a single address.
+func TestTestSendEmail_Success(t *testing.T) {
+	store := newMockEmailStore()
+	sender := newMockEmailSender()
+
+	store.emails["draft-1"] = emailDomain.Email{
+		ID:        "draft-1",
+		Subject:   "Grading Day",
+		Body:      "<p>Grading is on Saturday!</p>",
+		SenderID:  "admin-1",
+		Status:    emailDomain.StatusDraft,
+		CreatedAt: fixedTime,
+	}
+
+	input := TestSendEmailInput{EmailID: "draft-1", TestAddress: "test@example.com"}
+	deps := TestSendEmailDeps{
+		EmailStore:  store,
+		EmailSender: sender,
+		FromAddress: "Workshop <noreply@test.com>",
+		ReplyTo:     "info@test.com",
+	}
+
+	err := ExecuteTestSendEmail(context.Background(), input, deps)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify exactly one email was sent
+	if sender.sent != 1 {
+		t.Errorf("sent count = %d, want 1", sender.sent)
+	}
+
+	// Verify subject has [TEST] prefix
+	if len(sender.sentReqs) == 0 {
+		t.Fatal("no send requests recorded")
+	}
+	if sender.sentReqs[0].Subject != "[TEST] Grading Day" {
+		t.Errorf("subject = %q, want %q", sender.sentReqs[0].Subject, "[TEST] Grading Day")
+	}
+	if sender.sentReqs[0].To[0] != "test@example.com" {
+		t.Errorf("to = %q, want %q", sender.sentReqs[0].To[0], "test@example.com")
+	}
+}
+
+// TestTestSendEmail_DraftUnchanged tests that the draft status is not modified after test send.
+func TestTestSendEmail_DraftUnchanged(t *testing.T) {
+	store := newMockEmailStore()
+	sender := newMockEmailSender()
+
+	store.emails["draft-1"] = emailDomain.Email{
+		ID:        "draft-1",
+		Subject:   "Newsletter",
+		Body:      "<p>Content</p>",
+		SenderID:  "admin-1",
+		Status:    emailDomain.StatusDraft,
+		CreatedAt: fixedTime,
+	}
+
+	input := TestSendEmailInput{EmailID: "draft-1", TestAddress: "test@example.com"}
+	deps := TestSendEmailDeps{
+		EmailStore:  store,
+		EmailSender: sender,
+		FromAddress: "Workshop <noreply@test.com>",
+	}
+
+	if err := ExecuteTestSendEmail(context.Background(), input, deps); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify draft status is unchanged
+	em := store.emails["draft-1"]
+	if em.Status != emailDomain.StatusDraft {
+		t.Errorf("status = %q, want %q (draft should be unchanged)", em.Status, emailDomain.StatusDraft)
+	}
+}
+
+// TestTestSendEmail_EmptyAddress tests that an empty test address is rejected.
+func TestTestSendEmail_EmptyAddress(t *testing.T) {
+	store := newMockEmailStore()
+	store.emails["draft-1"] = emailDomain.Email{
+		ID:        "draft-1",
+		Subject:   "Test",
+		Body:      "body",
+		SenderID:  "admin-1",
+		Status:    emailDomain.StatusDraft,
+		CreatedAt: fixedTime,
+	}
+
+	input := TestSendEmailInput{EmailID: "draft-1", TestAddress: ""}
+	deps := TestSendEmailDeps{
+		EmailStore:  store,
+		EmailSender: newMockEmailSender(),
+	}
+
+	err := ExecuteTestSendEmail(context.Background(), input, deps)
+	if err == nil {
+		t.Error("expected error for empty test address")
+	}
+}
+
+// TestTestSendEmail_SenderFails tests that sender errors are propagated.
+func TestTestSendEmail_SenderFails(t *testing.T) {
+	store := newMockEmailStore()
+	sender := newMockEmailSender()
+	sender.failAt = 1 // fail on first send
+
+	store.emails["draft-1"] = emailDomain.Email{
+		ID:        "draft-1",
+		Subject:   "Test",
+		Body:      "<p>body</p>",
+		SenderID:  "admin-1",
+		Status:    emailDomain.StatusDraft,
+		CreatedAt: fixedTime,
+	}
+
+	input := TestSendEmailInput{EmailID: "draft-1", TestAddress: "test@example.com"}
+	deps := TestSendEmailDeps{
+		EmailStore:  store,
+		EmailSender: sender,
+		FromAddress: "noreply@test.com",
+	}
+
+	err := ExecuteTestSendEmail(context.Background(), input, deps)
+	if err == nil {
+		t.Error("expected error when sender fails")
+	}
+}
+
+// TestTestSendEmail_WithTemplate tests that the active template is applied to the test email.
+func TestTestSendEmail_WithTemplate(t *testing.T) {
+	store := newMockEmailStore()
+	sender := newMockEmailSender()
+
+	store.emails["draft-tpl"] = emailDomain.Email{
+		ID:        "draft-tpl",
+		Subject:   "Newsletter",
+		Body:      "<p>Main content</p>",
+		SenderID:  "admin-1",
+		Status:    emailDomain.StatusDraft,
+		CreatedAt: fixedTime,
+	}
+	store.templates["tpl-v1"] = emailDomain.EmailTemplate{
+		ID:     "tpl-v1",
+		Header: "<header>Logo</header>",
+		Footer: "<footer>Address</footer>",
+		Active: true,
+	}
+
+	input := TestSendEmailInput{EmailID: "draft-tpl", TestAddress: "test@example.com"}
+	deps := TestSendEmailDeps{
+		EmailStore:  store,
+		EmailSender: sender,
+		FromAddress: "noreply@test.com",
+	}
+
+	if err := ExecuteTestSendEmail(context.Background(), input, deps); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(sender.sentReqs) == 0 {
+		t.Fatal("no emails sent")
+	}
+	sentHTML := sender.sentReqs[0].HTML
+	if sentHTML != "<header>Logo</header><p>Main content</p><footer>Address</footer>" {
+		t.Errorf("sent HTML = %q, want wrapped body", sentHTML)
 	}
 }
