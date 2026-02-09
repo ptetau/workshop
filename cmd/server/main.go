@@ -107,6 +107,15 @@ func main() {
 		log.Fatalf("failed to seed programs: %v", err)
 	}
 
+	// Seed test accounts for each role (all environments, idempotent)
+	testAcctDeps := orchestrators.TestAccountSeedDeps{
+		AccountStore: acctStore,
+		MemberStore:  stores.MemberStore,
+	}
+	if err := orchestrators.ExecuteSeedTestAccounts(context.Background(), testAcctDeps); err != nil {
+		log.Fatalf("failed to seed test accounts: %v", err)
+	}
+
 	// Seed synthetic data for development only
 	if os.Getenv("WORKSHOP_ENV") != "production" {
 		adminAcct, err := acctStore.GetByEmail(context.Background(), adminEmail)
