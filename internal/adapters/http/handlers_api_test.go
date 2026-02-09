@@ -1545,3 +1545,144 @@ var (
 	_ trainingGoalStore.Store
 	_ waiverStore.Store
 )
+
+// --- Tests: /api/emails/recipients/by-session ---
+
+// TestHandleRecipientsFilterBySession_Success tests filtering recipients by a specific class session.
+func TestHandleRecipientsFilterBySession_Success(t *testing.T) {
+	stores = newFullStores()
+	ctx := context.Background()
+
+	// Seed a member
+	stores.MemberStore.Save(ctx, memberDomain.Member{ID: "m1", Name: "Alice", Email: "alice@test.com", Status: "active"})
+
+	// Seed an attendance record
+	stores.AttendanceStore.Save(ctx, attendanceDomain.Attendance{
+		ID: "a1", MemberID: "m1", ScheduleID: "s1", ClassDate: "2026-02-09",
+		CheckInTime: time.Now(),
+	})
+
+	req := authRequest("GET", "/api/emails/recipients/by-session?scheduleID=s1&date=2026-02-09", "", adminSession)
+	rec := httptest.NewRecorder()
+	handleRecipientsFilterBySession(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("got %d, want %d. Body: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	type memberResult struct {
+		ID    string `json:"ID"`
+		Name  string `json:"Name"`
+		Email string `json:"Email"`
+	}
+	var results []memberResult
+	json.NewDecoder(rec.Body).Decode(&results)
+	if len(results) != 1 {
+		t.Errorf("got %d results, want 1", len(results))
+	}
+	if len(results) > 0 && results[0].Name != "Alice" {
+		t.Errorf("got name %q, want Alice", results[0].Name)
+	}
+}
+
+// TestHandleRecipientsFilterBySession_MissingParams tests missing query params return 400.
+func TestHandleRecipientsFilterBySession_MissingParams(t *testing.T) {
+	stores = newFullStores()
+	req := authRequest("GET", "/api/emails/recipients/by-session", "", adminSession)
+	rec := httptest.NewRecorder()
+	handleRecipientsFilterBySession(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("got %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+// TestHandleRecipientsFilterBySession_NoMatch tests empty result when no attendance matches.
+func TestHandleRecipientsFilterBySession_NoMatch(t *testing.T) {
+	stores = newFullStores()
+	req := authRequest("GET", "/api/emails/recipients/by-session?scheduleID=s1&date=2026-01-01", "", adminSession)
+	rec := httptest.NewRecorder()
+	handleRecipientsFilterBySession(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("got %d, want %d", rec.Code, http.StatusOK)
+	}
+	if rec.Body.String() != "[]" {
+		t.Errorf("got %q, want []", rec.Body.String())
+	}
+}
+
+// --- Tests: /api/emails/recipients/by-class-type ---
+
+// TestHandleRecipientsFilterByClassType_Success tests filtering by class type with lookback.
+func TestHandleRecipientsFilterByClassType_Success(t *testing.T) {
+	stores = newFullStores()
+	ctx := context.Background()
+
+	// Seed class type, schedule, member, and attendance
+	stores.ClassTypeStore.Save(ctx, classTypeDomain.ClassType{ID: "ct1", ProgramID: "p1", Name: "Fundamentals"})
+	stores.ScheduleStore.Save(ctx, scheduleDomain.Schedule{ID: "s1", ClassTypeID: "ct1", Day: "monday", StartTime: "06:00", EndTime: "07:30"})
+	stores.MemberStore.Save(ctx, memberDomain.Member{ID: "m1", Name: "Bob", Email: "bob@test.com", Status: "active"})
+	stores.AttendanceStore.Save(ctx, attendanceDomain.Attendance{
+		ID: "a1", MemberID: "m1", ScheduleID: "s1", ClassDate: time.Now().Format("2006-01-02"),
+		CheckInTime: time.Now(),
+	})
+
+	req := authRequest("GET", "/api/emails/recipients/by-class-type?classTypeID=ct1&days=7", "", adminSession)
+	rec := httptest.NewRecorder()
+	handleRecipientsFilterByClassType(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("got %d, want %d. Body: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	type memberResult struct {
+		ID    string `json:"ID"`
+		Name  string `json:"Name"`
+		Email string `json:"Email"`
+	}
+	var results []memberResult
+	json.NewDecoder(rec.Body).Decode(&results)
+	if len(results) != 1 {
+		t.Errorf("got %d results, want 1", len(results))
+	}
+	if len(results) > 0 && results[0].Name != "Bob" {
+		t.Errorf("got name %q, want Bob", results[0].Name)
+	}
+}
+
+// TestHandleRecipientsFilterByClassType_MissingClassTypeID tests missing classTypeID returns 400.
+func TestHandleRecipientsFilterByClassType_MissingClassTypeID(t *testing.T) {
+	stores = newFullStores()
+	req := authRequest("GET", "/api/emails/recipients/by-class-type", "", adminSession)
+	rec := httptest.NewRecorder()
+	handleRecipientsFilterByClassType(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("got %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+// TestHandleRecipientsFilterByClassType_NoSchedules tests class type with no schedules returns empty.
+func TestHandleRecipientsFilterByClassType_NoSchedules(t *testing.T) {
+	stores = newFullStores()
+	req := authRequest("GET", "/api/emails/recipients/by-class-type?classTypeID=nonexistent&days=30", "", adminSession)
+	rec := httptest.NewRecorder()
+	handleRecipientsFilterByClassType(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("got %d, want %d", rec.Code, http.StatusOK)
+	}
+	if rec.Body.String() != "[]" {
+		t.Errorf("got %q, want []", rec.Body.String())
+	}
+}
+
+// TestHandleRecipientsFilterByClassType_Unauthenticated tests that unauthenticated requests are rejected.
+func TestHandleRecipientsFilterByClassType_Unauthenticated(t *testing.T) {
+	stores = newFullStores()
+	req := httptest.NewRequest("GET", "/api/emails/recipients/by-class-type?classTypeID=ct1&days=30", nil)
+	rec := httptest.NewRecorder()
+	handleRecipientsFilterByClassType(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("got %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}

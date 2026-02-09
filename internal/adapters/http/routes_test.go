@@ -169,6 +169,40 @@ func (m *mockAttendanceStore) ListByMemberIDAndDate(ctx context.Context, memberI
 	return list, nil
 }
 
+// ListDistinctMemberIDsByScheduleAndDate returns distinct member IDs for a specific session.
+// PRE: scheduleID and classDate are non-empty
+// POST: Returns distinct member IDs
+func (m *mockAttendanceStore) ListDistinctMemberIDsByScheduleAndDate(ctx context.Context, scheduleID string, classDate string) ([]string, error) {
+	seen := map[string]bool{}
+	var ids []string
+	for _, a := range m.attendances {
+		if a.ScheduleID == scheduleID && a.ClassDate == classDate && !seen[a.MemberID] {
+			seen[a.MemberID] = true
+			ids = append(ids, a.MemberID)
+		}
+	}
+	return ids, nil
+}
+
+// ListDistinctMemberIDsByScheduleIDsSince returns distinct member IDs for schedules since a date.
+// PRE: scheduleIDs is non-empty, since is YYYY-MM-DD
+// POST: Returns distinct member IDs
+func (m *mockAttendanceStore) ListDistinctMemberIDsByScheduleIDsSince(ctx context.Context, scheduleIDs []string, since string) ([]string, error) {
+	schedSet := map[string]bool{}
+	for _, id := range scheduleIDs {
+		schedSet[id] = true
+	}
+	seen := map[string]bool{}
+	var ids []string
+	for _, a := range m.attendances {
+		if schedSet[a.ScheduleID] && a.ClassDate >= since && !seen[a.MemberID] {
+			seen[a.MemberID] = true
+			ids = append(ids, a.MemberID)
+		}
+	}
+	return ids, nil
+}
+
 type mockInjuryStore struct {
 	injuries map[string]injuryDomain.Injury
 }

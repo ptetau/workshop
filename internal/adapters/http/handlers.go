@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -3590,6 +3591,180 @@ func handleMemberSearchForEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	json.NewEncoder(w).Encode(results)
+}
+
+// handleRecipientsFilterBySession handles GET /api/emails/recipients/by-session?scheduleID=...&date=...
+func handleRecipientsFilterBySession(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if _, ok := requireAdmin(w, r); !ok {
+		return
+	}
+
+	scheduleID := r.URL.Query().Get("scheduleID")
+	classDate := r.URL.Query().Get("date")
+	if scheduleID == "" || classDate == "" {
+		http.Error(w, "scheduleID and date are required", http.StatusBadRequest)
+		return
+	}
+
+	memberIDs, err := stores.AttendanceStore.ListDistinctMemberIDsByScheduleAndDate(r.Context(), scheduleID, classDate)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+
+	type memberResult struct {
+		ID    string `json:"ID"`
+		Name  string `json:"Name"`
+		Email string `json:"Email"`
+	}
+	var results []memberResult
+	for _, id := range memberIDs {
+		m, err := stores.MemberStore.GetByID(r.Context(), id)
+		if err != nil {
+			continue
+		}
+		results = append(results, memberResult{ID: m.ID, Name: m.Name, Email: m.Email})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if results == nil {
+		w.Write([]byte("[]"))
+		return
+	}
+	json.NewEncoder(w).Encode(results)
+}
+
+// handleRecipientsFilterByClassType handles GET /api/emails/recipients/by-class-type?classTypeID=...&days=30
+func handleRecipientsFilterByClassType(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if _, ok := requireAdmin(w, r); !ok {
+		return
+	}
+
+	classTypeID := r.URL.Query().Get("classTypeID")
+	daysStr := r.URL.Query().Get("days")
+	if classTypeID == "" {
+		http.Error(w, "classTypeID is required", http.StatusBadRequest)
+		return
+	}
+	days := 30
+	if daysStr != "" {
+		if d, err := strconv.Atoi(daysStr); err == nil && d > 0 {
+			days = d
+		}
+	}
+
+	schedules, err := stores.ScheduleStore.ListByClassTypeID(r.Context(), classTypeID)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	var scheduleIDs []string
+	for _, s := range schedules {
+		scheduleIDs = append(scheduleIDs, s.ID)
+	}
+	if len(scheduleIDs) == 0 {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte("[]"))
+		return
+	}
+
+	since := time.Now().AddDate(0, 0, -days).Format("2006-01-02")
+	memberIDs, err := stores.AttendanceStore.ListDistinctMemberIDsByScheduleIDsSince(r.Context(), scheduleIDs, since)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+
+	type memberResult struct {
+		ID    string `json:"ID"`
+		Name  string `json:"Name"`
+		Email string `json:"Email"`
+	}
+	var results []memberResult
+	for _, id := range memberIDs {
+		m, err := stores.MemberStore.GetByID(r.Context(), id)
+		if err != nil {
+			continue
+		}
+		results = append(results, memberResult{ID: m.ID, Name: m.Name, Email: m.Email})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if results == nil {
+		w.Write([]byte("[]"))
+		return
+	}
+	json.NewEncoder(w).Encode(results)
+}
+
+// handleRecentSessions handles GET /api/schedules/recent-sessions — lists recent class sessions for the filter dropdown.
+func handleRecentSessions(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if _, ok := requireAdmin(w, r); !ok {
+		return
+	}
+
+	schedules, err := stores.ScheduleStore.List(r.Context())
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+
+	classTypes, err := stores.ClassTypeStore.List(r.Context())
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	ctMap := map[string]string{}
+	for _, ct := range classTypes {
+		ctMap[ct.ID] = ct.Name
+	}
+
+	type sessionInfo struct {
+		ScheduleID string `json:"ScheduleID"`
+		ClassDate  string `json:"ClassDate"`
+		Label      string `json:"Label"`
+	}
+
+	// Generate sessions for the last 14 days
+	var sessions []sessionInfo
+	now := time.Now()
+	for daysAgo := 0; daysAgo < 14; daysAgo++ {
+		date := now.AddDate(0, 0, -daysAgo)
+		dayName := strings.ToLower(date.Weekday().String())
+		for _, s := range schedules {
+			if s.Day == dayName {
+				ctName := ctMap[s.ClassTypeID]
+				if ctName == "" {
+					ctName = "Unknown"
+				}
+				label := date.Format("Mon 2 Jan") + " " + s.StartTime + " " + ctName
+				sessions = append(sessions, sessionInfo{
+					ScheduleID: s.ID,
+					ClassDate:  date.Format("2006-01-02"),
+					Label:      label,
+				})
+			}
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if sessions == nil {
+		w.Write([]byte("[]"))
+		return
+	}
+	json.NewEncoder(w).Encode(sessions)
 }
 
 // handleActivatePage handles GET /activate?token=... — shows the password-setting form.
