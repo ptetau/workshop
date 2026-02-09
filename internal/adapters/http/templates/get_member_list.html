@@ -2,14 +2,67 @@
 <div class="card">
     <h1>📋 Member List</h1>
 
+    <!-- Search and Filter Controls -->
+    <form method="GET" action="/members" id="list-form" style="display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: flex-end; margin-bottom: 1.5rem;">
+        <!-- Preserve sort params -->
+        {{ if .Sort }}<input type="hidden" name="sort" value="{{ .Sort }}">{{ end }}
+        {{ if .Dir }}<input type="hidden" name="dir" value="{{ .Dir }}">{{ end }}
+
+        <div style="flex: 1; min-width: 200px;">
+            <label for="search-input" style="font-size: 0.8rem;">Search</label>
+            <input type="text" id="search-input" name="q" value="{{ .Search }}" placeholder="Search by name or email..." style="width: 100%;">
+        </div>
+        <div style="min-width: 140px;">
+            <label for="program-filter" style="font-size: 0.8rem;">Program</label>
+            <select id="program-filter" name="program" onchange="document.getElementById('list-form').submit()">
+                <option value="">All Programs</option>
+                <option value="Adults"{{ if eq .Program "Adults" }} selected{{ end }}>Adults</option>
+                <option value="Kids"{{ if eq .Program "Kids" }} selected{{ end }}>Kids</option>
+            </select>
+        </div>
+        <div style="min-width: 140px;">
+            <label for="status-filter" style="font-size: 0.8rem;">Status</label>
+            <select id="status-filter" name="status" onchange="document.getElementById('list-form').submit()">
+                <option value="">All Statuses</option>
+                <option value="active"{{ if eq .Status "active" }} selected{{ end }}>Active</option>
+                <option value="trial"{{ if eq .Status "trial" }} selected{{ end }}>Trial</option>
+                <option value="archived"{{ if eq .Status "archived" }} selected{{ end }}>Archived</option>
+            </select>
+        </div>
+        <div style="min-width: 120px;">
+            <label for="per-page-select" style="font-size: 0.8rem;">Rows</label>
+            <select id="per-page-select" name="per_page" onchange="document.getElementById('list-form').submit()">
+                {{ $currentPerPage := .PageInfo.PerPage }}
+                {{ range .PerPageOptions }}
+                <option value="{{ . }}"{{ if eq . $currentPerPage }} selected{{ end }}>{{ . }}</option>
+                {{ end }}
+            </select>
+        </div>
+        <button type="submit" style="padding: 0.6rem 1.2rem;">Search</button>
+        {{ if .HasFilters }}
+        <a href="/members" id="clear-filters" style="padding: 0.6rem 1.2rem; background: #6c757d; color: white; text-decoration: none; border-radius: 2px; font-size: 0.85rem; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; display: inline-block;">Clear</a>
+        {{ end }}
+    </form>
+
+    <!-- Results Summary -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; color: #6c757d; font-size: 0.85rem;">
+        <span id="results-summary">
+            {{ if .Members }}
+            Showing {{ .PageInfo.StartRow }}-{{ .PageInfo.EndRow }} of {{ .PageInfo.Total }} results
+            {{ else }}
+            No results found
+            {{ end }}
+        </span>
+    </div>
+
     {{ if .Members }}
-    <table style="width: 100%; border-collapse: collapse; margin: 1rem 0;">
+    <table style="width: 100%; border-collapse: collapse; margin: 0 0 1rem 0;">
         <thead>
             <tr style="background: #f8f9fa; border-bottom: 2px solid #dee2e6;">
-                <th style="padding: 0.75rem; text-align: left;">Name</th>
-                <th style="padding: 0.75rem; text-align: left;">Email</th>
-                <th style="padding: 0.75rem; text-align: left;">Program</th>
-                <th style="padding: 0.75rem; text-align: center;">Status</th>
+                {{ template "sort-header" (sortHeaderArgs "name" "Name" $.Sort $.Dir $.Search $.Program $.Status $.PageInfo.PerPage) }}
+                {{ template "sort-header" (sortHeaderArgs "email" "Email" $.Sort $.Dir $.Search $.Program $.Status $.PageInfo.PerPage) }}
+                {{ template "sort-header" (sortHeaderArgs "program" "Program" $.Sort $.Dir $.Search $.Program $.Status $.PageInfo.PerPage) }}
+                {{ template "sort-header" (sortHeaderArgs "status" "Status" $.Sort $.Dir $.Search $.Program $.Status $.PageInfo.PerPage) }}
                 <th style="padding: 0.75rem; text-align: center;">Injury</th>
             </tr>
         </thead>
@@ -19,22 +72,22 @@
                 <td style="padding: 0.75rem;"><a href="/members/profile?id={{ .ID }}" style="color: #667eea; text-decoration: none; font-weight: 600;">{{ .Name }}</a></td>
                 <td style="padding: 0.75rem;">{{ .Email }}</td>
                 <td style="padding: 0.75rem;">
-                    <span
-                        style="display: inline-block; padding: 0.25rem 0.75rem; border-radius: 12px; font-size: 0.85rem; font-weight: 600; background: #e3f2fd; color: #1976d2;">
+                    <span style="display: inline-block; padding: 0.25rem 0.75rem; border-radius: 12px; font-size: 0.85rem; font-weight: 600; background: #e3f2fd; color: #1976d2;">
                         {{ .Program }}
                     </span>
                 </td>
                 <td style="padding: 0.75rem; text-align: center;">
                     {{ if eq .Status "active" }}
                     <span style="color: #F9B232; font-weight: 600;">✓ Active</span>
+                    {{ else if eq .Status "trial" }}
+                    <span style="color: #17a2b8; font-weight: 600;">◆ Trial</span>
                     {{ else }}
-                    <span style="color: #dc3545; font-weight: 600;">✗ Inactive</span>
+                    <span style="color: #dc3545; font-weight: 600;">✗ Archived</span>
                     {{ end }}
                 </td>
                 <td style="padding: 0.75rem; text-align: center;">
                     {{ if .HasInjury }}
-                    <span
-                        style="display: inline-block; padding: 0.25rem 0.75rem; border-radius: 12px; background: #fff3cd; color: #856404; font-weight: 600;">
+                    <span style="display: inline-block; padding: 0.25rem 0.75rem; border-radius: 12px; background: #fff3cd; color: #856404; font-weight: 600;">
                         🚨 {{ .InjuryBodyPart }}
                     </span>
                     {{ else }}
@@ -45,11 +98,38 @@
             {{ end }}
         </tbody>
     </table>
+
+    <!-- Pagination Controls -->
+    {{ if .PageInfo.ShowPagination }}
+    <nav style="display: flex; justify-content: center; align-items: center; gap: 0.25rem; margin-top: 1rem;" aria-label="Pagination">
+        {{ $pi := .PageInfo }}
+        {{ if gt $pi.Page 1 }}
+        <a href="/members?{{ paginationQuery 1 $.Sort $.Dir $.Search $.Program $.Status $pi.PerPage }}" style="padding: 0.4rem 0.7rem; border: 1px solid var(--border); border-radius: 2px; text-decoration: none; color: var(--text); font-size: 0.85rem;">First</a>
+        <a href="/members?{{ paginationQuery (sub $pi.Page 1) $.Sort $.Dir $.Search $.Program $.Status $pi.PerPage }}" style="padding: 0.4rem 0.7rem; border: 1px solid var(--border); border-radius: 2px; text-decoration: none; color: var(--text); font-size: 0.85rem;">Previous</a>
+        {{ end }}
+
+        {{ range $pi.PageNumbers }}
+        {{ if eq . $pi.Page }}
+        <span style="padding: 0.4rem 0.7rem; border: 1px solid var(--orange); border-radius: 2px; background: var(--orange); color: white; font-size: 0.85rem; font-weight: 600;">{{ . }}</span>
+        {{ else }}
+        <a href="/members?{{ paginationQuery . $.Sort $.Dir $.Search $.Program $.Status $pi.PerPage }}" style="padding: 0.4rem 0.7rem; border: 1px solid var(--border); border-radius: 2px; text-decoration: none; color: var(--text); font-size: 0.85rem;">{{ . }}</a>
+        {{ end }}
+        {{ end }}
+
+        {{ if lt $pi.Page $pi.TotalPages }}
+        <a href="/members?{{ paginationQuery (add $pi.Page 1) $.Sort $.Dir $.Search $.Program $.Status $pi.PerPage }}" style="padding: 0.4rem 0.7rem; border: 1px solid var(--border); border-radius: 2px; text-decoration: none; color: var(--text); font-size: 0.85rem;">Next</a>
+        <a href="/members?{{ paginationQuery $pi.TotalPages $.Sort $.Dir $.Search $.Program $.Status $pi.PerPage }}" style="padding: 0.4rem 0.7rem; border: 1px solid var(--border); border-radius: 2px; text-decoration: none; color: var(--text); font-size: 0.85rem;">Last</a>
+        {{ end }}
+    </nav>
+    {{ end }}
+
     {{ else }}
-    <p
-        style="color: #6c757d; font-style: italic; padding: 2rem; text-align: center; background: #f8f9fa; border-radius:2px;">
-        No members registered yet. <a href="/members" style="color: #F9B232; text-decoration: underline;">Register a new
-            member</a>
+    <p style="color: #6c757d; font-style: italic; padding: 2rem; text-align: center; background: #f8f9fa; border-radius:2px;">
+        {{ if .HasFilters }}
+        No members match your filters. <a href="/members" style="color: #F9B232; text-decoration: underline;">Clear filters</a>
+        {{ else }}
+        No members registered yet. <a href="/members/register" style="color: #F9B232; text-decoration: underline;">Register a new member</a>
+        {{ end }}
     </p>
     {{ end }}
 
@@ -57,4 +137,39 @@
         <a href="/dashboard" style="color: #F9B232; text-decoration: none; font-weight: 600;">← Back to Dashboard</a>
     </p>
 </div>
+
+<script>
+// Debounce search input (250ms)
+(function() {
+    var input = document.getElementById('search-input');
+    var timer;
+    input.addEventListener('input', function() {
+        clearTimeout(timer);
+        timer = setTimeout(function() {
+            document.getElementById('list-form').submit();
+        }, 250);
+    });
+    // Persist per_page in localStorage
+    var perPageSelect = document.getElementById('per-page-select');
+    var saved = localStorage.getItem('list_per_page');
+    if (saved && !new URLSearchParams(window.location.search).has('per_page')) {
+        perPageSelect.value = saved;
+    }
+    perPageSelect.addEventListener('change', function() {
+        localStorage.setItem('list_per_page', this.value);
+    });
+})();
+</script>
+{{ end }}
+
+{{ define "sort-header" }}
+<th style="padding: 0.75rem; text-align: left;">
+    <a href="/members?sort={{ .Col }}&dir={{ .NextDir }}{{ if .Search }}&q={{ .Search }}{{ end }}{{ if .Program }}&program={{ .Program }}{{ end }}{{ if .Status }}&status={{ .Status }}{{ end }}{{ if .PerPage }}&per_page={{ .PerPage }}{{ end }}"
+       style="color: var(--dark); text-decoration: none; display: inline-flex; align-items: center; gap: 0.3rem; font-weight: 600; font-size: 0.85rem;">
+        {{ .Label }}
+        {{ if eq .Col .ActiveSort }}
+            {{ if eq .ActiveDir "asc" }}▲{{ else }}▼{{ end }}
+        {{ end }}
+    </a>
+</th>
 {{ end }}

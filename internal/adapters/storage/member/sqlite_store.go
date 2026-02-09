@@ -164,21 +164,61 @@ func (s *SQLiteStore) SearchByName(ctx context.Context, query string, limit int)
 	return results, nil
 }
 
+// listWhereClause builds the WHERE clause and args for List/Count queries.
+func listWhereClause(filter ListFilter) (string, []any) {
+	where := " WHERE 1=1"
+	var args []any
+
+	if filter.Program != "" {
+		where += " AND program = ?"
+		args = append(args, filter.Program)
+	}
+	if filter.Status != "" {
+		where += " AND status = ?"
+		args = append(args, filter.Status)
+	}
+	if filter.Search != "" {
+		where += " AND (name LIKE ? OR email LIKE ?)"
+		term := "%" + filter.Search + "%"
+		args = append(args, term, term)
+	}
+	return where, args
+}
+
+// sortClause returns a safe ORDER BY clause. Only allowed columns are accepted.
+func sortClause(filter ListFilter) string {
+	allowed := map[string]string{
+		"name": "name", "email": "email",
+		"program": "program", "status": "status",
+	}
+	col, ok := allowed[filter.Sort]
+	if !ok {
+		return " ORDER BY name ASC"
+	}
+	dir := "ASC"
+	if filter.Dir == "desc" {
+		dir = "DESC"
+	}
+	return " ORDER BY " + col + " " + dir
+}
+
+// Count returns the total number of members matching the filter.
+// PRE: filter has valid parameters
+// POST: Returns count >= 0
+func (s *SQLiteStore) Count(ctx context.Context, filter ListFilter) (int, error) {
+	where, args := listWhereClause(filter)
+	var count int
+	err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM member"+where, args...).Scan(&count)
+	return count, err
+}
+
 // List retrieves a list of Members based on the filter.
 // PRE: filter has valid parameters
 // POST: Returns matching entities
 func (s *SQLiteStore) List(ctx context.Context, filter ListFilter) ([]domain.Member, error) {
-	query := "SELECT id, account_id, email, fee, frequency, name, program, status FROM member WHERE 1=1"
-	var args []any
-
-	if filter.Program != "" {
-		query += " AND program = ?"
-		args = append(args, filter.Program)
-	}
-	if filter.Status != "" {
-		query += " AND status = ?"
-		args = append(args, filter.Status)
-	}
+	where, args := listWhereClause(filter)
+	query := "SELECT id, account_id, email, fee, frequency, name, program, status FROM member" + where
+	query += sortClause(filter)
 
 	limit := filter.Limit
 	if limit <= 0 {

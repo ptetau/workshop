@@ -92,6 +92,13 @@ func (m *mockMemberStore) List(ctx context.Context, filter memberStore.ListFilte
 	return list, nil
 }
 
+// Count implements the member store interface for testing.
+// PRE: filter has valid parameters
+// POST: Returns count of matching entities
+func (m *mockMemberStore) Count(ctx context.Context, filter memberStore.ListFilter) (int, error) {
+	return len(m.members), nil
+}
+
 type mockAttendanceStore struct {
 	attendances map[string]attendanceDomain.Attendance
 }
@@ -482,13 +489,16 @@ func TestGetGetmemberlist(t *testing.T) {
 			}
 
 			// Parse and verify response body
-			var members []memberDomain.Member
-			if err := json.NewDecoder(rec.Body).Decode(&members); err != nil {
+			var result struct {
+				Members  []json.RawMessage `json:"Members"`
+				PageInfo json.RawMessage   `json:"PageInfo"`
+			}
+			if err := json.NewDecoder(rec.Body).Decode(&result); err != nil {
 				t.Fatalf("failed to decode response: %v", err)
 			}
 
-			if len(members) != tt.wantCount {
-				t.Errorf("got %d members, want %d", len(members), tt.wantCount)
+			if len(result.Members) != tt.wantCount {
+				t.Errorf("got %d members, want %d", len(result.Members), tt.wantCount)
 			}
 		})
 	}

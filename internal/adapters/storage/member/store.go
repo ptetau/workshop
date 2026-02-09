@@ -13,6 +13,7 @@ type Store interface {
 	Save(ctx context.Context, value domain.Member) error
 	Delete(ctx context.Context, id string) error
 	List(ctx context.Context, filter ListFilter) ([]domain.Member, error)
+	Count(ctx context.Context, filter ListFilter) (int, error)
 	SearchByName(ctx context.Context, query string, limit int) ([]domain.Member, error)
 }
 
@@ -22,4 +23,7 @@ type ListFilter struct {
 	Offset  int
 	Program string
 	Status  string
+	Search  string // case-insensitive LIKE on name or email
+	Sort    string // column to sort by (name, email, program, status)
+	Dir     string // "asc" or "desc"
 }

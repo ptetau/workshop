@@ -17,6 +17,7 @@ import (
 type MemberStore interface {
 	GetByID(ctx context.Context, id string) (domainMember.Member, error)
 	List(ctx context.Context, filter member.ListFilter) ([]domainMember.Member, error)
+	Count(ctx context.Context, filter member.ListFilter) (int, error)
 }
 
 // WaiverStore interface for waiver queries.
