@@ -120,6 +120,13 @@ func renderTemplate(w http.ResponseWriter, r *http.Request, templateName string,
 			}
 			return noticeDomain.ColorHex[noticeDomain.ColorOrange]
 		},
+		"stripeRange": func(n int) []int {
+			s := make([]int, n)
+			for i := range s {
+				s[i] = i
+			}
+			return s
+		},
 		"add": func(a, b int) int { return a + b },
 		"sub": func(a, b int) int { return a - b },
 		"sortHeaderArgs": func(col, label, activeSort, activeDir, search, program, status string, perPage int) map[string]string {
@@ -320,9 +327,10 @@ func handleGetAttendanceGetAttendanceToday(w http.ResponseWriter, r *http.Reques
 
 	query := projections.GetAttendanceTodayQuery{Date: ""}
 	deps := projections.GetAttendanceTodayDeps{
-		AttendanceStore: stores.AttendanceStore,
-		MemberStore:     stores.MemberStore,
-		InjuryStore:     stores.InjuryStore,
+		AttendanceStore:    stores.AttendanceStore,
+		MemberStore:        stores.MemberStore,
+		InjuryStore:        stores.InjuryStore,
+		GradingRecordStore: stores.GradingRecordStore,
 	}
 
 	result, err := projections.QueryGetAttendanceToday(ctx, query, deps)

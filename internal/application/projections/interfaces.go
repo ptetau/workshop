@@ -8,6 +8,7 @@ import (
 	"workshop/internal/adapters/storage/member"
 	"workshop/internal/adapters/storage/waiver"
 	domainAttendance "workshop/internal/domain/attendance"
+	domainGrading "workshop/internal/domain/grading"
 	domainInjury "workshop/internal/domain/injury"
 	domainMember "workshop/internal/domain/member"
 	domainWaiver "workshop/internal/domain/waiver"
@@ -33,4 +34,9 @@ type InjuryStore interface {
 // AttendanceStore interface for attendance queries.
 type AttendanceStore interface {
 	List(ctx context.Context, filter attendance.ListFilter) ([]domainAttendance.Attendance, error)
+}
+
+// GradingRecordStore interface for grading record queries.
+type GradingRecordStore interface {
+	ListByMemberID(ctx context.Context, memberID string) ([]domainGrading.Record, error)
 }
