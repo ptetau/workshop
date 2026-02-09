@@ -12,6 +12,139 @@ import (
 	memberDomain "workshop/internal/domain/member"
 )
 
+// TestListView_BookmarkFilteredView tests US-1.5.6: Bookmark a filtered view.
+// Opening a URL with query params pre-set should display the matching filtered/sorted view.
+func TestListView_BookmarkFilteredView(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping browser test in short mode")
+	}
+	app := newTestApp(t)
+	page := app.newPage(t)
+	app.login(t, page)
+
+	// Seed specific members
+	ctx := context.Background()
+	members := []memberDomain.Member{
+		{ID: uuid.New().String(), Name: "Alice Smith", Email: "alice@test.com", Program: "Adults", Status: "active", Fee: 100, Frequency: "monthly"},
+		{ID: uuid.New().String(), Name: "Bob Jones", Email: "bob@test.com", Program: "Kids", Status: "active", Fee: 80, Frequency: "monthly"},
+		{ID: uuid.New().String(), Name: "Charlie Smith", Email: "charlie@test.com", Program: "Adults", Status: "trial", Fee: 100, Frequency: "monthly"},
+		{ID: uuid.New().String(), Name: "Diana Lee", Email: "diana@test.com", Program: "Kids", Status: "archived", Fee: 80, Frequency: "monthly"},
+	}
+	for _, m := range members {
+		if err := app.Stores.MemberStore.Save(ctx, m); err != nil {
+			t.Fatalf("failed to seed: %v", err)
+		}
+	}
+
+	// Test 1: Bookmark with search filter — open URL with q=Smith directly
+	_, err := page.Goto(app.BaseURL + "/members?q=Smith")
+	if err != nil {
+		t.Fatalf("failed to navigate: %v", err)
+	}
+	summary := page.Locator("#results-summary")
+	text, _ := summary.TextContent()
+	if !strings.Contains(text, "of 2") {
+		t.Errorf("bookmarked search q=Smith: expected 2 results, got: %s", strings.TrimSpace(text))
+	}
+	// Verify search input is pre-filled
+	searchVal, _ := page.Locator("#search-input").InputValue()
+	if searchVal != "Smith" {
+		t.Errorf("expected search input to show 'Smith', got: %q", searchVal)
+	}
+
+	// Test 2: Bookmark with program + status filters
+	_, err = page.Goto(app.BaseURL + "/members?program=Adults&status=active")
+	if err != nil {
+		t.Fatalf("failed to navigate: %v", err)
+	}
+	text, _ = summary.TextContent()
+	if !strings.Contains(text, "of 1") {
+		t.Errorf("bookmarked Adults+active: expected 1 result, got: %s", strings.TrimSpace(text))
+	}
+	// Verify dropdowns are pre-selected
+	progVal, _ := page.Locator("#program-filter").InputValue()
+	if progVal != "Adults" {
+		t.Errorf("expected program dropdown to show Adults, got: %q", progVal)
+	}
+	statusVal, _ := page.Locator("#status-filter").InputValue()
+	if statusVal != "active" {
+		t.Errorf("expected status dropdown to show active, got: %q", statusVal)
+	}
+
+	// Test 3: Bookmark with sort params — sort by name desc
+	_, err = page.Goto(app.BaseURL + "/members?sort=name&dir=desc")
+	if err != nil {
+		t.Fatalf("failed to navigate: %v", err)
+	}
+	firstRow := page.Locator("table tbody tr:first-child td:first-child")
+	text, _ = firstRow.TextContent()
+	if !strings.Contains(text, "Diana") {
+		t.Errorf("bookmarked sort=name&dir=desc: expected Diana first, got: %s", strings.TrimSpace(text))
+	}
+
+	// Test 4: Bookmark with per_page — use valid option (10)
+	_, err = page.Goto(app.BaseURL + "/members?per_page=10")
+	if err != nil {
+		t.Fatalf("failed to navigate: %v", err)
+	}
+	text, _ = summary.TextContent()
+	if !strings.Contains(text, "1-4 of 4") {
+		t.Errorf("bookmarked per_page=10: expected '1-4 of 4', got: %s", strings.TrimSpace(text))
+	}
+	perPageVal, _ := page.Locator("#per-page-select").InputValue()
+	if perPageVal != "10" {
+		t.Errorf("expected per_page dropdown to show 10, got: %q", perPageVal)
+	}
+
+	// Test 5: Full bookmark with all params combined
+	_, err = page.Goto(app.BaseURL + "/members?q=Smith&program=Adults&sort=name&dir=asc&per_page=10")
+	if err != nil {
+		t.Fatalf("failed to navigate: %v", err)
+	}
+	text, _ = summary.TextContent()
+	if !strings.Contains(text, "of 2") {
+		t.Errorf("full bookmark: expected 2 results (Smith+Adults), got: %s", strings.TrimSpace(text))
+	}
+	// First row should be Alice (name asc, both Smiths are Adults)
+	firstRow = page.Locator("table tbody tr:first-child td:first-child")
+	text, _ = firstRow.TextContent()
+	if !strings.Contains(text, "Alice") {
+		t.Errorf("full bookmark: expected Alice first (name asc), got: %s", strings.TrimSpace(text))
+	}
+
+	// Test 6: Browser back/forward preserves state
+	_, err = page.Goto(app.BaseURL + "/members")
+	if err != nil {
+		t.Fatalf("failed to navigate: %v", err)
+	}
+	_, err = page.Goto(app.BaseURL + "/members?program=Kids")
+	if err != nil {
+		t.Fatalf("failed to navigate: %v", err)
+	}
+	text, _ = summary.TextContent()
+	if !strings.Contains(text, "of 2") {
+		t.Errorf("Kids filter: expected 2, got: %s", strings.TrimSpace(text))
+	}
+	// Go back
+	page.GoBack()
+	page.WaitForLoadState(playwright.PageWaitForLoadStateOptions{
+		State: playwright.LoadStateDomcontentloaded,
+	})
+	text, _ = summary.TextContent()
+	if !strings.Contains(text, "of 4") {
+		t.Errorf("after back: expected all 4 members, got: %s", strings.TrimSpace(text))
+	}
+	// Go forward
+	page.GoForward()
+	page.WaitForLoadState(playwright.PageWaitForLoadStateOptions{
+		State: playwright.LoadStateDomcontentloaded,
+	})
+	text, _ = summary.TextContent()
+	if !strings.Contains(text, "of 2") {
+		t.Errorf("after forward: expected 2 Kids, got: %s", strings.TrimSpace(text))
+	}
+}
+
 // seedMembers creates n test members with varied programs and statuses.
 func seedMembers(t *testing.T, app *testApp, n int) {
 	t.Helper()
