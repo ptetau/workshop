@@ -1965,8 +1965,8 @@ func handleGradingConfig(w http.ResponseWriter, r *http.Request) {
 		}
 		config := gradingDomain.Config{
 			ID:              generateID(),
-			Program:         input.Program,
-			Belt:            input.Belt,
+			Program:         strings.ToLower(strings.TrimSpace(input.Program)),
+			Belt:            strings.ToLower(strings.TrimSpace(input.Belt)),
 			FlightTimeHours: input.FlightTimeHours,
 			AttendancePct:   input.AttendancePct,
 			StripeCount:     input.StripeCount,
