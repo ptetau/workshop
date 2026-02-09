@@ -202,6 +202,68 @@ func ExecuteSendEmail(ctx context.Context, input SendEmailInput, deps SendEmailD
 	return em, nil
 }
 
+// --- Test Send Email ---
+
+// TestSendEmailInput carries input for sending a test email to a single address.
+type TestSendEmailInput struct {
+	EmailID     string
+	TestAddress string // The address to send the test to
+}
+
+// TestSendEmailDeps holds dependencies for TestSendEmail.
+type TestSendEmailDeps struct {
+	EmailStore  EmailStoreForOrchestrator
+	EmailSender emailAdapter.Sender
+	FromAddress string
+	ReplyTo     string
+}
+
+// ExecuteTestSendEmail sends a single test email to the specified address.
+// The draft is NOT modified — status stays as-is, no recipients are recorded.
+// PRE: EmailID exists; TestAddress is a valid email; EmailSender is configured
+// POST: Exactly one email is delivered to TestAddress; draft is unchanged
+func ExecuteTestSendEmail(ctx context.Context, input TestSendEmailInput, deps TestSendEmailDeps) error {
+	if input.EmailID == "" {
+		return errors.New("email ID is required")
+	}
+	if input.TestAddress == "" {
+		return errors.New("test address is required")
+	}
+
+	em, err := deps.EmailStore.GetByID(ctx, input.EmailID)
+	if err != nil {
+		return err
+	}
+
+	if err := em.Validate(); err != nil {
+		return err
+	}
+
+	// Apply active template if one exists
+	htmlBody := em.Body
+	tpl, tplErr := deps.EmailStore.GetActiveTemplate(ctx)
+	if tplErr == nil {
+		htmlBody = tpl.WrapBody(em.Body)
+	}
+
+	// Send single email to the test address
+	req := emailAdapter.SendRequest{
+		To:      []string{input.TestAddress},
+		From:    deps.FromAddress,
+		Subject: "[TEST] " + em.Subject,
+		HTML:    htmlBody,
+		ReplyTo: deps.ReplyTo,
+	}
+
+	_, err = deps.EmailSender.Send(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	slog.Info("email_event", "event", "test_email_sent", "email_id", em.ID, "test_address", input.TestAddress)
+	return nil
+}
+
 // --- Schedule Email ---
 
 // ScheduleEmailInput carries input for scheduling an email.

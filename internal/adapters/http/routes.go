@@ -120,6 +120,7 @@ func registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/emails", handleEmailList)
 	mux.HandleFunc("/api/emails/compose", handleEmailCompose)
 	mux.HandleFunc("/api/emails/send", handleEmailSend)
+	mux.HandleFunc("/api/emails/test-send", handleEmailTestSend)
 	mux.HandleFunc("/api/emails/detail", handleEmailDetail)
 	mux.HandleFunc("/api/emails/delete", handleEmailDelete)
 	mux.HandleFunc("/api/emails/schedule", handleEmailSchedule)
