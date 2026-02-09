@@ -109,10 +109,13 @@
             <a href="/attendance">Attendance</a>
             <a href="/admin/grading">Grading</a>
             <a href="/curriculum">Curriculum</a>
-            {{ else }}
+            {{ else if eq (currentRole) "member" }}
             <a href="/training-log">Training Log</a>
             <a href="/messages">Messages</a>
             <a href="/curriculum">Curriculum</a>
+            {{ else }}
+            <a href="/training-log">Training Log</a>
+            <a href="/messages">Messages</a>
             {{ end }}
             {{ if or (eq (currentRole) "admin") (eq (currentRole) "coach") (eq (currentRole) "member") }}
             <a href="/themes">Themes</a>
