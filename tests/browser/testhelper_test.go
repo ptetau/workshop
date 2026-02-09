@@ -241,6 +241,33 @@ func (a *testApp) login(t *testing.T, page playwright.Page) {
 	}
 }
 
+// impersonate uses the DevMode bar to switch to the given role.
+// Requires the user to already be logged in as admin.
+func (a *testApp) impersonate(t *testing.T, page playwright.Page, role string) {
+	t.Helper()
+	// Navigate to dashboard first to ensure DevMode bar is visible
+	if _, err := page.Goto(a.BaseURL + "/dashboard"); err != nil {
+		t.Fatalf("failed to navigate to dashboard for impersonation: %v", err)
+	}
+	// Click the role button in the DevMode bar
+	btn := page.Locator(fmt.Sprintf("#devmode-bar form input[name='role'][value='%s'] ~ button, #devmode-bar form:has(input[value='%s']) button", role, role))
+	// Simpler: find the form with the matching hidden input and click its button
+	form := page.Locator(fmt.Sprintf("#devmode-bar form:has(input[name='role'][value='%s'])", role))
+	formBtn := form.Locator("button")
+	if err := formBtn.Click(); err != nil {
+		// Fallback: try btn
+		if err2 := btn.Click(); err2 != nil {
+			t.Fatalf("failed to click impersonate button for role %s: %v", role, err2)
+		}
+	}
+	// Wait for page to reload after impersonation
+	if err := page.WaitForURL(a.BaseURL+"/dashboard", playwright.PageWaitForURLOptions{
+		Timeout: playwright.Float(10000),
+	}); err != nil {
+		t.Fatalf("impersonation did not redirect to dashboard: %v", err)
+	}
+}
+
 // findProjectRoot walks up from the working directory to find the project root (contains go.mod).
 func findProjectRoot(t *testing.T) string {
 	t.Helper()

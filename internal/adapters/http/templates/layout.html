@@ -28,7 +28,22 @@
         nav a[aria-current="page"] { color: var(--orange); border-bottom: 2px solid var(--orange); }
         .nav-brand { font-weight: 700; font-size: 1rem; letter-spacing: 1.5px; color: var(--dark); text-transform: uppercase; margin-right: 1.5rem; padding: 1rem 0; }
         .nav-brand:hover { color: var(--dark); }
+        .nav-links { display: flex; align-items: center; gap: 0; flex: 1; }
+        .nav-toggle { display: none; background: none; border: none; cursor: pointer; padding: 0.5rem; color: var(--dark); font-size: 1.5rem; line-height: 1; }
         main { max-width: 960px; margin: 2rem auto; padding: 0 1.5rem; }
+        @media (max-width: 768px) {
+            header { padding: 0 1rem; }
+            header nav { flex-wrap: nowrap; justify-content: space-between; }
+            .nav-toggle { display: block; order: 3; }
+            .nav-links { display: none; order: 4; flex-basis: 100%; flex-direction: column; align-items: stretch; gap: 0; }
+            .nav-links.open { display: flex; }
+            .nav-links a { padding: 0.75rem 0; border-bottom: 1px solid var(--border); }
+            .nav-links form { padding: 0.75rem 0; }
+            .nav-links form button { padding: 0.75rem 0 !important; }
+            main { padding: 0 1rem; margin: 1rem auto; }
+            .card { padding: 1.25rem; }
+            table { font-size: 0.85rem; }
+        }
         .card { background: var(--white); padding: 2rem; border-radius: 2px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
         h1 { margin-top: 0; font-weight: 400; font-size: 1.75rem; color: var(--dark); }
         h2 { font-weight: 400; font-size: 1.25rem; color: var(--dark); margin-top: 2rem; }
@@ -79,6 +94,8 @@
         <nav>
             {{ if isLoggedIn }}
             <a href="/dashboard" class="nav-brand">Workshop</a>
+            <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Toggle navigation">&#9776;</button>
+            <div class="nav-links">
             {{ if eq (currentRole) "admin" }}
             <a href="/members">Members</a>
             <a href="/attendance">Attendance</a>
@@ -86,12 +103,16 @@
             <a href="/admin/notices">Notices</a>
             <a href="/admin/emails">Emails</a>
             <a href="/admin/grading">Grading</a>
+            <a href="/curriculum">Curriculum</a>
             {{ else if eq (currentRole) "coach" }}
             <a href="/members">Members</a>
             <a href="/attendance">Attendance</a>
+            <a href="/admin/grading">Grading</a>
+            <a href="/curriculum">Curriculum</a>
             {{ else }}
             <a href="/training-log">Training Log</a>
             <a href="/messages">Messages</a>
+            <a href="/curriculum">Curriculum</a>
             {{ end }}
             {{ if or (eq (currentRole) "admin") (eq (currentRole) "coach") (eq (currentRole) "member") }}
             <a href="/themes">Themes</a>
@@ -101,6 +122,7 @@
                 <input type="hidden" name="gorilla.csrf.Token" value="{{ csrfToken }}">
                 <button type="submit" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-weight:500;font-size:0.8rem;letter-spacing:1px;text-transform:uppercase;padding:1rem 0.5rem;">Logout</button>
             </form>
+            </div>
             {{ else }}
             <a href="/dashboard" class="nav-brand">Workshop</a>
             <a href="/login" style="margin-left:auto;">Login</a>
