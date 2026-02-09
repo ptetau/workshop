@@ -214,6 +214,8 @@ jobs:
           ENDSSH
 
       - name: Create release tag
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           SHORT_SHA="${{ steps.version.outputs.short_sha }}"
@@ -242,6 +244,11 @@ jobs:
           EOF
           )
 
-          git tag -a "${VERSION}" -m "Release ${VERSION} (schema: ${SCHEMA_VERSION})"
-          git push origin "${VERSION}"
-          gh release create "${VERSION}" --title "${VERSION}" --notes "${BODY}"
+          if git rev-parse "${VERSION}" >/dev/null 2>&1; then
+            echo "Tag ${VERSION} already exists — skipping tag creation"
+          else
+            git tag -a "${VERSION}" -m "Release ${VERSION} (schema: ${SCHEMA_VERSION})"
+            git push origin "${VERSION}"
+          fi
+          gh release create "${VERSION}" --title "${VERSION}" --notes "${BODY}" 2>/dev/null \
+            || echo "Release ${VERSION} already exists — skipping"
