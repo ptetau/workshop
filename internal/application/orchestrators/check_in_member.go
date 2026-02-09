@@ -8,6 +8,7 @@ import (
 
 	"workshop/internal/domain/attendance"
 	"workshop/internal/domain/member"
+	"workshop/internal/domain/schedule"
 
 	"github.com/google/uuid"
 )
@@ -71,10 +72,16 @@ type CheckInMemberInput struct {
 	ClassDate  string // optional: date of the class (YYYY-MM-DD)
 }
 
+// ScheduleLookupStore defines the schedule store interface needed for mat hours.
+type ScheduleLookupStore interface {
+	GetByID(ctx context.Context, id string) (schedule.Schedule, error)
+}
+
 // CheckInMemberDeps holds dependencies for CheckInMember.
 type CheckInMemberDeps struct {
 	MemberStore     CheckInSearchStore
 	AttendanceStore AttendanceStore
+	ScheduleStore   ScheduleLookupStore // optional: used to compute mat hours
 }
 
 // ExecuteCheckInMember coordinates member check-in.
@@ -95,6 +102,16 @@ func ExecuteCheckInMember(ctx context.Context, input CheckInMemberInput, deps Ch
 		return errors.New("archived members cannot check in")
 	}
 
+	// Compute mat hours from schedule duration if available
+	var matHours float64
+	if input.ScheduleID != "" && deps.ScheduleStore != nil {
+		if sched, err := deps.ScheduleStore.GetByID(ctx, input.ScheduleID); err == nil {
+			if dur, err := sched.DurationHours(); err == nil {
+				matHours = dur
+			}
+		}
+	}
+
 	// Create attendance record
 	a := attendance.Attendance{
 		ID:          uuid.New().String(),
@@ -102,6 +119,7 @@ func ExecuteCheckInMember(ctx context.Context, input CheckInMemberInput, deps Ch
 		CheckInTime: time.Now(),
 		ScheduleID:  input.ScheduleID,
 		ClassDate:   input.ClassDate,
+		MatHours:    matHours,
 	}
 
 	if err := a.Validate(); err != nil {
@@ -112,6 +130,6 @@ func ExecuteCheckInMember(ctx context.Context, input CheckInMemberInput, deps Ch
 		return err
 	}
 
-	slog.Info("checkin_event", "event", "member_checked_in", "member_id", input.MemberID, "name", m.Name, "schedule_id", input.ScheduleID)
+	slog.Info("checkin_event", "event", "member_checked_in", "member_id", input.MemberID, "name", m.Name, "schedule_id", input.ScheduleID, "mat_hours", matHours)
 	return nil
 }

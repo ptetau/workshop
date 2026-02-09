@@ -24,7 +24,7 @@ func NewSQLiteStore(db *sql.DB) *SQLiteStore {
 // PRE: id is non-empty
 // POST: Returns the entity or an error if not found
 func (s *SQLiteStore) GetByID(ctx context.Context, id string) (domain.Attendance, error) {
-	query := "SELECT id, check_in_time, check_out_time, member_id, schedule_id, class_date FROM attendance WHERE id = ?"
+	query := "SELECT id, check_in_time, check_out_time, member_id, schedule_id, class_date, mat_hours FROM attendance WHERE id = ?"
 
 	row := s.db.QueryRowContext(ctx, query, id)
 
@@ -38,6 +38,7 @@ func (s *SQLiteStore) GetByID(ctx context.Context, id string) (domain.Attendance
 		&entity.MemberID,
 		&scheduleID,
 		&classDate,
+		&entity.MatHours,
 	)
 	if scheduleID.Valid {
 		entity.ScheduleID = scheduleID.String
@@ -77,9 +78,9 @@ func (s *SQLiteStore) Save(ctx context.Context, entity domain.Attendance) error 
 	defer tx.Rollback()
 
 	// Upsert implementation
-	fields := []string{"id", "check_in_time", "check_out_time", "member_id", "schedule_id", "class_date"}
-	placeholders := []string{"?", "?", "?", "?", "?", "?"}
-	updates := []string{"check_in_time=excluded.check_in_time", "check_out_time=excluded.check_out_time", "member_id=excluded.member_id", "schedule_id=excluded.schedule_id", "class_date=excluded.class_date"}
+	fields := []string{"id", "check_in_time", "check_out_time", "member_id", "schedule_id", "class_date", "mat_hours"}
+	placeholders := []string{"?", "?", "?", "?", "?", "?", "?"}
+	updates := []string{"check_in_time=excluded.check_in_time", "check_out_time=excluded.check_out_time", "member_id=excluded.member_id", "schedule_id=excluded.schedule_id", "class_date=excluded.class_date", "mat_hours=excluded.mat_hours"}
 
 	query := fmt.Sprintf(
 		"INSERT INTO attendance (%s) VALUES (%s) ON CONFLICT(id) DO UPDATE SET %s",
@@ -109,6 +110,7 @@ func (s *SQLiteStore) Save(ctx context.Context, entity domain.Attendance) error 
 		entity.MemberID,
 		scheduleIDVal,
 		classDateVal,
+		entity.MatHours,
 	)
 	if err != nil {
 		return err
@@ -129,7 +131,7 @@ func (s *SQLiteStore) Delete(ctx context.Context, id string) error {
 // PRE: filter has valid parameters
 // POST: Returns matching entities
 func (s *SQLiteStore) List(ctx context.Context, filter ListFilter) ([]domain.Attendance, error) {
-	query := "SELECT id, check_in_time, check_out_time, member_id, schedule_id, class_date FROM attendance LIMIT ? OFFSET ?"
+	query := "SELECT id, check_in_time, check_out_time, member_id, schedule_id, class_date, mat_hours FROM attendance LIMIT ? OFFSET ?"
 
 	rows, err := s.db.QueryContext(ctx, query, filter.Limit, filter.Offset)
 	if err != nil {
@@ -149,6 +151,7 @@ func (s *SQLiteStore) List(ctx context.Context, filter ListFilter) ([]domain.Att
 			&entity.MemberID,
 			&scheduleID,
 			&classDate,
+			&entity.MatHours,
 		); err != nil {
 			return nil, err
 		}
@@ -180,7 +183,7 @@ func (s *SQLiteStore) List(ctx context.Context, filter ListFilter) ([]domain.Att
 // PRE: memberID is non-empty
 // POST: Returns records for the given member
 func (s *SQLiteStore) ListByMemberID(ctx context.Context, memberID string) ([]domain.Attendance, error) {
-	query := "SELECT id, check_in_time, check_out_time, member_id, schedule_id, class_date FROM attendance WHERE member_id = ? ORDER BY check_in_time DESC"
+	query := "SELECT id, check_in_time, check_out_time, member_id, schedule_id, class_date, mat_hours FROM attendance WHERE member_id = ? ORDER BY check_in_time DESC"
 
 	rows, err := s.db.QueryContext(ctx, query, memberID)
 	if err != nil {
@@ -200,6 +203,7 @@ func (s *SQLiteStore) ListByMemberID(ctx context.Context, memberID string) ([]do
 			&entity.MemberID,
 			&scheduleID,
 			&classDate,
+			&entity.MatHours,
 		); err != nil {
 			return nil, err
 		}
@@ -229,7 +233,7 @@ func (s *SQLiteStore) ListByMemberID(ctx context.Context, memberID string) ([]do
 // PRE: memberID is non-empty, date is YYYY-MM-DD format
 // POST: Returns records matching memberID and date, ordered by check-in time desc
 func (s *SQLiteStore) ListByMemberIDAndDate(ctx context.Context, memberID string, date string) ([]domain.Attendance, error) {
-	query := `SELECT id, check_in_time, check_out_time, member_id, schedule_id, class_date
+	query := `SELECT id, check_in_time, check_out_time, member_id, schedule_id, class_date, mat_hours
 		FROM attendance
 		WHERE member_id = ? AND DATE(check_in_time) = ?
 		ORDER BY check_in_time DESC`
@@ -252,6 +256,7 @@ func (s *SQLiteStore) ListByMemberIDAndDate(ctx context.Context, memberID string
 			&entity.MemberID,
 			&scheduleID,
 			&classDate,
+			&entity.MatHours,
 		); err != nil {
 			return nil, err
 		}

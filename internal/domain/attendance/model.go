@@ -12,7 +12,8 @@ type Attendance struct {
 	CheckOutTime time.Time
 	MemberID     string
 	ScheduleID   string
-	ClassDate    string // YYYY-MM-DD format
+	ClassDate    string  // YYYY-MM-DD format
+	MatHours     float64 // hours credited from session duration
 }
 
 // Validate checks if the Attendance has valid data.

@@ -2,7 +2,9 @@ package schedule
 
 import (
 	"errors"
+	"fmt"
 	"strings"
+	"time"
 )
 
 // Day of week constants
@@ -54,6 +56,25 @@ func (s *Schedule) Validate() error {
 		return ErrEmptyEndTime
 	}
 	return nil
+}
+
+// DurationHours returns the session duration in hours.
+// PRE: StartTime and EndTime are in HH:MM format
+// POST: Returns duration as float64 hours, or error if times can't be parsed
+func (s *Schedule) DurationHours() (float64, error) {
+	start, err := time.Parse("15:04", s.StartTime)
+	if err != nil {
+		return 0, fmt.Errorf("invalid start time %q: %w", s.StartTime, err)
+	}
+	end, err := time.Parse("15:04", s.EndTime)
+	if err != nil {
+		return 0, fmt.Errorf("invalid end time %q: %w", s.EndTime, err)
+	}
+	dur := end.Sub(start)
+	if dur <= 0 {
+		dur += 24 * time.Hour // handle overnight classes
+	}
+	return dur.Hours(), nil
 }
 
 func isValidDay(day string) bool {

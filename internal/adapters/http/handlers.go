@@ -293,6 +293,7 @@ func handlePostCheckinCheckInMember(w http.ResponseWriter, r *http.Request) {
 	deps := orchestrators.CheckInMemberDeps{
 		MemberStore:     stores.MemberStore,
 		AttendanceStore: stores.AttendanceStore,
+		ScheduleStore:   stores.ScheduleStore,
 	}
 	err := orchestrators.ExecuteCheckInMember(ctx, input, deps)
 	if err != nil {

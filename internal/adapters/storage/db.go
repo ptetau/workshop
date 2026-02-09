@@ -22,6 +22,7 @@ var migrations = []migration{
 	{version: 2, description: "email system tables", apply: migrate2},
 	{version: 3, description: "account activation", apply: migrate3},
 	{version: 4, description: "curriculum rotor system", apply: migrate4},
+	{version: 5, description: "attendance mat hours", apply: migrate5},
 }
 
 // SchemaVersion returns the current schema version of the database.
@@ -453,5 +454,11 @@ func migrate4(tx *sql.Tx) error {
 	CREATE INDEX IF NOT EXISTS idx_vote_topic ON vote(topic_id);
 	`
 	_, err := tx.Exec(schema)
+	return err
+}
+
+// migrate5 adds mat_hours column to attendance table.
+func migrate5(tx *sql.Tx) error {
+	_, err := tx.Exec(`ALTER TABLE attendance ADD COLUMN mat_hours REAL NOT NULL DEFAULT 0`)
 	return err
 }
