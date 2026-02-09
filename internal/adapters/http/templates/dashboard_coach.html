@@ -39,30 +39,43 @@
 
     <h2>Today's Attendance</h2>
     {{ if .Attendees }}
-    <table style="width:100%;border-collapse:collapse;margin-bottom:1.5rem;">
+    <div style="overflow-x:auto;">
+    <table style="width:100%;border-collapse:collapse;margin-bottom:1.5rem;min-width:500px;">
         <thead>
             <tr style="border-bottom:2px solid var(--border);">
                 <th style="padding:0.5rem;text-align:left;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);">Name</th>
+                <th style="padding:0.5rem;text-align:left;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);">Belt</th>
                 <th style="padding:0.5rem;text-align:left;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);">Check-In</th>
-                <th style="padding:0.5rem;text-align:center;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);">Injury</th>
+                <th style="padding:0.5rem;text-align:right;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);">Mat Hrs</th>
+                <th style="padding:0.5rem;text-align:center;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);">Flags</th>
             </tr>
         </thead>
         <tbody>
             {{ range .Attendees }}
             <tr style="border-bottom:1px solid var(--border);">
                 <td style="padding:0.5rem;font-weight:600;">{{ .MemberName }}</td>
-                <td style="padding:0.5rem;">{{ .CheckInTime.Format "15:04" }}</td>
-                <td style="padding:0.5rem;text-align:center;">
-                    {{ if .HasInjury }}
-                    <span style="background:var(--orange);color:white;padding:0.2rem 0.5rem;font-weight:600;font-size:0.8rem;">{{ .InjuryBodyPart }}</span>
+                <td style="padding:0.5rem;">
+                    {{ if .Belt }}
+                    <span style="display:inline-block;width:16px;height:9px;border-radius:2px;border:1px solid #ccc;vertical-align:middle;margin-right:3px;background:{{ if eq .Belt "white" }}#fff{{ else if eq .Belt "blue" }}#1565c0{{ else if eq .Belt "purple" }}#7b1fa2{{ else if eq .Belt "brown" }}#5d4037{{ else if eq .Belt "black" }}#212121{{ else if eq .Belt "yellow" }}#f9a825{{ else if eq .Belt "orange" }}#e65100{{ else if eq .Belt "green" }}#2e7d32{{ else if eq .Belt "grey" }}#9e9e9e{{ else }}#ccc{{ end }};"></span>
+                    {{ range $i := .Stripe | stripeRange }}<span style="display:inline-block;width:5px;height:5px;background:#fff;border:1px solid #999;border-radius:50%;margin-left:1px;vertical-align:middle;"></span>{{ end }}
                     {{ else }}
                     <span style="color:var(--text-muted);">—</span>
+                    {{ end }}
+                </td>
+                <td style="padding:0.5rem;">{{ .CheckInTime.Format "15:04" }}</td>
+                <td style="padding:0.5rem;text-align:right;">{{ if gt .MatHours 0.0 }}{{ printf "%.1f" .MatHours }}h{{ else }}—{{ end }}</td>
+                <td style="padding:0.5rem;text-align:center;">
+                    {{ if .HasInjury }}
+                    <span style="background:#fff3cd;color:#856404;padding:0.2rem 0.5rem;font-weight:600;font-size:0.8rem;border-radius:8px;">🚨 {{ .InjuryBodyPart }}</span>
+                    {{ else }}
+                    <span style="color:#28a745;">✓</span>
                     {{ end }}
                 </td>
             </tr>
             {{ end }}
         </tbody>
     </table>
+    </div>
     {{ else }}
     <p style="color:var(--text-muted);font-style:italic;">No check-ins yet today.</p>
     {{ end }}
@@ -84,6 +97,9 @@
     <div style="display:flex;flex-wrap:wrap;gap:0.75rem;margin-top:1rem;">
         <a href="/members" style="background:var(--orange);color:white;padding:0.5rem 1.25rem;text-decoration:none;font-weight:600;font-size:0.85rem;text-transform:uppercase;letter-spacing:0.5px;">Members</a>
         <a href="/attendance" style="background:var(--dark);color:white;padding:0.5rem 1.25rem;text-decoration:none;font-weight:600;font-size:0.85rem;text-transform:uppercase;letter-spacing:0.5px;">Attendance</a>
+        <a href="/admin/grading" style="background:var(--dark);color:white;padding:0.5rem 1.25rem;text-decoration:none;font-weight:600;font-size:0.85rem;text-transform:uppercase;letter-spacing:0.5px;">Grading</a>
+        <a href="/curriculum" style="background:var(--dark);color:white;padding:0.5rem 1.25rem;text-decoration:none;font-weight:600;font-size:0.85rem;text-transform:uppercase;letter-spacing:0.5px;">Curriculum</a>
+        <a href="/injuries/form" style="background:var(--dark);color:white;padding:0.5rem 1.25rem;text-decoration:none;font-weight:600;font-size:0.85rem;text-transform:uppercase;letter-spacing:0.5px;">Report Injury</a>
         <a href="/kiosk" style="background:var(--dark);color:white;padding:0.5rem 1.25rem;text-decoration:none;font-weight:600;font-size:0.85rem;text-transform:uppercase;letter-spacing:0.5px;">Launch Kiosk</a>
     </div>
 </div>

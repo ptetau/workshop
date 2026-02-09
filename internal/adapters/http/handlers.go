@@ -2544,9 +2544,10 @@ func handleDashboard(w http.ResponseWriter, r *http.Request) {
 			ProgramStore:   stores.ProgramStore,
 		},
 		AttendanceDeps: projections.GetAttendanceTodayDeps{
-			AttendanceStore: stores.AttendanceStore,
-			MemberStore:     stores.MemberStore,
-			InjuryStore:     stores.InjuryStore,
+			AttendanceStore:    stores.AttendanceStore,
+			MemberStore:        stores.MemberStore,
+			InjuryStore:        stores.InjuryStore,
+			GradingRecordStore: stores.GradingRecordStore,
 		},
 		InactiveDeps: projections.GetInactiveMembersDeps{
 			MemberStore:     stores.MemberStore,
