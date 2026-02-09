@@ -1,4 +1,19 @@
 {{ define "content" }}
+<style>
+    .belt-icon {
+        display: inline-block; width: 18px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: middle; border: 1px solid #ccc;
+    }
+    .belt-white  { background: #fff; }
+    .belt-blue   { background: #1565c0; border-color: #1565c0; }
+    .belt-purple { background: #7b1fa2; border-color: #7b1fa2; }
+    .belt-brown  { background: #5d4037; border-color: #5d4037; }
+    .belt-black  { background: #212121; border-color: #212121; }
+    .belt-grey   { background: #9e9e9e; border-color: #9e9e9e; }
+    .belt-yellow { background: #f9a825; border-color: #f9a825; }
+    .belt-orange { background: #e65100; border-color: #e65100; }
+    .belt-green  { background: #2e7d32; border-color: #2e7d32; }
+    .stripe-dot { display: inline-block; width: 6px; height: 6px; background: #fff; border: 1px solid #999; border-radius: 50%; margin-left: 2px; vertical-align: middle; }
+</style>
 <div class="card">
     <h1>📊 Today's Attendance</h1>
 
@@ -10,17 +25,33 @@
     <table style="width: 100%; border-collapse: collapse; margin: 1rem 0;">
         <thead>
             <tr style="background: #f8f9fa; border-bottom: 2px solid #dee2e6;">
-                <th style="padding: 0.75rem; text-align: left;">Member Name</th>
-                <th style="padding: 0.75rem; text-align: left;">Check-In Time</th>
-                <th style="padding: 0.75rem; text-align: center;">Injury Status</th>
+                <th style="padding: 0.75rem; text-align: left;">Member</th>
+                <th style="padding: 0.75rem; text-align: left;">Belt</th>
+                <th style="padding: 0.75rem; text-align: left;">Check-In</th>
+                <th style="padding: 0.75rem; text-align: right;">Mat Hours</th>
+                <th style="padding: 0.75rem; text-align: center;">Flags</th>
             </tr>
         </thead>
         <tbody>
             {{ range .Attendees }}
             <tr style="border-bottom: 1px solid #dee2e6;">
                 <td style="padding: 0.75rem; font-weight: 600;">{{ .MemberName }}</td>
+                <td style="padding: 0.75rem;">
+                    {{ if .Belt }}
+                    <span class="belt-icon belt-{{ .Belt }}" data-belt="{{ .Belt }}"></span>
+                    <span style="font-size: 0.85rem; text-transform: capitalize;">{{ .Belt }}</span>
+                    {{ range $i := .Stripe | stripeRange }}
+                    <span class="stripe-dot"></span>
+                    {{ end }}
+                    {{ else }}
+                    <span style="color: #999; font-size: 0.85rem;">—</span>
+                    {{ end }}
+                </td>
                 <td style="padding: 0.75rem; color: #666;">
                     {{ .CheckInTime.Format "3:04 PM" }}
+                </td>
+                <td style="padding: 0.75rem; text-align: right; color: #666;">
+                    {{ if gt .MatHours 0.0 }}{{ printf "%.1f" .MatHours }}h{{ else }}—{{ end }}
                 </td>
                 <td style="padding: 0.75rem; text-align: center;">
                     {{ if .HasInjury }}
@@ -29,7 +60,7 @@
                         🚨 {{ .InjuryBodyPart }}
                     </span>
                     {{ else }}
-                    <span style="color: #F9B232; font-weight: 600;">✓ No Injury</span>
+                    <span style="color: #28a745;">✓</span>
                     {{ end }}
                 </td>
             </tr>

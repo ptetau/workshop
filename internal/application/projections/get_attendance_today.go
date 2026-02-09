@@ -23,6 +23,10 @@ type AttendanceWithMember struct {
 	CheckOutTime   time.Time
 	HasInjury      bool
 	InjuryBodyPart string
+	Belt           string
+	Stripe         int
+	MatHours       float64
+	ScheduleID     string
 }
 
 // GetAttendanceTodayResult carries the query result.
@@ -32,9 +36,10 @@ type GetAttendanceTodayResult struct {
 
 // GetAttendanceTodayDeps holds dependencies for GetAttendanceToday.
 type GetAttendanceTodayDeps struct {
-	AttendanceStore AttendanceStore
-	MemberStore     MemberStore
-	InjuryStore     InjuryStore
+	AttendanceStore    AttendanceStore
+	MemberStore        MemberStore
+	InjuryStore        InjuryStore
+	GradingRecordStore GradingRecordStore // optional: nil skips belt lookup
 }
 
 // QueryGetAttendanceToday retrieves today's check-ins with injury indicators.
@@ -90,12 +95,28 @@ func QueryGetAttendanceToday(ctx context.Context, query GetAttendanceTodayQuery,
 			MemberName:   m.Name,
 			CheckInTime:  a.CheckInTime,
 			CheckOutTime: a.CheckOutTime,
+			MatHours:     a.MatHours,
+			ScheduleID:   a.ScheduleID,
 		}
 
 		// Check for injury
 		if inj, hasInjury := injuryMap[m.ID]; hasInjury {
 			awm.HasInjury = true
 			awm.InjuryBodyPart = inj.BodyPart
+		}
+
+		// Look up latest belt
+		if deps.GradingRecordStore != nil {
+			if records, err := deps.GradingRecordStore.ListByMemberID(ctx, m.ID); err == nil && len(records) > 0 {
+				latest := records[0]
+				for _, r := range records[1:] {
+					if r.PromotedAt.After(latest.PromotedAt) {
+						latest = r
+					}
+				}
+				awm.Belt = latest.Belt
+				awm.Stripe = latest.Stripe
+			}
 		}
 
 		result = append(result, awm)
