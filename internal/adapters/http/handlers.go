@@ -326,7 +326,8 @@ func handleGetAttendanceGetAttendanceToday(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	query := projections.GetAttendanceTodayQuery{Date: ""}
+	dateParam := r.URL.Query().Get("date")
+	query := projections.GetAttendanceTodayQuery{Date: dateParam}
 	deps := projections.GetAttendanceTodayDeps{
 		AttendanceStore:    stores.AttendanceStore,
 		MemberStore:        stores.MemberStore,
@@ -340,9 +341,29 @@ func handleGetAttendanceGetAttendanceToday(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// Determine display date and whether it's today
+	today := time.Now().Format("2006-01-02")
+	displayDate := today
+	if dateParam != "" {
+		displayDate = dateParam
+	}
+	isToday := displayDate == today
+
+	// Compute prev/next dates for navigation
+	parsed, _ := time.Parse("2006-01-02", displayDate)
+	if parsed.IsZero() {
+		parsed = time.Now()
+	}
+	prevDate := parsed.AddDate(0, 0, -1).Format("2006-01-02")
+	nextDate := parsed.AddDate(0, 0, 1).Format("2006-01-02")
+
 	if isHTML {
 		renderTemplate(w, r, "get_attendance_today.html", map[string]any{
-			"Attendees": result.Attendees,
+			"Attendees":   result.Attendees,
+			"DisplayDate": displayDate,
+			"IsToday":     isToday,
+			"PrevDate":    prevDate,
+			"NextDate":    nextDate,
 		})
 		return
 	}

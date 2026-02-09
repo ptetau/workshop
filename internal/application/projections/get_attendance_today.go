@@ -46,20 +46,27 @@ type GetAttendanceTodayDeps struct {
 // PRE: Valid query parameters
 // POST: Returns today's attendance with member details and injury flags
 func QueryGetAttendanceToday(ctx context.Context, query GetAttendanceTodayQuery, deps GetAttendanceTodayDeps) (GetAttendanceTodayResult, error) {
+	// Determine target date
+	targetDate := time.Now().Truncate(24 * time.Hour)
+	if query.Date != "" {
+		if parsed, err := time.Parse("2006-01-02", query.Date); err == nil {
+			targetDate = parsed.Truncate(24 * time.Hour)
+		}
+	}
+
 	// Get all attendance records (filter by date in production)
 	attendances, err := deps.AttendanceStore.List(ctx, attendance.ListFilter{
-		Limit:  100,
+		Limit:  1000,
 		Offset: 0,
 	})
 	if err != nil {
 		return GetAttendanceTodayResult{}, err
 	}
 
-	// Filter to today's records
-	today := time.Now().Truncate(24 * time.Hour)
+	// Filter to target date's records
 	var todayAttendances []domainAttendance.Attendance
 	for _, a := range attendances {
-		if a.CheckInTime.Truncate(24 * time.Hour).Equal(today) {
+		if a.CheckInTime.Truncate(24 * time.Hour).Equal(targetDate) {
 			todayAttendances = append(todayAttendances, a)
 		}
 	}
