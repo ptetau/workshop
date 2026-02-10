@@ -7,7 +7,9 @@ import (
 	"workshop/internal/adapters/storage/attendance"
 	"workshop/internal/adapters/storage/injury"
 	domainAttendance "workshop/internal/domain/attendance"
+	domainClassType "workshop/internal/domain/classtype"
 	domainInjury "workshop/internal/domain/injury"
+	domainSchedule "workshop/internal/domain/schedule"
 )
 
 // GetAttendanceTodayQuery carries query parameters.
@@ -27,6 +29,7 @@ type AttendanceWithMember struct {
 	Stripe         int
 	MatHours       float64
 	ScheduleID     string
+	ClassName      string
 }
 
 // GetAttendanceTodayResult carries the query result.
@@ -34,12 +37,24 @@ type GetAttendanceTodayResult struct {
 	Attendees []AttendanceWithMember
 }
 
+// AttendanceTodayScheduleStore defines the schedule store interface for this projection.
+type AttendanceTodayScheduleStore interface {
+	GetByID(ctx context.Context, id string) (domainSchedule.Schedule, error)
+}
+
+// AttendanceTodayClassTypeStore defines the class type store interface for this projection.
+type AttendanceTodayClassTypeStore interface {
+	GetByID(ctx context.Context, id string) (domainClassType.ClassType, error)
+}
+
 // GetAttendanceTodayDeps holds dependencies for GetAttendanceToday.
 type GetAttendanceTodayDeps struct {
 	AttendanceStore    AttendanceStore
 	MemberStore        MemberStore
 	InjuryStore        InjuryStore
-	GradingRecordStore GradingRecordStore // optional: nil skips belt lookup
+	GradingRecordStore GradingRecordStore            // optional: nil skips belt lookup
+	ScheduleStore      AttendanceTodayScheduleStore  // optional: nil skips class name
+	ClassTypeStore     AttendanceTodayClassTypeStore // optional: nil skips class name
 }
 
 // QueryGetAttendanceToday retrieves today's check-ins with injury indicators.
@@ -123,6 +138,15 @@ func QueryGetAttendanceToday(ctx context.Context, query GetAttendanceTodayQuery,
 				}
 				awm.Belt = latest.Belt
 				awm.Stripe = latest.Stripe
+			}
+		}
+
+		// Look up class name from schedule
+		if a.ScheduleID != "" && deps.ScheduleStore != nil && deps.ClassTypeStore != nil {
+			if sched, err := deps.ScheduleStore.GetByID(ctx, a.ScheduleID); err == nil {
+				if ct, err := deps.ClassTypeStore.GetByID(ctx, sched.ClassTypeID); err == nil {
+					awm.ClassName = ct.Name
+				}
 			}
 		}
 

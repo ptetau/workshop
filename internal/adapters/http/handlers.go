@@ -333,6 +333,8 @@ func handleGetAttendanceGetAttendanceToday(w http.ResponseWriter, r *http.Reques
 		MemberStore:        stores.MemberStore,
 		InjuryStore:        stores.InjuryStore,
 		GradingRecordStore: stores.GradingRecordStore,
+		ScheduleStore:      stores.ScheduleStore,
+		ClassTypeStore:     stores.ClassTypeStore,
 	}
 
 	result, err := projections.QueryGetAttendanceToday(ctx, query, deps)
@@ -2620,6 +2622,8 @@ func handleDashboard(w http.ResponseWriter, r *http.Request) {
 			MemberStore:        stores.MemberStore,
 			InjuryStore:        stores.InjuryStore,
 			GradingRecordStore: stores.GradingRecordStore,
+			ScheduleStore:      stores.ScheduleStore,
+			ClassTypeStore:     stores.ClassTypeStore,
 		},
 		InactiveDeps: projections.GetInactiveMembersDeps{
 			MemberStore:     stores.MemberStore,

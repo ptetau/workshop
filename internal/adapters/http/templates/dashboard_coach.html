@@ -45,6 +45,7 @@
             <tr style="border-bottom:2px solid var(--border);">
                 <th style="padding:0.5rem;text-align:left;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);">Name</th>
                 <th style="padding:0.5rem;text-align:left;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);">Belt</th>
+                <th style="padding:0.5rem;text-align:left;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);">Class</th>
                 <th style="padding:0.5rem;text-align:left;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);">Check-In</th>
                 <th style="padding:0.5rem;text-align:right;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);">Mat Hrs</th>
                 <th style="padding:0.5rem;text-align:center;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);">Flags</th>
@@ -63,6 +64,7 @@
                     <span style="color:var(--text-muted);">—</span>
                     {{ end }}
                 </td>
+                <td style="padding:0.5rem;">{{ if .ClassName }}{{ .ClassName }}{{ else }}—{{ end }}</td>
                 <td style="padding:0.5rem;">{{ .CheckInTime.Format "3:04 PM" }}</td>
                 <td style="padding:0.5rem;text-align:right;">{{ if gt .MatHours 0.0 }}{{ printf "%.1f" .MatHours }}h{{ else }}—{{ end }}</td>
                 <td style="padding:0.5rem;text-align:center;">
