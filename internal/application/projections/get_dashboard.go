@@ -8,6 +8,7 @@ import (
 	"workshop/internal/domain/member"
 	"workshop/internal/domain/notice"
 	"workshop/internal/domain/traininggoal"
+	"workshop/internal/domain/waiver"
 )
 
 // DashboardNoticeStore defines the notice store interface needed by the dashboard projection.
@@ -35,6 +36,11 @@ type DashboardMemberStore interface {
 	GetByEmail(ctx context.Context, email string) (member.Member, error)
 }
 
+// DashboardWaiverStore defines the waiver store interface needed by the dashboard projection.
+type DashboardWaiverStore interface {
+	GetByMemberID(ctx context.Context, memberID string) (waiver.Waiver, error)
+}
+
 // GetDashboardQuery carries input for the dashboard projection.
 type GetDashboardQuery struct {
 	Role         string // admin, coach, member, trial
@@ -52,12 +58,14 @@ type GetDashboardDeps struct {
 	MessageStore       DashboardMessageStore
 	TrainingGoalStore  DashboardTrainingGoalStore
 	MemberStore        DashboardMemberStore
-	GradingRecordStore GradingRecordStore // optional: nil skips belt lookup
+	GradingRecordStore GradingRecordStore   // optional: nil skips belt lookup
+	WaiverStore        DashboardWaiverStore // optional: nil skips waiver check
 }
 
 // DashboardResult carries the output of the dashboard projection.
 type DashboardResult struct {
-	Role string
+	Role         string
+	WaiverSigned bool // added field
 
 	// Shared
 	TodaysClasses []TodaysClassResult
@@ -76,6 +84,7 @@ type DashboardResult struct {
 	TrainingGoal *traininggoal.TrainingGoal
 	Belt         string
 	Stripe       int
+	IsTrial      bool
 }
 
 // QueryGetDashboard aggregates dashboard data based on the user's role.
@@ -149,6 +158,16 @@ func QueryGetDashboard(ctx context.Context, query GetDashboardQuery, deps GetDas
 						}
 						result.Belt = latest.Belt
 						result.Stripe = latest.Stripe
+					}
+				}
+				// Waiver status for trial users
+				if query.Role == "trial" {
+					result.IsTrial = true
+					if deps.WaiverStore != nil {
+						w, err := deps.WaiverStore.GetByMemberID(ctx, memberID)
+						if err == nil && w.ID != "" {
+							result.WaiverSigned = true
+						}
 					}
 				}
 			}

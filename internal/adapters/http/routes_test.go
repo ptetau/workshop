@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -267,6 +268,18 @@ func (m *mockWaiverStore) GetByID(ctx context.Context, id string) (waiverDomain.
 		return w, nil
 	}
 	return waiverDomain.Waiver{}, nil
+}
+
+// GetByMemberID implements the waiver store interface for testing.
+// PRE: memberID is non-empty
+// POST: Returns the waiver for the member or an error if not found
+func (m *mockWaiverStore) GetByMemberID(ctx context.Context, memberID string) (waiverDomain.Waiver, error) {
+	for _, w := range m.waivers {
+		if w.MemberID == memberID {
+			return w, nil
+		}
+	}
+	return waiverDomain.Waiver{}, fmt.Errorf("waiver not found")
 }
 
 // Save implements the waiver store interface for testing.

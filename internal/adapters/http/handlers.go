@@ -2639,6 +2639,7 @@ func handleDashboard(w http.ResponseWriter, r *http.Request) {
 		TrainingGoalStore:  stores.TrainingGoalStore,
 		MemberStore:        stores.MemberStore,
 		GradingRecordStore: stores.GradingRecordStore,
+		WaiverStore:        stores.WaiverStore,
 	}
 
 	result, err := projections.QueryGetDashboard(ctx, query, deps, timeNow())

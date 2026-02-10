@@ -49,6 +49,36 @@ func (s *SQLiteStore) GetByID(ctx context.Context, id string) (domain.Waiver, er
 	return entity, err
 }
 
+// GetByMemberID retrieves the most recent Waiver for a member.
+// PRE: memberID is non-empty
+// POST: Returns the waiver or an error if not found
+func (s *SQLiteStore) GetByMemberID(ctx context.Context, memberID string) (domain.Waiver, error) {
+	query := "SELECT id, accepted_terms, ip_address, member_id, signed_at FROM waiver WHERE member_id = ? ORDER BY signed_at DESC LIMIT 1"
+
+	row := s.db.QueryRowContext(ctx, query, memberID)
+
+	var entity domain.Waiver
+	var signedAtStr string
+	err := row.Scan(
+		&entity.ID,
+		&entity.AcceptedTerms,
+		&entity.IPAddress,
+		&entity.MemberID,
+		&signedAtStr,
+	)
+	if err == sql.ErrNoRows {
+		return domain.Waiver{}, fmt.Errorf("waiver not found: %w", err)
+	}
+	if err != nil {
+		return domain.Waiver{}, err
+	}
+	entity.SignedAt, err = parseStoredTime(signedAtStr)
+	if err != nil {
+		return domain.Waiver{}, fmt.Errorf("failed to parse signed_at: %w", err)
+	}
+	return entity, nil
+}
+
 // Save persists a Waiver to the database.
 // PRE: entity has been validated
 // POST: Entity is persisted (insert or update)
