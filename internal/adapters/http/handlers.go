@@ -3948,6 +3948,10 @@ func handleCurriculumPage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	if !middleware.IsRole(r.Context(), "admin", "coach", "member") {
+		http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
+		return
+	}
 	renderTemplate(w, r, "curriculum.html", map[string]interface{}{
 		"Title": "Curriculum",
 	})

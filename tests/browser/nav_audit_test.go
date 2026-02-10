@@ -113,6 +113,65 @@ func TestNavAudit_MemberNavLinks(t *testing.T) {
 	}
 }
 
+// TestNavAudit_TrialNavLinks verifies trial nav does NOT contain Curriculum, Themes, or Library.
+func TestNavAudit_TrialNavLinks(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping browser test in short mode")
+	}
+	app := newTestApp(t)
+	page := app.newPage(t)
+	app.login(t, page)
+
+	// Impersonate trial
+	app.impersonate(t, page, "trial")
+
+	nav := page.Locator(".nav-links")
+
+	// Trial SHOULD have these links
+	for _, link := range []struct{ text, href string }{
+		{"Training Log", "/training-log"},
+		{"Messages", "/messages"},
+	} {
+		loc := nav.Locator(fmt.Sprintf("a[href='%s']", link.href))
+		if visible, _ := loc.IsVisible(); !visible {
+			t.Errorf("trial nav missing link: %s (%s)", link.text, link.href)
+		}
+	}
+
+	// Trial should NOT have these links
+	for _, href := range []string{"/curriculum", "/themes", "/library"} {
+		loc := nav.Locator(fmt.Sprintf("a[href='%s']", href))
+		count, _ := loc.Count()
+		if count > 0 {
+			if visible, _ := loc.IsVisible(); visible {
+				t.Errorf("trial nav should NOT contain %s", href)
+			}
+		}
+	}
+}
+
+// TestNavAudit_TrialCurriculumRedirects verifies trial users are redirected away from /curriculum.
+func TestNavAudit_TrialCurriculumRedirects(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping browser test in short mode")
+	}
+	app := newTestApp(t)
+	page := app.newPage(t)
+	app.login(t, page)
+
+	app.impersonate(t, page, "trial")
+
+	resp, err := page.Goto(app.BaseURL + "/curriculum")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Should redirect to dashboard (303 -> 200 after redirect)
+	url := page.URL()
+	if !strings.Contains(url, "/dashboard") {
+		t.Errorf("trial accessing /curriculum should redirect to /dashboard, got %s (status %d)", url, resp.Status())
+	}
+}
+
 // TestNavAudit_CurriculumLinkNavigates verifies the Curriculum nav link works.
 func TestNavAudit_CurriculumLinkNavigates(t *testing.T) {
 	if testing.Short() {

@@ -58,6 +58,7 @@
                 <td style="padding:0.5rem;">
                     {{ if .Belt }}
                     <span style="display:inline-block;width:16px;height:9px;border-radius:2px;border:1px solid #ccc;vertical-align:middle;margin-right:3px;background:{{ if eq .Belt "white" }}#fff{{ else if eq .Belt "blue" }}#1565c0{{ else if eq .Belt "purple" }}#7b1fa2{{ else if eq .Belt "brown" }}#5d4037{{ else if eq .Belt "black" }}#212121{{ else if eq .Belt "yellow" }}#f9a825{{ else if eq .Belt "orange" }}#e65100{{ else if eq .Belt "green" }}#2e7d32{{ else if eq .Belt "grey" }}#9e9e9e{{ else }}#ccc{{ end }};"></span>
+                    <span style="font-size:0.85rem;text-transform:capitalize;">{{ .Belt }}</span>
                     {{ range $i := .Stripe | stripeRange }}<span style="display:inline-block;width:5px;height:5px;background:#fff;border:1px solid #999;border-radius:50%;margin-left:1px;vertical-align:middle;"></span>{{ end }}
                     {{ else }}
                     <span style="color:var(--text-muted);">—</span>
