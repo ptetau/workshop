@@ -43,15 +43,16 @@ type GetDashboardQuery struct {
 
 // GetDashboardDeps holds dependencies for the dashboard projection.
 type GetDashboardDeps struct {
-	TodaysClassesDeps GetTodaysClassesDeps
-	AttendanceDeps    GetAttendanceTodayDeps
-	InactiveDeps      GetInactiveMembersDeps
-	TrainingLogDeps   GetTrainingLogDeps
-	NoticeStore       DashboardNoticeStore
-	ProposalStore     DashboardProposalStore
-	MessageStore      DashboardMessageStore
-	TrainingGoalStore DashboardTrainingGoalStore
-	MemberStore       DashboardMemberStore
+	TodaysClassesDeps  GetTodaysClassesDeps
+	AttendanceDeps     GetAttendanceTodayDeps
+	InactiveDeps       GetInactiveMembersDeps
+	TrainingLogDeps    GetTrainingLogDeps
+	NoticeStore        DashboardNoticeStore
+	ProposalStore      DashboardProposalStore
+	MessageStore       DashboardMessageStore
+	TrainingGoalStore  DashboardTrainingGoalStore
+	MemberStore        DashboardMemberStore
+	GradingRecordStore GradingRecordStore // optional: nil skips belt lookup
 }
 
 // DashboardResult carries the output of the dashboard projection.
@@ -73,6 +74,8 @@ type DashboardResult struct {
 	TrainingLog  *TrainingLogResult
 	UnreadCount  int
 	TrainingGoal *traininggoal.TrainingGoal
+	Belt         string
+	Stripe       int
 }
 
 // QueryGetDashboard aggregates dashboard data based on the user's role.
@@ -134,6 +137,19 @@ func QueryGetDashboard(ctx context.Context, query GetDashboardQuery, deps GetDas
 				goal, err := deps.TrainingGoalStore.GetActiveByMemberID(ctx, memberID)
 				if err == nil && goal.ID != "" {
 					result.TrainingGoal = &goal
+				}
+				// Latest belt
+				if deps.GradingRecordStore != nil {
+					if records, err := deps.GradingRecordStore.ListByMemberID(ctx, memberID); err == nil && len(records) > 0 {
+						latest := records[0]
+						for _, r := range records[1:] {
+							if r.PromotedAt.After(latest.PromotedAt) {
+								latest = r
+							}
+						}
+						result.Belt = latest.Belt
+						result.Stripe = latest.Stripe
+					}
 				}
 			}
 		}

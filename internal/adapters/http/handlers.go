@@ -2579,11 +2579,12 @@ func handleDashboard(w http.ResponseWriter, r *http.Request) {
 			AttendanceStore: stores.AttendanceStore,
 			MemberStore:     stores.MemberStore,
 		},
-		NoticeStore:       stores.NoticeStore,
-		ProposalStore:     stores.GradingProposalStore,
-		MessageStore:      stores.MessageStore,
-		TrainingGoalStore: stores.TrainingGoalStore,
-		MemberStore:       stores.MemberStore,
+		NoticeStore:        stores.NoticeStore,
+		ProposalStore:      stores.GradingProposalStore,
+		MessageStore:       stores.MessageStore,
+		TrainingGoalStore:  stores.TrainingGoalStore,
+		MemberStore:        stores.MemberStore,
+		GradingRecordStore: stores.GradingRecordStore,
 	}
 
 	result, err := projections.QueryGetDashboard(ctx, query, deps, timeNow())
