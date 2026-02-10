@@ -490,6 +490,12 @@ loadClassFilters();
                     var local = new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,16);
                     document.getElementById('scheduleAt').value = local;
                 }
+            } else if (em.Status === 'failed') {
+                document.getElementById('pageTitle').textContent = 'Retry Failed Email';
+                var banner = document.createElement('div');
+                banner.style.cssText = 'background:#fce4ec;color:#c62828;padding:0.75rem 1rem;border-radius:2px;margin-bottom:1rem;border-left:4px solid #c62828;font-weight:500;';
+                banner.textContent = 'This email failed to send. Edit if needed and click "Send Now" to retry.';
+                document.getElementById('pageTitle').after(banner);
             } else {
                 document.getElementById('pageTitle').textContent = 'Edit Draft';
             }

@@ -60,8 +60,11 @@ func ExecuteComposeEmail(ctx context.Context, input ComposeEmailInput, deps Comp
 		if err != nil {
 			return emailDomain.Email{}, err
 		}
-		if !existing.IsDraft() {
+		if !existing.IsDraft() && existing.Status != emailDomain.StatusFailed {
 			return emailDomain.Email{}, emailDomain.ErrNotDraft
+		}
+		if existing.Status == emailDomain.StatusFailed {
+			existing.Status = emailDomain.StatusDraft
 		}
 		em = existing
 		em.Subject = input.Subject
