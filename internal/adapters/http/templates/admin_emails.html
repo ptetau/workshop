@@ -15,7 +15,7 @@
         <button onclick="filterEmails('scheduled')" class="filter-btn" data-filter="scheduled" style="background:#f8f9fa;color:#333;padding:0.3rem 0.8rem;border:1px solid var(--border);border-radius:2px;cursor:pointer;font-size:0.85rem;">Scheduled</button>
     </div>
     <div style="margin-bottom:1.5rem;">
-        <input type="text" id="emailSearch" placeholder="Search emails by subject or content..." oninput="debounceSearch()" style="width:100%;max-width:400px;padding:0.5rem;border:1px solid var(--border);border-radius:2px;">
+        <input type="text" id="emailSearch" placeholder="Search emails by subject or content..." maxlength="200" oninput="debounceSearch()" style="width:100%;max-width:400px;padding:0.5rem;border:1px solid var(--border);border-radius:2px;">
     </div>
 
     <div id="emailList" style="color:#6c757d;">Loading...</div>

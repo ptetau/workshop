@@ -4,7 +4,7 @@ description: View open issues ordered by priority (milestone then issue number)
 
 # Backlog Workflow
 
-Display the open issue backlog ordered by implementation priority: milestone phase first (earliest = highest priority), then issue number within each milestone.
+Display the open issue backlog ordered by implementation priority: **bugs first** (across all milestones), then stories by milestone phase (earliest = highest priority), then issue number within each milestone.
 
 ## Steps
 
@@ -22,9 +22,17 @@ Display the open issue backlog ordered by implementation priority: milestone pha
    gh issue list --state open --limit 200 --json number,title,labels,milestone --template "{{range .}}#{{.number}} | {{.title}} | {{if .milestone}}{{.milestone.title}}{{else}}No milestone{{end}} | {{range .labels}}{{.name}}, {{end}}{{println}}{{end}}"
    ```
 
-3. **Summarise the backlog** — present a structured overview:
+3. **Summarise the backlog** — present a structured overview. **Always list bugs first**, then stories by milestone:
 
    > **Backlog Summary**
+   >
+   > **🐛 Open Bugs (fix first):**
+   >
+   > | # | Title | Milestone |
+   > |---|-------|-----------|
+   > | #52 | Bug: Progress bar crashes on null belt | Phase 3 |
+   >
+   > **Stories by Milestone:**
    >
    > | Milestone | Open | Next issue |
    > |-----------|------|------------|
@@ -32,9 +40,11 @@ Display the open issue backlog ordered by implementation priority: milestone pha
    > | Phase 1: Core Data | 4 | #... |
    > | ... | | |
    >
-   > **Total open issues:** N
+   > **Total open issues:** N (B bugs + S stories)
    >
-   > The highest-priority unstarted issue is **#[N]: [title]** in **[milestone]**.
+   > The highest-priority issue is **#[N]: [title]** (bug/story) in **[milestone]**.
+
+   If there are no open bugs, omit the bugs table and proceed with stories only.
 
 4. **Filter options** — if the user wants to narrow the view, offer filters:
    - By milestone: `gh issue list --state open --milestone "Phase 2: Kiosk MVP" ...`

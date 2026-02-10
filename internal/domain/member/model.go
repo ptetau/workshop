@@ -5,6 +5,11 @@ import (
 	"strings"
 )
 
+// Max length constants for user-editable fields.
+const (
+	MaxNameLength = 100
+)
+
 // Business rule constants
 const (
 	StatusActive   = "active"
@@ -40,6 +45,9 @@ type Member struct {
 func (m *Member) Validate() error {
 	if strings.TrimSpace(m.Name) == "" {
 		return errors.New("member name cannot be empty")
+	}
+	if len(m.Name) > MaxNameLength {
+		return errors.New("member name cannot exceed 100 characters")
 	}
 	if !strings.Contains(m.Email, "@") {
 		return errors.New("member email must be valid")

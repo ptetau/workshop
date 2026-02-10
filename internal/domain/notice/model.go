@@ -5,6 +5,12 @@ import (
 	"time"
 )
 
+// Max length constants for user-editable fields.
+const (
+	MaxTitleLength   = 200
+	MaxContentLength = 10000
+)
+
 // Notice types
 const (
 	TypeSchoolWide    = "school_wide"
@@ -92,8 +98,14 @@ func (n *Notice) Validate() error {
 	if n.Title == "" {
 		return ErrEmptyTitle
 	}
+	if len(n.Title) > MaxTitleLength {
+		return errors.New("notice title cannot exceed 200 characters")
+	}
 	if n.Content == "" {
 		return ErrEmptyContent
+	}
+	if len(n.Content) > MaxContentLength {
+		return errors.New("notice content cannot exceed 10000 characters")
 	}
 	if !isValidType(n.Type) {
 		return ErrInvalidType

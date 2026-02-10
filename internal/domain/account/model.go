@@ -8,6 +8,11 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// Max length constants for user-editable fields.
+const (
+	MaxEmailLength = 254
+)
+
 // Role constants
 const (
 	RoleAdmin  = "admin"
@@ -69,6 +74,9 @@ type ActivationToken struct {
 func (a *Account) Validate() error {
 	if strings.TrimSpace(a.Email) == "" {
 		return ErrEmptyEmail
+	}
+	if len(a.Email) > MaxEmailLength {
+		return errors.New("email cannot exceed 254 characters")
 	}
 	if !strings.Contains(a.Email, "@") {
 		return ErrInvalidEmail

@@ -8,7 +8,7 @@
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
             <div class="form-group">
                 <label>Title</label>
-                <input type="text" id="noticeTitle" placeholder="Open Mat Friday">
+                <input type="text" id="noticeTitle" placeholder="Open Mat Friday" maxlength="200">
             </div>
             <div class="form-group">
                 <label>Type</label>
@@ -20,12 +20,12 @@
         </div>
         <div class="form-group">
             <label>Content <span style="font-size:0.75rem;color:var(--text-muted);">(Markdown supported)</span></label>
-            <textarea id="noticeContent" rows="5" placeholder="**Bold**, *italic*, [links](url), lists..." style="width:100%;padding:0.5rem;border:1px solid var(--border);border-radius:2px;font-family:inherit;resize:vertical;"></textarea>
+            <textarea id="noticeContent" rows="5" placeholder="**Bold**, *italic*, [links](url), lists..." maxlength="10000" style="width:100%;padding:0.5rem;border:1px solid var(--border);border-radius:2px;font-family:inherit;resize:vertical;"></textarea>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
             <div class="form-group">
                 <label>Author Name</label>
-                <input type="text" id="noticeAuthor" placeholder="Coach Pat">
+                <input type="text" id="noticeAuthor" placeholder="Coach Pat" maxlength="100">
             </div>
             <div class="form-group" style="display:flex;align-items:center;gap:0.5rem;padding-top:1.5rem;">
                 <input type="checkbox" id="noticeShowAuthor" style="width:auto;">

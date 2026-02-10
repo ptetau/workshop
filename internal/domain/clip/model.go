@@ -6,6 +6,13 @@ import (
 	"time"
 )
 
+// Max length constants for user-editable fields.
+const (
+	MaxTitleLength      = 200
+	MaxYouTubeURLLength = 2048
+	MaxNotesLength      = 1000
+)
+
 // Clip represents a YouTube timestamp loop for technical study.
 // PRE: YouTubeURL is a valid YouTube URL. StartSeconds < EndSeconds.
 // INVARIANT: A clip always belongs to a theme via ThemeID.
@@ -36,8 +43,14 @@ func (c *Clip) Validate() error {
 	if c.Title == "" {
 		return errors.New("clip title cannot be empty")
 	}
+	if len(c.Title) > MaxTitleLength {
+		return errors.New("clip title cannot exceed 200 characters")
+	}
 	if c.YouTubeURL == "" {
 		return errors.New("clip YouTube URL cannot be empty")
+	}
+	if len(c.YouTubeURL) > MaxYouTubeURLLength {
+		return errors.New("clip YouTube URL cannot exceed 2048 characters")
 	}
 	if c.StartSeconds < 0 {
 		return errors.New("clip start seconds cannot be negative")
@@ -47,6 +60,9 @@ func (c *Clip) Validate() error {
 	}
 	if c.StartSeconds >= c.EndSeconds {
 		return errors.New("clip start must be before end")
+	}
+	if len(c.Notes) > MaxNotesLength {
+		return errors.New("clip notes cannot exceed 1000 characters")
 	}
 	return nil
 }

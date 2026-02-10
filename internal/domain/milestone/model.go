@@ -11,6 +11,12 @@ var (
 	ErrZeroThreshold = errors.New("threshold must be greater than zero")
 )
 
+// Max length constants for user-editable fields.
+const (
+	MaxNameLength      = 100
+	MaxBadgeIconLength = 50
+)
+
 // Metric constants
 const (
 	MetricClasses     = "classes"
@@ -36,6 +42,12 @@ type Milestone struct {
 func (m *Milestone) Validate() error {
 	if m.Name == "" {
 		return ErrEmptyName
+	}
+	if len(m.Name) > MaxNameLength {
+		return errors.New("milestone name cannot exceed 100 characters")
+	}
+	if len(m.BadgeIcon) > MaxBadgeIconLength {
+		return errors.New("badge icon cannot exceed 50 characters")
 	}
 	if !isValidMetric(m.Metric) {
 		return ErrInvalidMetric

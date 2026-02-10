@@ -18,7 +18,7 @@
         <div id="createRotorForm" style="display:none;background:#f8f9fa;padding:1rem;border-radius:2px;margin-bottom:1rem;">
             <div class="form-group">
                 <label>Rotor Name</label>
-                <input type="text" id="rotorName" placeholder="e.g. Gi Express v2" style="width:100%;padding:0.5rem;border:1px solid #ccc;border-radius:4px;">
+                <input type="text" id="rotorName" placeholder="e.g. Gi Express v2" maxlength="100" style="width:100%;padding:0.5rem;border:1px solid #ccc;border-radius:4px;">
             </div>
             <button onclick="createRotor()">Create Draft</button>
             <button onclick="hideCreateRotor()" style="background:#6c757d;">Cancel</button>
@@ -46,7 +46,7 @@
                 <button id="addThemeBtn" onclick="showAddTheme()" style="padding:0.2rem 0.5rem;font-size:0.8rem;">+ Add Theme</button>
             </div>
             <div id="addThemeForm" style="display:none;background:#f8f9fa;padding:0.75rem;border-radius:2px;margin-bottom:0.75rem;">
-                <input type="text" id="themeName" placeholder="Theme name (e.g. Standing)" style="padding:0.4rem;border:1px solid #ccc;border-radius:4px;">
+                <input type="text" id="themeName" placeholder="Theme name (e.g. Standing)" maxlength="100" style="padding:0.4rem;border:1px solid #ccc;border-radius:4px;">
                 <button onclick="addTheme()" style="padding:0.3rem 0.6rem;font-size:0.85rem;">Add</button>
                 <button onclick="document.getElementById('addThemeForm').style.display='none'" style="background:#6c757d;padding:0.3rem 0.6rem;font-size:0.85rem;">Cancel</button>
             </div>
@@ -199,7 +199,7 @@ function loadThemes() {
             html += '<button onclick="showAddTopic(\''+th.ID+'\')" style="padding:0.15rem 0.5rem;font-size:0.75rem;">+ Topic</button>';
             html += '</div>';
             html += '<div id="addTopicForm-'+th.ID+'" style="display:none;background:#f8f9fa;padding:0.5rem;border-radius:2px;margin-bottom:0.5rem;">';
-            html += '<input type="text" id="topicName-'+th.ID+'" placeholder="Topic name" style="padding:0.3rem;border:1px solid #ccc;border-radius:4px;margin-right:0.25rem;">';
+            html += '<input type="text" id="topicName-'+th.ID+'" placeholder="Topic name" maxlength="100" style="padding:0.3rem;border:1px solid #ccc;border-radius:4px;margin-right:0.25rem;">';
             html += '<input type="number" id="topicDuration-'+th.ID+'" value="1" min="1" max="8" style="width:3rem;padding:0.3rem;border:1px solid #ccc;border-radius:4px;margin-right:0.25rem;" title="Duration (weeks)">';
             html += '<button onclick="addTopic(\''+th.ID+'\')" style="padding:0.2rem 0.5rem;font-size:0.8rem;">Add</button>';
             html += '<button onclick="document.getElementById(\'addTopicForm-'+th.ID+'\').style.display=\'none\'" style="background:#6c757d;padding:0.2rem 0.5rem;font-size:0.8rem;">Cancel</button>';

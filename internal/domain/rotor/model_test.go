@@ -54,6 +54,22 @@ func TestRotor_Validate(t *testing.T) {
 			},
 			wantErr: rotor.ErrInvalidStatus,
 		},
+		{
+			name: "name too long",
+			rotor: rotor.Rotor{
+				ID: "1", ClassTypeID: "ct1", Name: string(make([]byte, rotor.MaxRotorNameLength+1)),
+				Version: 1, Status: rotor.StatusDraft, CreatedBy: "admin1",
+			},
+			wantErr: rotor.ErrRotorNameTooLong,
+		},
+		{
+			name: "name at max length is valid",
+			rotor: rotor.Rotor{
+				ID: "1", ClassTypeID: "ct1", Name: string(make([]byte, rotor.MaxRotorNameLength)),
+				Version: 1, Status: rotor.StatusDraft, CreatedBy: "admin1",
+			},
+			wantErr: nil,
+		},
 	}
 
 	for _, tt := range tests {
@@ -141,6 +157,12 @@ func TestRotorTheme_Validate(t *testing.T) {
 			t.Errorf("error = %v, want ErrEmptyRotorID", err)
 		}
 	})
+	t.Run("name too long", func(t *testing.T) {
+		th := &rotor.RotorTheme{ID: "1", RotorID: "r1", Name: string(make([]byte, rotor.MaxThemeNameLength+1))}
+		if err := th.Validate(); err != rotor.ErrThemeNameTooLong {
+			t.Errorf("error = %v, want ErrThemeNameTooLong", err)
+		}
+	})
 }
 
 // TestTopic_Validate tests validation of Topic.
@@ -167,6 +189,18 @@ func TestTopic_Validate(t *testing.T) {
 		tp := &rotor.Topic{ID: "1", RotorThemeID: "th1", Name: "Single Leg", DurationWeeks: 0}
 		if err := tp.Validate(); err != rotor.ErrInvalidDuration {
 			t.Errorf("error = %v, want ErrInvalidDuration", err)
+		}
+	})
+	t.Run("name too long", func(t *testing.T) {
+		tp := &rotor.Topic{ID: "1", RotorThemeID: "th1", Name: string(make([]byte, rotor.MaxTopicNameLength+1)), DurationWeeks: 1}
+		if err := tp.Validate(); err != rotor.ErrTopicNameTooLong {
+			t.Errorf("error = %v, want ErrTopicNameTooLong", err)
+		}
+	})
+	t.Run("description too long", func(t *testing.T) {
+		tp := &rotor.Topic{ID: "1", RotorThemeID: "th1", Name: "Single Leg", DurationWeeks: 1, Description: string(make([]byte, rotor.MaxTopicDescriptionLength+1))}
+		if err := tp.Validate(); err != rotor.ErrTopicDescriptionTooLong {
+			t.Errorf("error = %v, want ErrTopicDescriptionTooLong", err)
 		}
 	})
 }

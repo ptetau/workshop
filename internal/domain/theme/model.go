@@ -5,6 +5,12 @@ import (
 	"time"
 )
 
+// Max length constants for user-editable fields.
+const (
+	MaxNameLength        = 100
+	MaxDescriptionLength = 500
+)
+
 // Theme represents a 4-week technical block for the gym's curriculum.
 // PRE: Name and Program are non-empty.
 // INVARIANT: StartDate is before EndDate.
@@ -34,6 +40,12 @@ const StatusCompleted = "completed"
 func (t *Theme) Validate() error {
 	if t.Name == "" {
 		return errors.New("theme name cannot be empty")
+	}
+	if len(t.Name) > MaxNameLength {
+		return errors.New("theme name cannot exceed 100 characters")
+	}
+	if len(t.Description) > MaxDescriptionLength {
+		return errors.New("theme description cannot exceed 500 characters")
 	}
 	if t.Program == "" {
 		return errors.New("theme program cannot be empty")

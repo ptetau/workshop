@@ -139,5 +139,43 @@
     <footer>
         <p>&copy; 2026 Workshop Jiu Jitsu &middot; Wellington</p>
     </footer>
+    <script>
+    (function(){
+        var style = document.createElement('style');
+        style.textContent = '.char-counter{position:absolute;right:0.5rem;bottom:-1.2rem;font-size:0.7rem;color:var(--text-muted,#6c757d);pointer-events:none;transition:opacity 0.2s;opacity:0;}.char-counter.visible{opacity:1;}.char-counter.warn{color:#e65100;}';
+        document.head.appendChild(style);
+        function attach(el){
+            var max = parseInt(el.getAttribute('maxlength'),10);
+            if(!max||max<1) return;
+            var wrap = el.parentElement;
+            if(wrap) wrap.style.position = wrap.style.position||'relative';
+            var counter = document.createElement('span');
+            counter.className = 'char-counter';
+            if(wrap) wrap.appendChild(counter);
+            function update(){
+                var len = el.value.length;
+                var remaining = max - len;
+                var threshold = Math.max(Math.floor(max*0.2),10);
+                counter.textContent = remaining + ' / ' + max;
+                if(len >= max) { counter.className='char-counter visible warn'; }
+                else if(remaining <= threshold) { counter.className='char-counter visible'; }
+                else { counter.className='char-counter'; }
+            }
+            el.addEventListener('input',update);
+            el.addEventListener('focus',update);
+            el.addEventListener('blur',function(){ counter.className='char-counter'; });
+        }
+        document.querySelectorAll('input[maxlength],textarea[maxlength]').forEach(attach);
+        new MutationObserver(function(mutations){
+            mutations.forEach(function(m){
+                m.addedNodes.forEach(function(n){
+                    if(n.nodeType!==1) return;
+                    if(n.matches && n.matches('input[maxlength],textarea[maxlength]')) attach(n);
+                    if(n.querySelectorAll) n.querySelectorAll('input[maxlength],textarea[maxlength]').forEach(attach);
+                });
+            });
+        }).observe(document.body,{childList:true,subtree:true});
+    })();
+    </script>
 </body>
 </html>
