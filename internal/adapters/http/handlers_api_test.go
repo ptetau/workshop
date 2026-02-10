@@ -476,6 +476,58 @@ func (m *mockMilestoneStore) List(ctx context.Context) ([]milestoneDomain.Milest
 	return list, nil
 }
 
+type mockMemberMilestoneStore struct {
+	items map[string]milestoneDomain.MemberMilestone
+}
+
+// Save implements the mock MemberMilestoneStore for testing.
+// PRE: valid parameters
+// POST: returns expected result
+func (m *mockMemberMilestoneStore) Save(ctx context.Context, value milestoneDomain.MemberMilestone) error {
+	if m.items == nil {
+		m.items = make(map[string]milestoneDomain.MemberMilestone)
+	}
+	m.items[value.ID] = value
+	return nil
+}
+
+// ListByMemberID implements the mock MemberMilestoneStore for testing.
+// PRE: valid parameters
+// POST: returns expected result
+func (m *mockMemberMilestoneStore) ListByMemberID(ctx context.Context, memberID string) ([]milestoneDomain.MemberMilestone, error) {
+	var list []milestoneDomain.MemberMilestone
+	for _, item := range m.items {
+		if item.MemberID == memberID {
+			list = append(list, item)
+		}
+	}
+	return list, nil
+}
+
+// MarkNotified implements the mock MemberMilestoneStore for testing.
+// PRE: valid parameters
+// POST: returns expected result
+func (m *mockMemberMilestoneStore) MarkNotified(ctx context.Context, id string) error {
+	if item, ok := m.items[id]; ok {
+		item.Notified = true
+		m.items[id] = item
+	}
+	return nil
+}
+
+// ListUnnotifiedByMemberID implements the mock MemberMilestoneStore for testing.
+// PRE: valid parameters
+// POST: returns expected result
+func (m *mockMemberMilestoneStore) ListUnnotifiedByMemberID(ctx context.Context, memberID string) ([]milestoneDomain.MemberMilestone, error) {
+	var list []milestoneDomain.MemberMilestone
+	for _, item := range m.items {
+		if item.MemberID == memberID && !item.Notified {
+			list = append(list, item)
+		}
+	}
+	return list, nil
+}
+
 type mockTrainingGoalStore struct {
 	goals map[string]trainingGoalDomain.TrainingGoal
 }
@@ -815,6 +867,7 @@ func newFullStores() *Stores {
 		MessageStore:         &mockMessageStore{messages: make(map[string]messageDomain.Message)},
 		ObservationStore:     &mockObservationStore{observations: make(map[string]observationDomain.Observation)},
 		MilestoneStore:       &mockMilestoneStore{milestones: make(map[string]milestoneDomain.Milestone)},
+		MemberMilestoneStore: &mockMemberMilestoneStore{items: make(map[string]milestoneDomain.MemberMilestone)},
 		TrainingGoalStore:    &mockTrainingGoalStore{goals: make(map[string]trainingGoalDomain.TrainingGoal)},
 	}
 }

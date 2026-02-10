@@ -23,6 +23,7 @@ var migrations = []migration{
 	{version: 3, description: "account activation", apply: migrate3},
 	{version: 4, description: "curriculum rotor system", apply: migrate4},
 	{version: 5, description: "attendance mat hours", apply: migrate5},
+	{version: 6, description: "member milestone achievements", apply: migrate6},
 }
 
 // SchemaVersion returns the current schema version of the database.
@@ -460,5 +461,26 @@ func migrate4(tx *sql.Tx) error {
 // migrate5 adds mat_hours column to attendance table.
 func migrate5(tx *sql.Tx) error {
 	_, err := tx.Exec(`ALTER TABLE attendance ADD COLUMN mat_hours REAL NOT NULL DEFAULT 0`)
+	return err
+}
+
+// --- Migration 6: Member milestone achievements ---
+// Tracks which milestones each member has earned.
+func migrate6(tx *sql.Tx) error {
+	schema := `
+	CREATE TABLE IF NOT EXISTS member_milestone (
+		id TEXT PRIMARY KEY,
+		member_id TEXT NOT NULL,
+		milestone_id TEXT NOT NULL,
+		earned_at TEXT NOT NULL,
+		notified INTEGER NOT NULL DEFAULT 0,
+		FOREIGN KEY (member_id) REFERENCES member(id),
+		FOREIGN KEY (milestone_id) REFERENCES milestone(id),
+		UNIQUE(member_id, milestone_id)
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_member_milestone_member ON member_milestone(member_id);
+	`
+	_, err := tx.Exec(schema)
 	return err
 }

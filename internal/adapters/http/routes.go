@@ -86,6 +86,8 @@ func registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/grading/readiness", handleGradingReadiness)
 	mux.HandleFunc("/api/training-goals", handleTrainingGoals)
 	mux.HandleFunc("/api/milestones", handleMilestones)
+	mux.HandleFunc("/api/member-milestones", handleMemberMilestones)
+	mux.HandleFunc("/api/member-milestones/dismiss", handleMemberMilestoneDismiss)
 	mux.HandleFunc("/api/messages/read", handleMessageRead)
 
 	// Layer 2: Spine API routes

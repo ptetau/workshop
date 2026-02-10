@@ -51,6 +51,7 @@ type Stores struct {
 	MessageStore         messageStore.Store
 	ObservationStore     observationStore.Store
 	MilestoneStore       milestoneStore.Store
+	MemberMilestoneStore milestoneStore.MemberMilestoneStore
 	TrainingGoalStore    trainingGoalStore.Store
 	ThemeStore           themeStore.Store
 	ClipStore            clipStore.Store
