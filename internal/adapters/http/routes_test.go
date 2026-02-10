@@ -271,6 +271,8 @@ func (m *mockWaiverStore) GetByID(ctx context.Context, id string) (waiverDomain.
 }
 
 // GetByMemberID implements the waiver store interface for testing.
+// PRE: memberID is non-empty
+// POST: Returns the waiver for the member or an error if not found
 func (m *mockWaiverStore) GetByMemberID(ctx context.Context, memberID string) (waiverDomain.Waiver, error) {
 	for _, w := range m.waivers {
 		if w.MemberID == memberID {
