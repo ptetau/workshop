@@ -32,6 +32,9 @@
         .exit-btn:hover { border-color: #e94560; color: #e94560; }
         .undo-btn { background: #e94560; color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: 600; }
         .undo-btn:hover { background: #c0392b; }
+        .checkout-btn { background: #F9B232; color: #1a1a2e; border: none; padding: 0.4rem 0.8rem; border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: 600; }
+        .checkout-btn:hover { background: #e6a020; }
+        .checked-out { color: #666; font-size: 0.85rem; }
         .hidden { display: none; }
         .status { color: #666; text-align: center; padding: 1rem; font-size: 1rem; }
     </style>
@@ -137,12 +140,31 @@
                     checkins.forEach(ci => {
                         const li = document.createElement('li');
                         const time = new Date(ci.CheckInTime).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
-                        li.innerHTML = '<span>Checked in at ' + time + '</span> ';
-                        const btn = document.createElement('button');
-                        btn.textContent = 'Un-Check-In';
-                        btn.className = 'undo-btn';
-                        btn.onclick = (e) => { e.stopPropagation(); undoCheckIn(ci.ID); };
-                        li.appendChild(btn);
+                        const isOut = ci.CheckOutTime && ci.CheckOutTime !== '0001-01-01T00:00:00Z';
+                        if (isOut) {
+                            const outTime = new Date(ci.CheckOutTime).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+                            const hrs = ci.MatHours ? ci.MatHours.toFixed(1) : '0.0';
+                            li.innerHTML = '<span>Checked in ' + time + ' → out ' + outTime + ' (' + hrs + 'h)</span> ';
+                            const span = document.createElement('span');
+                            span.className = 'checked-out';
+                            span.textContent = '✓ Done';
+                            li.appendChild(span);
+                        } else {
+                            li.innerHTML = '<span>Checked in at ' + time + '</span> ';
+                            const actions = document.createElement('span');
+                            const coBtn = document.createElement('button');
+                            coBtn.textContent = 'Check Out';
+                            coBtn.className = 'checkout-btn';
+                            coBtn.onclick = (e) => { e.stopPropagation(); doCheckOut(ci.ID); };
+                            actions.appendChild(coBtn);
+                            actions.innerHTML += ' ';
+                            const undoBtn = document.createElement('button');
+                            undoBtn.textContent = 'Undo';
+                            undoBtn.className = 'undo-btn';
+                            undoBtn.onclick = (e) => { e.stopPropagation(); undoCheckIn(ci.ID); };
+                            actions.appendChild(undoBtn);
+                            li.appendChild(actions);
+                        }
                         li.style.display = 'flex';
                         li.style.justifyContent = 'space-between';
                         li.style.alignItems = 'center';
@@ -192,6 +214,29 @@
                 }
             } catch (err) {
                 alert('Un-check-in failed');
+            }
+        }
+
+        async function doCheckOut(attendanceID) {
+            try {
+                const response = await fetch('/api/attendance/checkout', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ AttendanceID: attendanceID })
+                });
+                if (response.ok) {
+                    const record = await response.json();
+                    const hrs = record.MatHours ? record.MatHours.toFixed(1) : '0.0';
+                    stepClasses.classList.add('hidden');
+                    stepDone.classList.remove('hidden');
+                    document.getElementById('doneMessage').textContent = selectedMember.Name + ' checked out — ' + hrs + 'h on the mats!';
+                    setTimeout(resetKiosk, 5000);
+                } else {
+                    const text = await response.text();
+                    alert('Check-out failed: ' + text);
+                }
+            } catch (err) {
+                alert('Check-out failed');
             }
         }
 
