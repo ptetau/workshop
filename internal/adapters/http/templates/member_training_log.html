@@ -17,6 +17,13 @@
         </div>
     </div>
 
+    <div id="badgesSection" style="display:none;margin-bottom:1.5rem;">
+        <h2 style="margin-top:0;">Earned Badges</h2>
+        <div id="badgesList" style="display:flex;flex-wrap:wrap;gap:0.75rem;"></div>
+    </div>
+
+    <div id="milestoneToast" style="display:none;position:fixed;top:1.5rem;right:1.5rem;background:#2e7d32;color:#fff;padding:1rem 1.5rem;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.2);z-index:1000;font-weight:600;max-width:350px;"></div>
+
     <h2>Training Goal</h2>
     <div id="goalSection">
         <div id="currentGoal" style="display:none;background:#f3e5f5;padding:1rem;border-radius:2px;margin-bottom:1rem;">
@@ -85,6 +92,29 @@ function setGoal() {
         setTimeout(() => document.getElementById('goalMsg').textContent = '', 2000);
     }).catch(() => document.getElementById('goalMsg').textContent = 'Error');
 }
-if (memberID) { loadTrainingLog(); loadGoal(); }
+function loadMilestones() {
+    if (!memberID) return;
+    fetch('/api/member-milestones?member_id='+memberID).then(r=>r.json()).then(data => {
+        if (!data || data.length === 0) return;
+        document.getElementById('badgesSection').style.display = 'block';
+        var html = '';
+        data.forEach(function(item) {
+            var icon = item.Milestone.BadgeIcon || '🏅';
+            html += '<div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;padding:0.75rem 1rem;text-align:center;min-width:100px;">';
+            html += '<div style="font-size:2rem;">'+icon+'</div>';
+            html += '<div style="font-weight:600;font-size:0.85rem;">'+esc(item.Milestone.Name)+'</div>';
+            html += '</div>';
+            // Show toast for unnotified milestones
+            if (!item.Notified) {
+                var toast = document.getElementById('milestoneToast');
+                toast.textContent = icon + ' Congratulations! You earned: ' + item.Milestone.Name;
+                toast.style.display = 'block';
+                setTimeout(function(){ toast.style.display = 'none'; }, 5000);
+            }
+        });
+        document.getElementById('badgesList').innerHTML = html;
+    }).catch(function(){});
+}
+if (memberID) { loadTrainingLog(); loadGoal(); loadMilestones(); }
 </script>
 {{ end }}

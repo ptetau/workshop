@@ -13,3 +13,11 @@ type Store interface {
 	Delete(ctx context.Context, id string) error
 	List(ctx context.Context) ([]domain.Milestone, error)
 }
+
+// MemberMilestoneStore persists earned milestone state for members.
+type MemberMilestoneStore interface {
+	Save(ctx context.Context, value domain.MemberMilestone) error
+	ListByMemberID(ctx context.Context, memberID string) ([]domain.MemberMilestone, error)
+	MarkNotified(ctx context.Context, id string) error
+	ListUnnotifiedByMemberID(ctx context.Context, memberID string) ([]domain.MemberMilestone, error)
+}

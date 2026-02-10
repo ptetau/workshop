@@ -2326,6 +2326,88 @@ func handleMilestones(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 }
 
+// handleMemberMilestones handles GET /api/member-milestones?member_id=<id>
+// Returns earned milestones for the member, evaluating current training stats.
+func handleMemberMilestones(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if _, ok := middleware.GetSessionFromContext(r.Context()); !ok {
+		http.Error(w, "not authenticated", http.StatusUnauthorized)
+		return
+	}
+	memberID := r.URL.Query().Get("member_id")
+	if memberID == "" {
+		http.Error(w, "member_id is required", http.StatusBadRequest)
+		return
+	}
+
+	// Get training stats
+	logQuery := projections.GetTrainingLogQuery{MemberID: memberID}
+	logDeps := projections.GetTrainingLogDeps{
+		AttendanceStore: stores.AttendanceStore,
+		MemberStore:     stores.MemberStore,
+	}
+	logResult, err := projections.QueryGetTrainingLog(r.Context(), logQuery, logDeps)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+
+	// Check milestones
+	checkDeps := projections.CheckMilestonesDeps{
+		MilestoneStore:       stores.MilestoneStore,
+		MemberMilestoneStore: stores.MemberMilestoneStore,
+	}
+	earned, err := projections.QueryCheckMilestones(r.Context(), projections.CheckMilestonesInput{
+		MemberID:      memberID,
+		TotalClasses:  logResult.TotalClasses,
+		TotalMatHours: logResult.TotalMatHours,
+		CurrentStreak: logResult.CurrentStreak,
+	}, checkDeps)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if earned == nil {
+		w.Write([]byte("[]"))
+		return
+	}
+	json.NewEncoder(w).Encode(earned)
+}
+
+// handleMemberMilestoneDismiss handles POST /api/member-milestones/dismiss
+// Marks a milestone notification as seen.
+func handleMemberMilestoneDismiss(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if _, ok := middleware.GetSessionFromContext(r.Context()); !ok {
+		http.Error(w, "not authenticated", http.StatusUnauthorized)
+		return
+	}
+	var input struct {
+		ID string `json:"ID"`
+	}
+	if err := strictDecode(r, &input); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if input.ID == "" {
+		http.Error(w, "ID is required", http.StatusBadRequest)
+		return
+	}
+	if err := stores.MemberMilestoneStore.MarkNotified(r.Context(), input.ID); err != nil {
+		internalError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // handleMessageRead handles POST /api/messages/read
 func handleMessageRead(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {

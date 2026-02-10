@@ -84,6 +84,7 @@ var expectedTables = []string{
 	"holiday",
 	"injury",
 	"member",
+	"member_milestone",
 	"message",
 	"milestone",
 	"notice",

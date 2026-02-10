@@ -86,6 +86,7 @@ func main() {
 		MessageStore:         messageStore.NewSQLiteStore(db),
 		ObservationStore:     observationStore.NewSQLiteStore(db),
 		MilestoneStore:       milestoneStore.NewSQLiteStore(db),
+		MemberMilestoneStore: milestoneStore.NewMemberMilestoneSQLiteStore(db),
 		TrainingGoalStore:    trainingGoalStore.NewSQLiteStore(db),
 		ThemeStore:           themeStorePkg.NewSQLiteStore(db),
 		ClipStore:            clipStorePkg.NewSQLiteStore(db),

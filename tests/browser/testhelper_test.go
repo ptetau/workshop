@@ -97,6 +97,7 @@ func newTestApp(t *testing.T) *testApp {
 		MessageStore:         messageStore.NewSQLiteStore(db),
 		ObservationStore:     observationStore.NewSQLiteStore(db),
 		MilestoneStore:       milestoneStore.NewSQLiteStore(db),
+		MemberMilestoneStore: milestoneStore.NewMemberMilestoneSQLiteStore(db),
 		TrainingGoalStore:    trainingGoalStore.NewSQLiteStore(db),
 		ThemeStore:           themeStore.NewSQLiteStore(db),
 		ClipStore:            clipStore.NewSQLiteStore(db),
