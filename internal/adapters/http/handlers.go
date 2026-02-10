@@ -996,8 +996,10 @@ func handleGetTrainingLog(w http.ResponseWriter, r *http.Request) {
 
 	query := projections.GetTrainingLogQuery{MemberID: memberID}
 	deps := projections.GetTrainingLogDeps{
-		AttendanceStore: stores.AttendanceStore,
-		MemberStore:     stores.MemberStore,
+		AttendanceStore:    stores.AttendanceStore,
+		MemberStore:        stores.MemberStore,
+		GradingRecordStore: stores.GradingRecordStore,
+		GradingConfigStore: stores.GradingConfigStore,
 	}
 	result, err := projections.QueryGetTrainingLog(r.Context(), query, deps)
 	if err != nil {
