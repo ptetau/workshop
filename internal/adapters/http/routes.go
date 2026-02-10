@@ -34,6 +34,7 @@ func registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/guest/checkin", handleGuestCheckIn)
 	mux.HandleFunc("/api/attendance/member", handleMemberAttendanceToday)
 	mux.HandleFunc("/api/attendance/undo", handleUndoCheckIn)
+	mux.HandleFunc("/api/attendance/checkout", handleCheckOut)
 	mux.HandleFunc("/api/classes/today", handleTodaysClasses)
 	mux.HandleFunc("/api/kiosk/launch", handleKioskLaunch)
 	mux.HandleFunc("/api/kiosk/exit", handleKioskExit)
