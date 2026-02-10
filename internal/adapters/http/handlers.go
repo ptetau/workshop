@@ -436,6 +436,56 @@ func handleUndoCheckIn(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// handleCheckOut handles POST /api/attendance/checkout
+// Sets CheckOutTime and calculates MatHours for an active check-in.
+func handleCheckOut(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	var input struct {
+		AttendanceID string `json:"AttendanceID"`
+	}
+	if err := strictDecode(r, &input); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+	if input.AttendanceID == "" {
+		http.Error(w, "AttendanceID is required", http.StatusBadRequest)
+		return
+	}
+
+	ctx := r.Context()
+	record, err := stores.AttendanceStore.GetByID(ctx, input.AttendanceID)
+	if err != nil {
+		http.Error(w, "attendance record not found", http.StatusNotFound)
+		return
+	}
+
+	if record.IsCheckedOut() {
+		http.Error(w, "already checked out", http.StatusConflict)
+		return
+	}
+
+	now := time.Now()
+	record.CheckOutTime = now
+	record.MatHours = now.Sub(record.CheckInTime).Hours()
+
+	if err := record.Validate(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if err := stores.AttendanceStore.Save(ctx, record); err != nil {
+		internalError(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(record)
+}
+
 // handlePostInjuriesReportInjury handles POST /injuries
 func handlePostInjuriesReportInjury(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
