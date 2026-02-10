@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"workshop/internal/domain/attendance"
+	"workshop/internal/domain/grading"
 	"workshop/internal/domain/member"
 )
 
@@ -25,10 +26,22 @@ type GetTrainingLogQuery struct {
 	MemberID string
 }
 
+// TrainingLogGradingRecordStore defines the grading record store interface.
+type TrainingLogGradingRecordStore interface {
+	ListByMemberID(ctx context.Context, memberID string) ([]grading.Record, error)
+}
+
+// TrainingLogGradingConfigStore defines the grading config store interface.
+type TrainingLogGradingConfigStore interface {
+	GetByProgramAndBelt(ctx context.Context, program, belt string) (grading.Config, error)
+}
+
 // GetTrainingLogDeps holds dependencies for the training log projection.
 type GetTrainingLogDeps struct {
-	AttendanceStore TrainingLogAttendanceStore
-	MemberStore     TrainingLogMemberStore
+	AttendanceStore    TrainingLogAttendanceStore
+	MemberStore        TrainingLogMemberStore
+	GradingRecordStore TrainingLogGradingRecordStore // optional: nil skips belt lookup
+	GradingConfigStore TrainingLogGradingConfigStore // optional: nil skips progress bar
 }
 
 // TrainingLogEntry represents a single attendance entry in the training log.
@@ -43,14 +56,21 @@ type TrainingLogEntry struct {
 
 // TrainingLogResult carries the output of the training log projection.
 type TrainingLogResult struct {
-	MemberID      string
-	MemberName    string
-	Program       string
-	TotalClasses  int
-	TotalMatHours float64 // "flight time"
-	CurrentStreak int     // consecutive weeks with at least one check-in
-	LastCheckIn   string  // date of most recent check-in
-	Entries       []TrainingLogEntry
+	MemberID       string
+	MemberName     string
+	Program        string
+	TotalClasses   int
+	TotalMatHours  float64 // "flight time" (recorded + estimated)
+	RecordedHours  float64 // hours from checked-out sessions
+	EstimatedHours float64 // hours from default estimate (no checkout)
+	CurrentStreak  int     // consecutive weeks with at least one check-in
+	LastCheckIn    string  // date of most recent check-in
+	Belt           string  // current belt
+	Stripe         int     // current stripes
+	NextBelt       string  // next belt in progression (empty if at highest)
+	ProgressPct    float64 // percentage progress toward next belt (0-100)
+	RequiredHours  float64 // hours required for next belt
+	Entries        []TrainingLogEntry
 }
 
 // QueryGetTrainingLog computes the training log for a member from their attendance history.
@@ -80,7 +100,7 @@ func QueryGetTrainingLog(ctx context.Context, query GetTrainingLogQuery, deps Ge
 		return result, nil
 	}
 
-	var totalHours float64
+	var recordedHours, estimatedHours float64
 	entries := make([]TrainingLogEntry, 0, len(records))
 
 	for _, r := range records {
@@ -96,12 +116,12 @@ func QueryGetTrainingLog(ctx context.Context, query GetTrainingLogQuery, deps Ge
 			duration := r.CheckOutTime.Sub(r.CheckInTime).Hours()
 			if duration > 0 {
 				entry.DurationH = duration
-				totalHours += duration
+				recordedHours += duration
 			}
 		} else {
 			// Default 1.5h per class if no checkout
 			entry.DurationH = 1.5
-			totalHours += 1.5
+			estimatedHours += 1.5
 		}
 
 		entries = append(entries, entry)
@@ -113,10 +133,46 @@ func QueryGetTrainingLog(ctx context.Context, query GetTrainingLogQuery, deps Ge
 	}
 
 	result.TotalClasses = len(records)
-	result.TotalMatHours = totalHours
+	result.RecordedHours = recordedHours
+	result.EstimatedHours = estimatedHours
+	result.TotalMatHours = recordedHours + estimatedHours
 	result.Entries = entries
 	result.LastCheckIn = records[len(records)-1].CheckInTime.Format("2006-01-02")
 	result.CurrentStreak = calculateWeekStreak(records)
+
+	// Belt and progress bar (optional deps)
+	if deps.GradingRecordStore != nil {
+		gradingRecords, err := deps.GradingRecordStore.ListByMemberID(ctx, query.MemberID)
+		if err == nil && len(gradingRecords) > 0 {
+			latest := gradingRecords[0]
+			for _, r := range gradingRecords[1:] {
+				if r.PromotedAt.After(latest.PromotedAt) {
+					latest = r
+				}
+			}
+			result.Belt = latest.Belt
+			result.Stripe = latest.Stripe
+		}
+	}
+
+	// Progress toward next belt
+	currentBelt := result.Belt
+	if currentBelt == "" {
+		currentBelt = "white"
+		result.Belt = "white"
+	}
+	result.NextBelt = nextBeltInProgression(currentBelt, m.Program)
+	if result.NextBelt != "" && deps.GradingConfigStore != nil {
+		config, err := deps.GradingConfigStore.GetByProgramAndBelt(ctx, m.Program, result.NextBelt)
+		if err == nil && config.FlightTimeHours > 0 {
+			result.RequiredHours = config.FlightTimeHours
+			pct := (result.TotalMatHours / config.FlightTimeHours) * 100
+			if pct > 100 {
+				pct = 100
+			}
+			result.ProgressPct = pct
+		}
+	}
 
 	return result, nil
 }
@@ -154,4 +210,20 @@ func calculateWeekStreak(records []attendance.Attendance) int {
 
 func padWeek(w int) string {
 	return fmt.Sprintf("%02d", w)
+}
+
+// nextBeltInProgression returns the next belt in the progression, or "" if at highest.
+func nextBeltInProgression(current, program string) string {
+	var progression []string
+	if program == "kids" {
+		progression = grading.KidsBelts
+	} else {
+		progression = grading.AdultBelts
+	}
+	for i, b := range progression {
+		if b == current && i+1 < len(progression) {
+			return progression[i+1]
+		}
+	}
+	return ""
 }
