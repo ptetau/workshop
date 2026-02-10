@@ -9,6 +9,7 @@ import (
 // Store persists Waiver state.
 type Store interface {
 	GetByID(ctx context.Context, id string) (domain.Waiver, error)
+	GetByMemberID(ctx context.Context, memberID string) (domain.Waiver, error)
 	Save(ctx context.Context, value domain.Waiver) error
 	Delete(ctx context.Context, id string) error
 	List(ctx context.Context, filter ListFilter) ([]domain.Waiver, error)
