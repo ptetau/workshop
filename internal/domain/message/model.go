@@ -5,6 +5,12 @@ import (
 	"time"
 )
 
+// Max length constants for user-editable fields.
+const (
+	MaxSubjectLength = 200
+	MaxContentLength = 5000
+)
+
 // Domain errors
 var (
 	ErrEmptySenderID   = errors.New("sender ID is required")
@@ -35,6 +41,12 @@ func (m *Message) Validate() error {
 	}
 	if m.Content == "" {
 		return ErrEmptyContent
+	}
+	if len(m.Subject) > MaxSubjectLength {
+		return errors.New("message subject cannot exceed 200 characters")
+	}
+	if len(m.Content) > MaxContentLength {
+		return errors.New("message content cannot exceed 5000 characters")
 	}
 	if m.CreatedAt.IsZero() {
 		return errors.New("created_at must be set")

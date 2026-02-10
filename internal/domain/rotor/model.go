@@ -12,6 +12,14 @@ const (
 	StatusArchived = "archived"
 )
 
+// Max length constants for user-editable fields.
+const (
+	MaxRotorNameLength        = 100
+	MaxThemeNameLength        = 100
+	MaxTopicNameLength        = 100
+	MaxTopicDescriptionLength = 500
+)
+
 // Domain errors.
 var (
 	ErrEmptyName        = errors.New("rotor name cannot be empty")
@@ -29,6 +37,11 @@ var (
 	ErrInvalidDuration   = errors.New("duration must be at least 1 week")
 	ErrTopicNotScheduled = errors.New("topic is not currently scheduled")
 	ErrAlreadyVoted      = errors.New("already voted for this topic in current cycle")
+
+	ErrRotorNameTooLong        = errors.New("rotor name cannot exceed 100 characters")
+	ErrThemeNameTooLong        = errors.New("theme name cannot exceed 100 characters")
+	ErrTopicNameTooLong        = errors.New("topic name cannot exceed 100 characters")
+	ErrTopicDescriptionTooLong = errors.New("topic description cannot exceed 500 characters")
 )
 
 // Rotor represents a versioned curriculum structure for a class type.
@@ -52,6 +65,9 @@ type Rotor struct {
 func (r *Rotor) Validate() error {
 	if r.Name == "" {
 		return ErrEmptyName
+	}
+	if len(r.Name) > MaxRotorNameLength {
+		return ErrRotorNameTooLong
 	}
 	if r.ClassTypeID == "" {
 		return ErrEmptyClassTypeID
@@ -122,6 +138,9 @@ func (t *RotorTheme) Validate() error {
 	if t.Name == "" {
 		return ErrEmptyThemeName
 	}
+	if len(t.Name) > MaxThemeNameLength {
+		return ErrThemeNameTooLong
+	}
 	if t.RotorID == "" {
 		return ErrEmptyRotorID
 	}
@@ -148,11 +167,17 @@ func (t *Topic) Validate() error {
 	if t.Name == "" {
 		return ErrEmptyTopicName
 	}
+	if len(t.Name) > MaxTopicNameLength {
+		return ErrTopicNameTooLong
+	}
 	if t.RotorThemeID == "" {
 		return ErrEmptyRotorThemeID
 	}
 	if t.DurationWeeks < 1 {
 		return ErrInvalidDuration
+	}
+	if len(t.Description) > MaxTopicDescriptionLength {
+		return ErrTopicDescriptionTooLong
 	}
 	return nil
 }

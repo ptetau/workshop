@@ -35,11 +35,11 @@
             </div>
             <div class="form-group">
                 <label for="clipTitle">Title</label>
-                <input type="text" id="clipTitle" placeholder="e.g. Leg Lasso Entry from DLR" required>
+                <input type="text" id="clipTitle" placeholder="e.g. Leg Lasso Entry from DLR" maxlength="200" required>
             </div>
             <div class="form-group">
                 <label for="clipURL">YouTube URL</label>
-                <input type="text" id="clipURL" placeholder="https://www.youtube.com/watch?v=..." required>
+                <input type="text" id="clipURL" placeholder="https://www.youtube.com/watch?v=..." maxlength="2048" required>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
                 <div class="form-group">
@@ -53,7 +53,7 @@
             </div>
             <div class="form-group">
                 <label for="clipNotes">Notes (optional)</label>
-                <input type="text" id="clipNotes" placeholder="Technique notes...">
+                <input type="text" id="clipNotes" placeholder="Technique notes..." maxlength="1000">
             </div>
             <button type="submit">Save Clip</button>
         </form>

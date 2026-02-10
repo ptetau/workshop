@@ -6,6 +6,11 @@ import (
 	"time"
 )
 
+// Max length constants for user-editable fields.
+const (
+	MaxNameLength = 100
+)
+
 // Domain errors
 var (
 	ErrEmptyName      = errors.New("term name cannot be empty")
@@ -28,6 +33,9 @@ type Term struct {
 func (t *Term) Validate() error {
 	if strings.TrimSpace(t.Name) == "" {
 		return ErrEmptyName
+	}
+	if len(t.Name) > MaxNameLength {
+		return errors.New("term name cannot exceed 100 characters")
 	}
 	if t.StartDate.IsZero() {
 		return ErrEmptyStartDate

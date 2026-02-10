@@ -5,6 +5,12 @@ import (
 	"time"
 )
 
+// Max length constants for user-editable fields.
+const (
+	MaxSubjectLength = 200
+	MaxBodyLength    = 50000
+)
+
 // Status constants for email lifecycle.
 const (
 	StatusDraft     = "draft"
@@ -74,8 +80,14 @@ func (e *Email) Validate() error {
 	if e.Subject == "" {
 		return ErrEmptySubject
 	}
+	if len(e.Subject) > MaxSubjectLength {
+		return errors.New("email subject cannot exceed 200 characters")
+	}
 	if e.Body == "" {
 		return ErrEmptyBody
+	}
+	if len(e.Body) > MaxBodyLength {
+		return errors.New("email body cannot exceed 50000 characters")
 	}
 	if e.SenderID == "" {
 		return ErrEmptySenderID

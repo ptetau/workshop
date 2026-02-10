@@ -5,6 +5,11 @@ import (
 	"time"
 )
 
+// Max length constants for user-editable fields.
+const (
+	MaxContentLength = 1000
+)
+
 // Domain errors
 var (
 	ErrEmptyMemberID = errors.New("member ID is required")
@@ -36,6 +41,9 @@ func (o *Observation) Validate() error {
 	}
 	if o.Content == "" {
 		return ErrEmptyContent
+	}
+	if len(o.Content) > MaxContentLength {
+		return errors.New("observation content cannot exceed 1000 characters")
 	}
 	if o.CreatedAt.IsZero() {
 		return errors.New("created_at must be set")

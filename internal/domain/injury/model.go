@@ -5,6 +5,11 @@ import (
 	"time"
 )
 
+// Max length constants for user-editable fields.
+const (
+	MaxDescriptionLength = 1000
+)
+
 // Body part constants
 const (
 	BodyPartKnee     = "knee"
@@ -36,6 +41,9 @@ func (i *Injury) Validate() error {
 	}
 	if i.BodyPart == "" {
 		return errors.New("body part must be specified")
+	}
+	if len(i.Description) > MaxDescriptionLength {
+		return errors.New("injury description cannot exceed 1000 characters")
 	}
 	if i.ReportedAt.IsZero() {
 		return errors.New("reported date must be set")

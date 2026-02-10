@@ -6,6 +6,11 @@ import (
 	"time"
 )
 
+// Max length constants for user-editable fields.
+const (
+	MaxNameLength = 100
+)
+
 // Domain errors
 var (
 	ErrEmptyName      = errors.New("holiday name cannot be empty")
@@ -29,6 +34,9 @@ type Holiday struct {
 func (h *Holiday) Validate() error {
 	if strings.TrimSpace(h.Name) == "" {
 		return ErrEmptyName
+	}
+	if len(h.Name) > MaxNameLength {
+		return errors.New("holiday name cannot exceed 100 characters")
 	}
 	if h.StartDate.IsZero() {
 		return ErrEmptyStartDate
