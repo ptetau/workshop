@@ -309,10 +309,13 @@ func TestListView_RowCount(t *testing.T) {
 	if _, err := perPageSelect.SelectOption(playwright.SelectOptionValues{Values: &[]string{"10"}}); err != nil {
 		t.Fatalf("failed to select per_page=10: %v", err)
 	}
-	page.WaitForLoadState(playwright.PageWaitForLoadStateOptions{
-		State: playwright.LoadStateDomcontentloaded,
-	})
+	if err := page.WaitForURL("**/members?*per_page=10*", playwright.PageWaitForURLOptions{
+		Timeout: playwright.Float(5000),
+	}); err != nil {
+		t.Fatalf("failed to wait for per_page=10 navigation: %v", err)
+	}
 
+	summary = page.Locator("#results-summary")
 	text, _ = summary.TextContent()
 	if !strings.Contains(text, "1-10 of 25") {
 		t.Errorf("expected '1-10 of 25' with per_page=10, got: %s", strings.TrimSpace(text))
@@ -324,13 +327,17 @@ func TestListView_RowCount(t *testing.T) {
 	}
 
 	// Change to 50 per page — should show all 25 and hide pagination
+	perPageSelect = page.Locator("#per-page-select")
 	if _, err := perPageSelect.SelectOption(playwright.SelectOptionValues{Values: &[]string{"50"}}); err != nil {
 		t.Fatalf("failed to select per_page=50: %v", err)
 	}
-	page.WaitForLoadState(playwright.PageWaitForLoadStateOptions{
-		State: playwright.LoadStateDomcontentloaded,
-	})
+	if err := page.WaitForURL("**/members?*per_page=50*", playwright.PageWaitForURLOptions{
+		Timeout: playwright.Float(5000),
+	}); err != nil {
+		t.Fatalf("failed to wait for per_page=50 navigation: %v", err)
+	}
 
+	summary = page.Locator("#results-summary")
 	text, _ = summary.TextContent()
 	if !strings.Contains(text, "1-25 of 25") {
 		t.Errorf("expected '1-25 of 25' with per_page=50, got: %s", strings.TrimSpace(text))
@@ -347,11 +354,14 @@ func TestListView_RowCount(t *testing.T) {
 	if _, err := perPageSelect.SelectOption(playwright.SelectOptionValues{Values: &[]string{"20"}}); err != nil {
 		t.Fatalf("failed to select per_page=20: %v", err)
 	}
-	page.WaitForLoadState(playwright.PageWaitForLoadStateOptions{
-		State: playwright.LoadStateDomcontentloaded,
-	})
+	if err := page.WaitForURL("**/members?*per_page=20*", playwright.PageWaitForURLOptions{
+		Timeout: playwright.Float(5000),
+	}); err != nil {
+		t.Fatalf("failed to wait for per_page=20 navigation: %v", err)
+	}
 
 	// Should be on page 1
+	summary = page.Locator("#results-summary")
 	text, _ = summary.TextContent()
 	if !strings.Contains(text, "1-20 of 25") {
 		t.Errorf("expected page reset to 1 after changing per_page, got: %s", strings.TrimSpace(text))
