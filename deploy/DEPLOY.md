@@ -99,8 +99,11 @@ sudo tee /opt/workshop/.env << 'EOF'
 WORKSHOP_ENV=production
 WORKSHOP_ADDR=127.0.0.1:8080
 WORKSHOP_CSRF_KEY=<paste-your-64-hex-char-key-here>
-WORKSHOP_ADMIN_EMAIL=admin@workshop.co.nz
+WORKSHOP_ADMIN_EMAIL=info@workshopjiujitsu.co.nz
 WORKSHOP_ADMIN_PASSWORD=<choose-a-strong-password>
+WORKSHOP_RESEND_KEY=<paste-your-resend-api-key-here>
+WORKSHOP_RESEND_FROM=Workshop Jiu Jitsu <noreply@workshopjiujitsu.co.nz>
+WORKSHOP_REPLY_TO=info@workshopjiujitsu.co.nz
 EOF
 
 sudo chown workshop:workshop /opt/workshop/.env
@@ -297,6 +300,8 @@ Run through this after initial setup:
 - [ ] App binds to `127.0.0.1:8080` (not reachable from internet directly)
 - [ ] `WORKSHOP_ENV=production` is set
 - [ ] `WORKSHOP_CSRF_KEY` is set (not the default)
+- [ ] `WORKSHOP_RESEND_KEY` is set (check logs for `Email sender configured (Resend)`, not `noop`)
+- [ ] Resend sending domain `workshopjiujitsu.co.nz` is verified (DKIM, SPF, DMARC)
 - [ ] Admin password has been changed from default
 - [ ] HTTPS is working (if domain is configured)
 - [ ] HSTS header present: `curl -I https://YOUR_DOMAIN`
@@ -314,3 +319,4 @@ Run through this after initial setup:
 | Permission denied | Ensure deploy user has correct sudoers config |
 | Locked out of SSH | Access VPS via OVH console (KVM), fix `/etc/ssh/sshd_config.d/99-hardened.conf` |
 | Synthetic data in prod | Ensure `WORKSHOP_ENV=production` is set in `.env` |
+| Emails not delivering | Check `WORKSHOP_RESEND_KEY` is set and valid. Logs should show `Email sender configured (Resend)`, not `noop`. Verify domain in Resend dashboard. |

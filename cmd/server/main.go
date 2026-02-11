@@ -161,7 +161,11 @@ func main() {
 		log.Println("Email sender configured (Resend)")
 	} else {
 		web.SetEmailSender(emailPkg.NewNoopSender(), emailFrom, emailReply)
-		log.Println("Email sender configured (noop — set WORKSHOP_RESEND_KEY for real delivery)")
+		if os.Getenv("WORKSHOP_ENV") == "production" {
+			log.Println("WARNING: WORKSHOP_RESEND_KEY is not set — email delivery is DISABLED in production")
+		} else {
+			log.Println("Email sender configured (noop — set WORKSHOP_RESEND_KEY for real delivery)")
+		}
 	}
 
 	// Create HTTP handler with middleware
