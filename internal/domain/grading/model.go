@@ -34,6 +34,7 @@ const (
 const (
 	MethodStandard = "standard"
 	MethodOverride = "override"
+	MethodInferred = "inferred"
 )
 
 // AdultBelts defines the adult belt progression order.
@@ -176,6 +177,25 @@ func (p *Proposal) Reject(adminID string) error {
 	p.ApprovedBy = adminID
 	p.DecidedAt = time.Now()
 	return nil
+}
+
+// InferStripe calculates the stripe count a member should have on their current belt
+// based on accumulated mat hours and the config for the next belt in progression.
+// PRE: config.FlightTimeHours > 0 and config.StripeCount > 0
+// POST: Returns 0..StripeCount (capped at StripeCount)
+func InferStripe(totalMatHours float64, config Config) int {
+	if config.FlightTimeHours <= 0 || config.StripeCount <= 0 {
+		return 0
+	}
+	hoursPerStripe := config.FlightTimeHours / float64(config.StripeCount)
+	if hoursPerStripe <= 0 {
+		return 0
+	}
+	stripe := int(totalMatHours / hoursPerStripe)
+	if stripe > config.StripeCount {
+		stripe = config.StripeCount
+	}
+	return stripe
 }
 
 func isValidBelt(belt string) bool {

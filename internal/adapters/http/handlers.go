@@ -303,6 +303,15 @@ func handlePostCheckinCheckInMember(w http.ResponseWriter, r *http.Request) {
 		AttendanceStore: stores.AttendanceStore,
 		ScheduleStore:   stores.ScheduleStore,
 	}
+	if stores.GradingRecordStore != nil && stores.GradingConfigStore != nil {
+		deps.InferStripeDeps = &orchestrators.InferStripeDeps{
+			MemberStore:         stores.MemberStore,
+			AttendanceStore:     stores.AttendanceStore,
+			EstimatedHoursStore: stores.EstimatedHoursStore,
+			GradingRecordStore:  stores.GradingRecordStore,
+			GradingConfigStore:  stores.GradingConfigStore,
+		}
+	}
 	err := orchestrators.ExecuteCheckInMember(ctx, input, deps)
 	if err != nil {
 		internalError(w, err)

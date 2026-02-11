@@ -156,6 +156,42 @@ func TestProposal_Validate(t *testing.T) {
 	}
 }
 
+// TestInferStripe tests the InferStripe pure function.
+func TestInferStripe(t *testing.T) {
+	blueConfig := grading.Config{
+		Program: "adults", Belt: grading.BeltBlue,
+		FlightTimeHours: 150, StripeCount: 4,
+	}
+
+	tests := []struct {
+		name       string
+		hours      float64
+		config     grading.Config
+		wantStripe int
+	}{
+		{"zero hours", 0, blueConfig, 0},
+		{"just under stripe 1", 37.4, blueConfig, 0},
+		{"exactly stripe 1", 37.5, blueConfig, 1},
+		{"between stripe 1 and 2", 50, blueConfig, 1},
+		{"exactly stripe 2 (75h)", 75, blueConfig, 2},
+		{"exactly stripe 3 (112.5h)", 112.5, blueConfig, 3},
+		{"exactly stripe 4 (150h)", 150, blueConfig, 4},
+		{"over max hours capped at stripe count", 200, blueConfig, 4},
+		{"zero flight time hours", 100, grading.Config{FlightTimeHours: 0, StripeCount: 4}, 0},
+		{"zero stripe count", 100, grading.Config{FlightTimeHours: 150, StripeCount: 0}, 0},
+		{"negative hours", -10, blueConfig, 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := grading.InferStripe(tt.hours, tt.config)
+			if got != tt.wantStripe {
+				t.Errorf("InferStripe(%v, config) = %d, want %d", tt.hours, got, tt.wantStripe)
+			}
+		})
+	}
+}
+
 // TestProposal_Approve tests the Approve method on grading Proposal.
 func TestProposal_Approve(t *testing.T) {
 	t.Run("approve pending", func(t *testing.T) {

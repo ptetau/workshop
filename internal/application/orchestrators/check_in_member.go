@@ -82,6 +82,7 @@ type CheckInMemberDeps struct {
 	MemberStore     CheckInSearchStore
 	AttendanceStore AttendanceStore
 	ScheduleStore   ScheduleLookupStore // optional: used to compute mat hours
+	InferStripeDeps *InferStripeDeps    // optional: nil skips stripe inference
 }
 
 // ExecuteCheckInMember coordinates member check-in.
@@ -131,5 +132,11 @@ func ExecuteCheckInMember(ctx context.Context, input CheckInMemberInput, deps Ch
 	}
 
 	slog.Info("checkin_event", "event", "member_checked_in", "member_id", input.MemberID, "name", m.Name, "schedule_id", input.ScheduleID, "mat_hours", matHours)
+
+	// Best-effort stripe inference after check-in
+	if deps.InferStripeDeps != nil {
+		_ = ExecuteInferStripe(ctx, input.MemberID, *deps.InferStripeDeps)
+	}
+
 	return nil
 }

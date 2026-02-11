@@ -408,6 +408,29 @@ func (s *SQLiteStore) DeleteByMemberIDAndDateRange(ctx context.Context, memberID
 	return int(n), err
 }
 
+// SumMatHoursByMemberID returns the total mat hours for a member.
+// Uses checkout-based duration where available, else defaults to 1.5h per session.
+// PRE: memberID is non-empty
+// POST: Returns total hours (>=0)
+func (s *SQLiteStore) SumMatHoursByMemberID(ctx context.Context, memberID string) (float64, error) {
+	var total sql.NullFloat64
+	err := s.db.QueryRowContext(ctx,
+		`SELECT SUM(
+			CASE
+				WHEN check_out_time IS NOT NULL AND check_out_time != ''
+				THEN (julianday(check_out_time) - julianday(check_in_time)) * 24.0
+				ELSE 1.5
+			END
+		) FROM attendance WHERE member_id = ?`, memberID).Scan(&total)
+	if err != nil {
+		return 0, err
+	}
+	if !total.Valid {
+		return 0, nil
+	}
+	return total.Float64, nil
+}
+
 func parseStoredTime(value string) (time.Time, error) {
 	if idx := strings.Index(value, " m="); idx != -1 {
 		value = value[:idx]

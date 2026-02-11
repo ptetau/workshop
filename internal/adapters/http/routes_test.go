@@ -233,6 +233,23 @@ func (m *mockAttendanceStore) DeleteByMemberIDAndDateRange(ctx context.Context, 
 	return count, nil
 }
 
+// SumMatHoursByMemberID implements the attendance store interface for testing.
+// PRE: memberID is non-empty
+// POST: Returns total hours (>=0)
+func (m *mockAttendanceStore) SumMatHoursByMemberID(ctx context.Context, memberID string) (float64, error) {
+	var total float64
+	for _, a := range m.attendances {
+		if a.MemberID == memberID {
+			if !a.CheckOutTime.IsZero() {
+				total += a.CheckOutTime.Sub(a.CheckInTime).Hours()
+			} else {
+				total += 1.5
+			}
+		}
+	}
+	return total, nil
+}
+
 type mockInjuryStore struct {
 	injuries map[string]injuryDomain.Injury
 }
