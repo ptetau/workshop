@@ -70,14 +70,55 @@ function decide(id,decision) {
     .then(()=>loadProposals());
 }
 function loadReadiness() {
+    var thStyle='padding:0.5rem;text-align:left;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);';
     fetch('/api/grading/readiness').then(r=>r.json()).then(data => {
         var el = document.getElementById('readinessList');
-        if (!data||data.length===0) { el.innerHTML='<p style="color:#6c757d;font-style:italic;">No members approaching eligibility.</p>'; return; }
-        var html='<table style="width:100%;border-collapse:collapse;"><thead><tr style="border-bottom:2px solid var(--border);"><th style="padding:0.5rem;text-align:left;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);">Member</th><th style="padding:0.5rem;text-align:left;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);">Belt</th><th style="padding:0.5rem;text-align:left;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);">Hours</th><th style="padding:0.5rem;text-align:left;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);">Progress</th></tr></thead><tbody>';
-        data.forEach(m => {
-            html+='<tr style="border-bottom:1px solid var(--border);"><td style="padding:0.5rem;font-weight:600;">'+m.MemberName+'</td><td style="padding:0.5rem;">'+m.CurrentBelt+'</td><td style="padding:0.5rem;">'+m.FlightTimeHours+'h</td><td style="padding:0.5rem;">'+m.ProgressPct+'%</td></tr>';
-        });
-        html+='</tbody></table>';
+        var html='';
+
+        // Adults section
+        if (data.Adults && data.Adults.length>0) {
+            html+='<h3 style="margin-top:0;">Adults (Mat Hours)</h3>';
+            html+='<table style="width:100%;border-collapse:collapse;"><thead><tr style="border-bottom:2px solid var(--border);">';
+            html+='<th style="'+thStyle+'">Member</th><th style="'+thStyle+'">Belt</th><th style="'+thStyle+'">Hours</th><th style="'+thStyle+'">Progress</th>';
+            html+='</tr></thead><tbody>';
+            data.Adults.forEach(m => {
+                html+='<tr style="border-bottom:1px solid var(--border);">';
+                html+='<td style="padding:0.5rem;font-weight:600;">'+m.MemberName+'</td>';
+                html+='<td style="padding:0.5rem;">'+m.CurrentBelt+' → '+m.TargetBelt+'</td>';
+                html+='<td style="padding:0.5rem;">'+m.MatHours.toFixed(1)+'h / '+m.RequiredHours+'h</td>';
+                html+='<td style="padding:0.5rem;">'+m.PercentReady.toFixed(0)+'%</td>';
+                html+='</tr>';
+            });
+            html+='</tbody></table>';
+        } else {
+            html+='<h3 style="margin-top:0;">Adults (Mat Hours)</h3>';
+            html+='<p style="color:#6c757d;font-style:italic;">No adults approaching eligibility.</p>';
+        }
+
+        // Kids section
+        var termLabel = data.TermName ? ' — '+data.TermName : '';
+        html+='<h3 style="margin-top:1.5rem;">Kids (Term Attendance'+termLabel+')</h3>';
+        if (data.Kids && data.Kids.length>0) {
+            html+='<table style="width:100%;border-collapse:collapse;"><thead><tr style="border-bottom:2px solid var(--border);">';
+            html+='<th style="'+thStyle+'">Member</th><th style="'+thStyle+'">Belt</th><th style="'+thStyle+'">Sessions</th><th style="'+thStyle+'">Attendance</th><th style="'+thStyle+'">Status</th>';
+            html+='</tr></thead><tbody>';
+            data.Kids.forEach(k => {
+                var statusBadge = k.Eligible
+                    ? '<span style="background:#28a745;color:#fff;padding:0.15rem 0.5rem;border-radius:2px;font-size:0.8rem;">Eligible</span>'
+                    : '<span style="color:#6c757d;font-size:0.8rem;">'+k.AttendancePct.toFixed(0)+'% (need '+k.ThresholdPct+'%)</span>';
+                html+='<tr style="border-bottom:1px solid var(--border);">';
+                html+='<td style="padding:0.5rem;font-weight:600;">'+k.MemberName+'</td>';
+                html+='<td style="padding:0.5rem;">'+k.CurrentBelt+' → '+k.TargetBelt+'</td>';
+                html+='<td style="padding:0.5rem;">'+k.Attended+' / '+k.TotalSessions+'</td>';
+                html+='<td style="padding:0.5rem;">'+k.AttendancePct.toFixed(0)+'%</td>';
+                html+='<td style="padding:0.5rem;">'+statusBadge+'</td>';
+                html+='</tr>';
+            });
+            html+='</tbody></table>';
+        } else {
+            html+='<p style="color:#6c757d;font-style:italic;">No kids data for current term.</p>';
+        }
+
         el.innerHTML=html;
     }).catch(()=>{document.getElementById('readinessList').innerHTML='<p style="color:#6c757d;font-style:italic;">Could not load readiness data.</p>';});
 }

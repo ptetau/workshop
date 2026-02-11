@@ -2222,7 +2222,7 @@ func handleGradingReadiness(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	type readinessEntry struct {
+	type adultEntry struct {
 		MemberID     string  `json:"MemberID"`
 		MemberName   string  `json:"MemberName"`
 		Program      string  `json:"Program"`
@@ -2233,9 +2233,27 @@ func handleGradingReadiness(w http.ResponseWriter, r *http.Request) {
 		PercentReady float64 `json:"PercentReady"`
 	}
 
-	var results []readinessEntry
+	type kidsEntry struct {
+		MemberID      string  `json:"MemberID"`
+		MemberName    string  `json:"MemberName"`
+		CurrentBelt   string  `json:"CurrentBelt"`
+		TargetBelt    string  `json:"TargetBelt"`
+		Attended      int     `json:"Attended"`
+		TotalSessions int     `json:"TotalSessions"`
+		AttendancePct float64 `json:"AttendancePct"`
+		ThresholdPct  float64 `json:"ThresholdPct"`
+		Eligible      bool    `json:"Eligible"`
+	}
+
+	type readinessResponse struct {
+		Adults   []adultEntry `json:"Adults"`
+		Kids     []kidsEntry  `json:"Kids"`
+		TermName string       `json:"TermName"`
+	}
+
+	var adults []adultEntry
 	for _, m := range members {
-		if m.Status != "active" {
+		if m.Status != "active" || m.Program == "kids" {
 			continue
 		}
 		// Get member's latest grading record to find current belt
@@ -2281,7 +2299,7 @@ func handleGradingReadiness(w http.ResponseWriter, r *http.Request) {
 			pct = 100
 		}
 		if pct >= 50 { // only show members at 50%+ readiness
-			results = append(results, readinessEntry{
+			adults = append(adults, adultEntry{
 				MemberID:     m.ID,
 				MemberName:   m.Name,
 				Program:      m.Program,
@@ -2294,12 +2312,49 @@ func handleGradingReadiness(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if results == nil {
-		w.Write([]byte("[]"))
-		return
+	// Kids term attendance readiness
+	var kids []kidsEntry
+	termName := ""
+	kidsQuery := projections.GetKidsTermReadinessQuery{Now: time.Now()}
+	kidsDeps := projections.GetKidsTermReadinessDeps{
+		TermStore:          stores.TermStore,
+		ProgramStore:       stores.ProgramStore,
+		ClassTypeStore:     stores.ClassTypeStore,
+		ScheduleStore:      stores.ScheduleStore,
+		HolidayStore:       stores.HolidayStore,
+		MemberStore:        stores.MemberStore,
+		AttendanceStore:    stores.AttendanceStore,
+		GradingRecordStore: stores.GradingRecordStore,
+		GradingConfigStore: stores.GradingConfigStore,
 	}
-	json.NewEncoder(w).Encode(results)
+	kidsResult, err := projections.QueryGetKidsTermReadiness(ctx, kidsQuery, kidsDeps)
+	if err == nil {
+		termName = kidsResult.TermName
+		for _, e := range kidsResult.Entries {
+			kids = append(kids, kidsEntry{
+				MemberID:      e.MemberID,
+				MemberName:    e.MemberName,
+				CurrentBelt:   e.CurrentBelt,
+				TargetBelt:    e.TargetBelt,
+				Attended:      e.Attended,
+				TotalSessions: e.TotalSessions,
+				AttendancePct: e.AttendancePct,
+				ThresholdPct:  e.ThresholdPct,
+				Eligible:      e.Eligible,
+			})
+		}
+	}
+
+	resp := readinessResponse{Adults: adults, Kids: kids, TermName: termName}
+	if resp.Adults == nil {
+		resp.Adults = []adultEntry{}
+	}
+	if resp.Kids == nil {
+		resp.Kids = []kidsEntry{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
 }
 
 // nextBeltFor returns the next belt in progression, or "" if at highest.
