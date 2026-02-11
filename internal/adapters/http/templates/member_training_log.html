@@ -76,8 +76,13 @@ function loadTrainingLog() {
         // Recorded vs estimated hours split
         var rec = Math.round(data.RecordedHours || 0);
         var est = Math.round(data.EstimatedHours || 0);
-        if (rec > 0 || est > 0) {
-            document.getElementById('hoursSplit').textContent = rec + 'h recorded + ' + est + 'h estimated';
+        var bulk = Math.round(data.BulkEstimatedHours || 0);
+        var parts = [];
+        if (rec > 0) parts.push(rec + 'h recorded');
+        if (est > 0) parts.push(est + 'h session est.');
+        if (bulk > 0) parts.push(bulk + 'h bulk est.');
+        if (parts.length > 0) {
+            document.getElementById('hoursSplit').textContent = parts.join(' + ');
         }
 
         // Belt display

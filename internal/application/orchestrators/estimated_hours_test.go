@@ -183,6 +183,53 @@ func TestExecuteBulkAddEstimatedHours_ReplaceMode(t *testing.T) {
 	}
 }
 
+// TestExecuteBulkAddEstimatedHours_AddMode tests that overlapping attendance is kept and estimate is saved on top.
+func TestExecuteBulkAddEstimatedHours_AddMode(t *testing.T) {
+	estStore := &mockEstimatedHoursStore{}
+	attStore := &mockAttendanceStoreForOverlap{
+		records: []attendanceDomain.Attendance{
+			{ID: "a1", MemberID: "m1", CheckInTime: time.Date(2026, 2, 5, 18, 0, 0, 0, time.UTC), MatHours: 1.5},
+			{ID: "a2", MemberID: "m1", CheckInTime: time.Date(2026, 2, 12, 18, 0, 0, 0, time.UTC), MatHours: 2.0},
+		},
+	}
+
+	input := BulkAddEstimatedHoursInput{
+		MemberID:    "m1",
+		StartDate:   "2026-02-01",
+		EndDate:     "2026-04-30",
+		WeeklyHours: 3,
+		Note:        "extra training at partner gym",
+		CreatedBy:   "coach-1",
+		OverlapMode: OverlapModeAdd,
+	}
+	deps := BulkAddEstimatedHoursDeps{
+		EstimatedHoursStore: estStore,
+		AttendanceStore:     attStore,
+		GenerateID:          func() string { return "est-add1" },
+		Now:                 testNowEstHours,
+	}
+
+	result, err := ExecuteBulkAddEstimatedHours(context.Background(), input, deps)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(estStore.saved) != 1 {
+		t.Errorf("expected 1 saved entry, got %d", len(estStore.saved))
+	}
+	if attStore.deleted != 0 {
+		t.Errorf("expected 0 deleted attendance records (add mode), got %d", attStore.deleted)
+	}
+	if len(attStore.records) != 2 {
+		t.Errorf("expected 2 remaining attendance records, got %d", len(attStore.records))
+	}
+	if result.TotalHours == 0 {
+		t.Error("expected non-zero TotalHours")
+	}
+	if result.Note != "extra training at partner gym" {
+		t.Errorf("note = %q, want %q", result.Note, "extra training at partner gym")
+	}
+}
+
 // TestExecuteBulkAddEstimatedHours_InvalidInput tests validation failure.
 func TestExecuteBulkAddEstimatedHours_InvalidInput(t *testing.T) {
 	store := &mockEstimatedHoursStore{}

@@ -18,6 +18,7 @@ type EstimatedHoursStoreForBulkAdd interface {
 const (
 	OverlapModeNone    = ""        // default: no overlap handling
 	OverlapModeReplace = "replace" // delete overlapping attendance, save estimate
+	OverlapModeAdd     = "add"     // keep overlapping attendance, save estimate on top
 )
 
 // BulkAddEstimatedHoursInput carries input for the bulk-add orchestrator.
@@ -114,6 +115,7 @@ func ExecuteBulkAddEstimatedHours(ctx context.Context, input BulkAddEstimatedHou
 			return domain.EstimatedHours{}, fmt.Errorf("failed to remove overlapping attendance: %w", err)
 		}
 	}
+	// OverlapModeAdd: no attendance deletion — estimate is saved on top of existing records
 
 	if err := deps.EstimatedHoursStore.Save(ctx, entry); err != nil {
 		return domain.EstimatedHours{}, err
