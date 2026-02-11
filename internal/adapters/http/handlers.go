@@ -535,6 +535,7 @@ func handleEstimatedHours(w http.ResponseWriter, r *http.Request) {
 			EndDate     string  `json:"EndDate"`
 			WeeklyHours float64 `json:"WeeklyHours"`
 			Note        string  `json:"Note"`
+			OverlapMode string  `json:"OverlapMode"`
 		}
 		if err := strictDecode(r, &input); err != nil {
 			http.Error(w, "invalid JSON", http.StatusBadRequest)
@@ -547,9 +548,11 @@ func handleEstimatedHours(w http.ResponseWriter, r *http.Request) {
 			WeeklyHours: input.WeeklyHours,
 			Note:        input.Note,
 			CreatedBy:   sess.AccountID,
+			OverlapMode: input.OverlapMode,
 		}
 		orchDeps := orchestrators.BulkAddEstimatedHoursDeps{
 			EstimatedHoursStore: stores.EstimatedHoursStore,
+			AttendanceStore:     stores.AttendanceStore,
 			GenerateID:          generateID,
 			Now:                 timeNow,
 		}
@@ -588,6 +591,37 @@ func handleEstimatedHours(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusMethodNotAllowed)
+}
+
+// handleEstimatedHoursCheckOverlap handles GET /api/estimated-hours/check-overlap
+func handleEstimatedHoursCheckOverlap(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	sess, ok := middleware.GetSessionFromContext(r.Context())
+	if !ok {
+		http.Error(w, "not authenticated", http.StatusUnauthorized)
+		return
+	}
+	if sess.Role != "admin" && sess.Role != "coach" {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	memberID := r.URL.Query().Get("member_id")
+	startDate := r.URL.Query().Get("start_date")
+	endDate := r.URL.Query().Get("end_date")
+	if memberID == "" || startDate == "" || endDate == "" {
+		http.Error(w, "member_id, start_date, and end_date are required", http.StatusBadRequest)
+		return
+	}
+	result, err := orchestrators.CheckEstimatedHoursOverlap(r.Context(), memberID, startDate, endDate, stores.AttendanceStore)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
 }
 
 // handlePostInjuriesReportInjury handles POST /injuries

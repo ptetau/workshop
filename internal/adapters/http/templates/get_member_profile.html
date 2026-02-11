@@ -87,6 +87,12 @@
             </div>
             <button type="submit">Add Estimated Hours</button>
             <span id="estMsg" style="margin-left:0.75rem;font-size:0.85rem;"></span>
+            <div id="overlapWarning" style="display:none;margin-top:0.75rem;padding:0.75rem;background:#fff3cd;border:1px solid #ffc107;border-radius:2px;">
+                <strong style="color:#856404;">Overlap Detected</strong>
+                <p id="overlapText" style="margin:0.5rem 0;color:#856404;font-size:0.9rem;"></p>
+                <button type="button" onclick="submitEstHours('replace')" style="background:#dc3545;margin-right:0.5rem;">Replace Recorded Hours</button>
+                <button type="button" onclick="document.getElementById('overlapWarning').style.display='none'" style="background:#6c757d;">Cancel</button>
+            </div>
         </form>
     </details>
 
@@ -171,24 +177,47 @@ function deleteEstHours(id) {
     if (!confirm('Delete this estimated hours entry?')) return;
     fetch('/api/estimated-hours?id='+id,{method:'DELETE'}).then(r=>{if(r.ok)loadEstimatedHours();});
 }
+function getEstFormData() {
+    return {
+        MemberID:memberID,
+        StartDate:document.getElementById('estStart').value,
+        EndDate:document.getElementById('estEnd').value,
+        WeeklyHours:parseFloat(document.getElementById('estWeekly').value),
+        Note:document.getElementById('estNote').value
+    };
+}
+function submitEstHours(overlapMode) {
+    var msg = document.getElementById('estMsg');
+    var data = getEstFormData();
+    if (overlapMode) data.OverlapMode = overlapMode;
+    msg.textContent='Saving...';msg.style.color='#666';
+    document.getElementById('overlapWarning').style.display='none';
+    fetch('/api/estimated-hours',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}).then(r=>{
+        if(!r.ok) return r.text().then(t=>{throw new Error(t);});
+        return r.json();
+    }).then(e=>{
+        msg.textContent='Added '+e.TotalHours+'h!';msg.style.color='#2e7d32';
+        document.getElementById('estHoursForm').reset();loadEstimatedHours();
+    }).catch(err=>{msg.textContent='Error: '+err.message;msg.style.color='#dc3545';});
+}
 var estForm = document.getElementById('estHoursForm');
 if (estForm) {
     estForm.addEventListener('submit', function(ev) {
         ev.preventDefault();
         var msg = document.getElementById('estMsg');
-        msg.textContent='Saving...';msg.style.color='#666';
-        fetch('/api/estimated-hours',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-            MemberID:memberID,
-            StartDate:document.getElementById('estStart').value,
-            EndDate:document.getElementById('estEnd').value,
-            WeeklyHours:parseFloat(document.getElementById('estWeekly').value),
-            Note:document.getElementById('estNote').value
-        })}).then(r=>{
-            if(!r.ok) return r.text().then(t=>{throw new Error(t);});
-            return r.json();
-        }).then(e=>{
-            msg.textContent='Added '+e.TotalHours+'h!';msg.style.color='#2e7d32';
-            estForm.reset();loadEstimatedHours();
+        var data = getEstFormData();
+        if (!data.StartDate||!data.EndDate||!data.WeeklyHours) { msg.textContent='Fill all required fields';msg.style.color='#dc3545'; return; }
+        msg.textContent='Checking for overlaps...';msg.style.color='#666';
+        fetch('/api/estimated-hours/check-overlap?member_id='+memberID+'&start_date='+data.StartDate+'&end_date='+data.EndDate)
+        .then(r=>r.json()).then(result=>{
+            if (result.HasOverlap) {
+                msg.textContent='';
+                var warn = document.getElementById('overlapWarning');
+                document.getElementById('overlapText').textContent=result.OverlapSummary+'. Choose an action:';
+                warn.style.display='block';
+            } else {
+                submitEstHours('');
+            }
         }).catch(err=>{msg.textContent='Error: '+err.message;msg.style.color='#dc3545';});
     });
     loadEstimatedHours();

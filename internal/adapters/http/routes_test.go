@@ -204,6 +204,35 @@ func (m *mockAttendanceStore) ListDistinctMemberIDsByScheduleIDsSince(ctx contex
 	return ids, nil
 }
 
+// ListByMemberIDAndDateRange implements the attendance store interface for testing.
+// PRE: memberID, startDate, endDate are non-empty
+// POST: Returns records within the date range
+func (m *mockAttendanceStore) ListByMemberIDAndDateRange(ctx context.Context, memberID string, startDate string, endDate string) ([]attendanceDomain.Attendance, error) {
+	var list []attendanceDomain.Attendance
+	for _, a := range m.attendances {
+		d := a.CheckInTime.Format("2006-01-02")
+		if a.MemberID == memberID && d >= startDate && d <= endDate {
+			list = append(list, a)
+		}
+	}
+	return list, nil
+}
+
+// DeleteByMemberIDAndDateRange implements the attendance store interface for testing.
+// PRE: memberID, startDate, endDate are non-empty
+// POST: Deletes records within the date range, returns count
+func (m *mockAttendanceStore) DeleteByMemberIDAndDateRange(ctx context.Context, memberID string, startDate string, endDate string) (int, error) {
+	count := 0
+	for id, a := range m.attendances {
+		d := a.CheckInTime.Format("2006-01-02")
+		if a.MemberID == memberID && d >= startDate && d <= endDate {
+			delete(m.attendances, id)
+			count++
+		}
+	}
+	return count, nil
+}
+
 type mockInjuryStore struct {
 	injuries map[string]injuryDomain.Injury
 }

@@ -340,6 +340,73 @@ func (s *SQLiteStore) ListDistinctMemberIDsByScheduleIDsSince(ctx context.Contex
 	return ids, rows.Err()
 }
 
+// ListByMemberIDAndDateRange retrieves attendance records for a member within a date range.
+// PRE: memberID is non-empty, startDate and endDate are YYYY-MM-DD format
+// POST: Returns records where check_in_time falls within the range (inclusive)
+func (s *SQLiteStore) ListByMemberIDAndDateRange(ctx context.Context, memberID string, startDate string, endDate string) ([]domain.Attendance, error) {
+	query := `SELECT id, check_in_time, check_out_time, member_id, schedule_id, class_date, mat_hours
+		FROM attendance
+		WHERE member_id = ? AND SUBSTR(check_in_time, 1, 10) >= ? AND SUBSTR(check_in_time, 1, 10) <= ?
+		ORDER BY check_in_time DESC`
+
+	rows, err := s.db.QueryContext(ctx, query, memberID, startDate, endDate)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []domain.Attendance
+	for rows.Next() {
+		var entity domain.Attendance
+		var checkInStr string
+		var checkOutStr, scheduleID, classDate sql.NullString
+		if err := rows.Scan(
+			&entity.ID,
+			&checkInStr,
+			&checkOutStr,
+			&entity.MemberID,
+			&scheduleID,
+			&classDate,
+			&entity.MatHours,
+		); err != nil {
+			return nil, err
+		}
+		if scheduleID.Valid {
+			entity.ScheduleID = scheduleID.String
+		}
+		if classDate.Valid {
+			entity.ClassDate = classDate.String
+		}
+		entity.CheckInTime, err = parseStoredTime(checkInStr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse check_in_time: %w", err)
+		}
+		if checkOutStr.Valid {
+			parsedTime, parseErr := parseStoredTime(checkOutStr.String)
+			if parseErr != nil {
+				return nil, fmt.Errorf("failed to parse check_out_time: %w", parseErr)
+			}
+			entity.CheckOutTime = parsedTime
+		}
+		results = append(results, entity)
+	}
+	return results, rows.Err()
+}
+
+// DeleteByMemberIDAndDateRange deletes attendance records for a member within a date range.
+// PRE: memberID is non-empty, startDate and endDate are YYYY-MM-DD format
+// POST: Returns the number of deleted records
+func (s *SQLiteStore) DeleteByMemberIDAndDateRange(ctx context.Context, memberID string, startDate string, endDate string) (int, error) {
+	result, err := s.db.ExecContext(ctx,
+		`DELETE FROM attendance WHERE member_id = ? AND SUBSTR(check_in_time, 1, 10) >= ? AND SUBSTR(check_in_time, 1, 10) <= ?`,
+		memberID, startDate, endDate)
+	if err != nil {
+		return 0, err
+	}
+	n, err := result.RowsAffected()
+	return int(n), err
+}
+
 func parseStoredTime(value string) (time.Time, error) {
 	if idx := strings.Index(value, " m="); idx != -1 {
 		value = value[:idx]
