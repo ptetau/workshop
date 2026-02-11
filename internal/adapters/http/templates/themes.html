@@ -1,47 +1,15 @@
 {{ define "content" }}
 <div class="card">
     <h1>Theme Carousel</h1>
-    <p style="color:var(--text-muted);margin-bottom:1.5rem;">Current technical blocks for structured study. Each theme runs for 4 weeks.</p>
+    <p style="color:var(--text-muted);margin-bottom:1.5rem;">This week's curriculum across all classes, driven by the rotor system.</p>
 
     {{ if eq .Role "admin" "coach" }}
-    <details style="margin-bottom:2rem;background:var(--bg);padding:1rem;">
-        <summary style="cursor:pointer;font-weight:600;font-size:0.85rem;text-transform:uppercase;letter-spacing:0.5px;">Create New Theme</summary>
-        <form id="createThemeForm" style="margin-top:1rem;">
-            <div class="form-group">
-                <label for="themeName">Theme Name</label>
-                <input type="text" id="themeName" placeholder="e.g. Leg Lasso Series" maxlength="100" required>
-            </div>
-            <div class="form-group">
-                <label for="themeDesc">Description</label>
-                <input type="text" id="themeDesc" placeholder="Brief summary of the technical focus" maxlength="500">
-            </div>
-            <div class="form-group">
-                <label for="themeProgram">Program</label>
-                <select id="themeProgram">
-                    <option value="adults">Adults</option>
-                    <option value="kids">Kids</option>
-                </select>
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
-                <div class="form-group">
-                    <label for="themeStart">Start Date</label>
-                    <input type="date" id="themeStart" required>
-                </div>
-                <div class="form-group">
-                    <label for="themeEnd">End Date</label>
-                    <input type="date" id="themeEnd" required>
-                </div>
-            </div>
-            <button type="submit">Create Theme</button>
-        </form>
-    </details>
+    <div style="margin-bottom:1.5rem;">
+        <a href="/curriculum" style="display:inline-block;background:#1A1B1F;color:#fff;padding:0.4rem 1rem;text-decoration:none;font-size:0.85rem;font-weight:600;border-radius:2px;">Manage Curriculum →</a>
+    </div>
     {{ end }}
 
-    <div id="activeThemes"></div>
-    <h2 style="margin-top:2rem;">Upcoming</h2>
-    <div id="upcomingThemes"></div>
-    <h2 style="margin-top:2rem;">Past Themes</h2>
-    <div id="pastThemes"></div>
+    <div id="curriculumOverview"></div>
 
     <p style="margin-top:2rem;">
         <a href="/library" style="font-weight:600;">View Technical Library →</a>
@@ -53,89 +21,84 @@
 var userRole = '{{ .Role }}';
 function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
 
-function formatDate(d) {
-    if (!d) return '';
-    return new Date(d).toLocaleDateString('en-NZ', {day:'numeric',month:'short',year:'numeric'});
-}
-
-function weekNumber(start, end) {
-    var now = new Date();
-    var s = new Date(start);
-    var e = new Date(end);
-    if (now < s || now > e) return 0;
-    var days = Math.floor((now - s) / (1000*60*60*24));
-    var w = Math.floor(days / 7) + 1;
-    return w > 4 ? 4 : w;
-}
-
-function themeStatus(start, end) {
-    var now = new Date();
-    var s = new Date(start);
-    var e = new Date(end);
-    if (now < s) return 'upcoming';
-    if (now > e) return 'completed';
-    return 'active';
-}
-
-function renderThemeCard(t, status) {
-    var week = weekNumber(t.StartDate, t.EndDate);
-    var badge = '';
-    if (status === 'active') {
-        badge = '<span style="background:#F9B232;color:#fff;padding:0.2rem 0.6rem;font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Week '+week+' of 4</span>';
-    } else if (status === 'upcoming') {
-        badge = '<span style="background:#1A1B1F;color:#fff;padding:0.2rem 0.6rem;font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Starts '+formatDate(t.StartDate)+'</span>';
+function renderActiveTopic(topic) {
+    var html = '<div style="display:flex;align-items:center;gap:0.5rem;">';
+    html += '<span style="background:#F9B232;width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0;"></span>';
+    html += '<strong>'+esc(topic.topic_name)+'</strong>';
+    if (topic.votes > 0) {
+        html += ' <span style="color:#6c757d;font-size:0.8rem;">('+topic.votes+' vote'+(topic.votes!==1?'s':'')+')</span>';
     }
-    var prog = t.Program === 'adults' ? '🥋 Adults' : '👦 Kids';
-    return '<div style="background:#fff;border:1px solid '+(status==='active'?'#F9B232':'#e0e0e0')+';padding:1.25rem;margin-bottom:1rem;"'+(status==='active'?' border-left:3px solid #F9B232;':'')+'>'
-        + '<div style="display:flex;justify-content:space-between;align-items:center;">'
-        + '<strong style="font-size:1.1rem;">'+esc(t.Name)+'</strong>'
-        + badge
-        + '</div>'
-        + '<div style="color:#6c757d;margin-top:0.5rem;font-size:0.85rem;">'+prog+' · '+formatDate(t.StartDate)+' – '+formatDate(t.EndDate)+'</div>'
-        + (t.Description ? '<p style="margin:0.5rem 0 0;color:#333;font-size:0.9rem;">'+esc(t.Description)+'</p>' : '')
-        + '<div style="margin-top:0.75rem;"><a href="/library?theme_id='+esc(t.ID)+'" style="color:#F9B232;font-weight:600;text-decoration:none;font-size:0.85rem;">View Clips →</a></div>'
-        + '</div>';
+    html += '</div>';
+    if (topic.description) {
+        html += '<p style="margin:0.25rem 0 0 1.1rem;color:#6c757d;font-size:0.85rem;">'+esc(topic.description)+'</p>';
+    }
+    return html;
 }
 
-function loadThemes() {
-    fetch('/api/themes').then(r=>r.json()).then(themes => {
-        var active = '', upcoming = '', past = '';
-        themes.forEach(t => {
-            var s = themeStatus(t.StartDate, t.EndDate);
-            if (s === 'active') active += renderThemeCard(t, s);
-            else if (s === 'upcoming') upcoming += renderThemeCard(t, s);
-            else past += renderThemeCard(t, s);
-        });
-        document.getElementById('activeThemes').innerHTML = active || '<p style="color:#6c757d;font-style:italic;">No active themes right now.</p>';
-        document.getElementById('upcomingThemes').innerHTML = upcoming || '<p style="color:#6c757d;font-style:italic;">No upcoming themes.</p>';
-        document.getElementById('pastThemes').innerHTML = past || '<p style="color:#6c757d;font-style:italic;">No past themes.</p>';
+function renderThemeRow(theme) {
+    var html = '<div style="padding:0.75rem 0;border-bottom:1px solid #f0f0f0;">';
+    html += '<div style="font-weight:600;color:#1A1B1F;font-size:0.9rem;margin-bottom:0.4rem;">'+esc(theme.theme_name)+'</div>';
+    if (theme.active_topic) {
+        html += renderActiveTopic(theme.active_topic);
+    } else {
+        html += '<span style="color:#6c757d;font-style:italic;font-size:0.85rem;">No active topic scheduled</span>';
+    }
+    if (theme.upcoming && theme.upcoming.length > 0) {
+        html += '<div style="margin-top:0.5rem;margin-left:1.1rem;">';
+        html += '<span style="font-size:0.75rem;color:#999;text-transform:uppercase;letter-spacing:0.5px;">Coming up:</span>';
+        html += '<div style="color:#6c757d;font-size:0.85rem;margin-top:0.2rem;">';
+        var names = [];
+        for (var i = 0; i < Math.min(theme.upcoming.length, 5); i++) {
+            names.push(esc(theme.upcoming[i].topic_name));
+        }
+        html += names.join(' → ');
+        if (theme.upcoming.length > 5) html += ' → …';
+        html += '</div></div>';
+    }
+    html += '</div>';
+    return html;
+}
+
+function renderClassCurriculum(cc) {
+    var html = '<div style="background:#fff;border:1px solid #e0e0e0;border-left:3px solid #F9B232;padding:1.25rem;margin-bottom:1.5rem;">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">';
+    html += '<strong style="font-size:1.1rem;">'+esc(cc.class_type_name)+'</strong>';
+    html += '<span style="background:#f8f9fa;color:#666;padding:0.15rem 0.5rem;font-size:0.75rem;border-radius:2px;">'+esc(cc.rotor_name)+'</span>';
+    html += '</div>';
+    if (cc.themes.length === 0) {
+        html += '<p style="color:#6c757d;font-style:italic;">No themes configured yet.</p>';
+    } else {
+        for (var i = 0; i < cc.themes.length; i++) {
+            html += renderThemeRow(cc.themes[i]);
+        }
+    }
+    html += '</div>';
+    return html;
+}
+
+function loadCurriculum() {
+    fetch('/api/curriculum/overview').then(function(r) {
+        if (!r.ok) throw new Error('Failed to load curriculum');
+        return r.json();
+    }).then(function(data) {
+        var container = document.getElementById('curriculumOverview');
+        if (!data.class_curriculums || data.class_curriculums.length === 0) {
+            container.innerHTML = '<p style="color:#6c757d;font-style:italic;">No active curriculum configured yet.</p>';
+            if (userRole === 'admin' || userRole === 'coach') {
+                container.innerHTML += '<p style="margin-top:0.5rem;"><a href="/curriculum">Set up a rotor to get started →</a></p>';
+            }
+            return;
+        }
+        var html = '';
+        for (var i = 0; i < data.class_curriculums.length; i++) {
+            html += renderClassCurriculum(data.class_curriculums[i]);
+        }
+        container.innerHTML = html;
+    }).catch(function(err) {
+        document.getElementById('curriculumOverview').innerHTML = '<p style="color:#c62828;">Error loading curriculum: '+esc(err.message)+'</p>';
     });
 }
 
-document.addEventListener('DOMContentLoaded', loadThemes);
-
-var form = document.getElementById('createThemeForm');
-if (form) {
-    form.addEventListener('submit', function(e) {
-        e.preventDefault();
-        fetch('/api/themes', {
-            method: 'POST',
-            headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({
-                Name: document.getElementById('themeName').value,
-                Description: document.getElementById('themeDesc').value,
-                Program: document.getElementById('themeProgram').value,
-                StartDate: document.getElementById('themeStart').value,
-                EndDate: document.getElementById('themeEnd').value
-            })
-        }).then(r => {
-            if (!r.ok) return r.text().then(t => { throw new Error(t); });
-            return r.json();
-        }).then(() => {
-            form.reset();
-            loadThemes();
-        }).catch(err => alert('Error: ' + err.message));
-    });
-}
+document.addEventListener('DOMContentLoaded', loadCurriculum);
 </script>
 {{ end }}

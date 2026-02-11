@@ -4709,6 +4709,36 @@ func handleTopicBump(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(sched)
 }
 
+// handleCurriculumOverview handles GET /api/curriculum/overview
+// Returns the active curriculum across all class types for the Theme Carousel page.
+func handleCurriculumOverview(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	sess, ok := middleware.GetSessionFromContext(r.Context())
+	if !ok {
+		http.Error(w, "not authenticated", http.StatusUnauthorized)
+		return
+	}
+
+	query := projections.GetCurriculumOverviewQuery{
+		Role: sess.Role,
+	}
+	deps := projections.GetCurriculumOverviewDeps{
+		ClassTypeStore: stores.ClassTypeStore,
+		RotorStore:     stores.RotorStore,
+	}
+	result, err := projections.QueryGetCurriculumOverview(r.Context(), query, deps)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
 // handleCurriculumView handles GET /api/curriculum/view?class_type_id=<id>
 // Returns the full curriculum state for a class: active rotor, themes, topics, schedules, votes.
 func handleCurriculumView(w http.ResponseWriter, r *http.Request) {

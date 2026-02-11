@@ -112,6 +112,7 @@ func registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/rotors/schedule/action", handleTopicScheduleAction)
 	mux.HandleFunc("/api/votes", handleVotes)
 	mux.HandleFunc("/api/curriculum/view", handleCurriculumView)
+	mux.HandleFunc("/api/curriculum/overview", handleCurriculumOverview)
 
 	// DevMode routes (admin-only impersonation)
 	mux.HandleFunc("/api/devmode/impersonate", handleDevModeImpersonate)
