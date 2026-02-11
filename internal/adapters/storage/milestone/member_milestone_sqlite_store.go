@@ -5,16 +5,17 @@ import (
 	"database/sql"
 	"time"
 
+	"workshop/internal/adapters/storage"
 	domain "workshop/internal/domain/milestone"
 )
 
 // MemberMilestoneSQLiteStore implements MemberMilestoneStore using SQLite.
 type MemberMilestoneSQLiteStore struct {
-	db *sql.DB
+	db storage.SQLDB
 }
 
 // NewMemberMilestoneSQLiteStore creates a new MemberMilestoneSQLiteStore.
-func NewMemberMilestoneSQLiteStore(db *sql.DB) *MemberMilestoneSQLiteStore {
+func NewMemberMilestoneSQLiteStore(db storage.SQLDB) *MemberMilestoneSQLiteStore {
 	return &MemberMilestoneSQLiteStore{db: db}
 }
 

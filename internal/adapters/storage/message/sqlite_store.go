@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"time"
 
+	"workshop/internal/adapters/storage"
 	domain "workshop/internal/domain/message"
 )
 
@@ -12,11 +13,11 @@ const timeLayout = "2006-01-02T15:04:05Z07:00"
 
 // SQLiteStore implements Store using SQLite.
 type SQLiteStore struct {
-	db *sql.DB
+	db storage.SQLDB
 }
 
 // NewSQLiteStore creates a new SQLiteStore.
-func NewSQLiteStore(db *sql.DB) *SQLiteStore {
+func NewSQLiteStore(db storage.SQLDB) *SQLiteStore {
 	return &SQLiteStore{db: db}
 }
 

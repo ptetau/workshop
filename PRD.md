@@ -205,6 +205,54 @@ Navigating back/forward in the browser restores the exact list state.
 
 ---
 
+### 1.8 Observability & Performance Instrumentation
+
+Lightweight, zero-dependency instrumentation to identify slow endpoints and queries, enabling targeted tuning of indexes, views, and algorithms. All instrumentation uses stdlib `log/slog` only.
+
+**Access:** Admin ✓ | Coach — | Member — | Trial — | Guest —
+
+#### Design Principles
+
+- **< 1ms overhead** per request from instrumentation
+- **Structured logs** — JSON-compatible, parseable by any log aggregator
+- **Opt-in verbosity** — normal requests at DEBUG, slow ones at WARN
+- **Configurable thresholds** — via environment variables
+
+#### Performance Safeguards
+
+Every instrumentation component must ship with `go test -bench` benchmarks proving it doesn't regress performance:
+
+- **Request middleware:** < 1µs p50 overhead, 0–1 allocs/op, no goroutines spawned per request
+- **Store wrapper:** < 500ns p50 overhead, 0–1 allocs/op, no locks held during query execution
+- **Collector (ring buffer):** < 200ns `Record()`, 0 allocs/op (pre-allocated), non-blocking writes; sorting only on dashboard read path
+- All benchmarks run with `b.RunParallel` to verify no lock contention under concurrent load
+
+#### User Stories
+
+**US-1.8.1: Request-level timing middleware**
+As an Admin, I want per-request latency logged so that I can identify slow endpoints.
+
+- *Given* any HTTP request is served
+- *When* the response completes
+- *Then* a structured log line is emitted with method, path, status code, and duration in milliseconds
+- *And* requests slower than a threshold (default 200ms, configurable via `WORKSHOP_SLOW_REQUEST_MS`) are logged at WARN level
+
+**US-1.8.2: Store-level query timing**
+As an Admin, I want slow database queries logged so that I can identify which stores need index tuning.
+
+- *Given* any store method is called
+- *When* the query completes
+- *Then* queries slower than a threshold (default 50ms, configurable via `WORKSHOP_SLOW_QUERY_MS`) are logged at WARN with store name, method, and duration
+
+**US-1.8.3: Admin performance dashboard**
+As an Admin, I want a `/admin/perf` dashboard so that I can see recent slow requests and queries at a glance.
+
+- *Given* I navigate to `/admin/perf`
+- *When* the page loads
+- *Then* I see P50/P95/P99 latency, top 10 slowest endpoints, and top 10 slowest queries from an in-memory ring buffer (ephemeral, lost on restart)
+
+---
+
 ## 2. Kiosk & Check-In
 
 ### 2.1 Kiosk Mode

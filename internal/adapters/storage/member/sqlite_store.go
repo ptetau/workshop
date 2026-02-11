@@ -6,16 +6,17 @@ import (
 	"fmt"
 	"strings"
 
+	"workshop/internal/adapters/storage"
 	domain "workshop/internal/domain/member"
 )
 
 // SQLiteStore implements domain.MemberStore using SQLite.
 type SQLiteStore struct {
-	db *sql.DB
+	db storage.SQLDB
 }
 
 // NewSQLiteStore creates a new MemberStore.
-func NewSQLiteStore(db *sql.DB) *SQLiteStore {
+func NewSQLiteStore(db storage.SQLDB) *SQLiteStore {
 	return &SQLiteStore{db: db}
 }
 

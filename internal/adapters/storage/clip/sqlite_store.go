@@ -2,21 +2,21 @@ package clip
 
 import (
 	"context"
-	"database/sql"
 
+	"workshop/internal/adapters/storage"
 	domain "workshop/internal/domain/clip"
 )
 
 // SQLiteStore implements Store using SQLite.
 type SQLiteStore struct {
-	DB *sql.DB
+	db storage.SQLDB
 }
 
 // NewSQLiteStore creates a new SQLiteStore and ensures the table exists.
-// PRE: db is a valid, open *sql.DB
+// PRE: db is a valid, open database connection
 // POST: clips table exists; store is ready for use
-func NewSQLiteStore(db *sql.DB) *SQLiteStore {
-	db.Exec(`CREATE TABLE IF NOT EXISTS clips (
+func NewSQLiteStore(db storage.SQLDB) *SQLiteStore {
+	db.ExecContext(context.Background(), `CREATE TABLE IF NOT EXISTS clips (
 		id TEXT PRIMARY KEY,
 		theme_id TEXT NOT NULL,
 		title TEXT NOT NULL,
@@ -31,7 +31,7 @@ func NewSQLiteStore(db *sql.DB) *SQLiteStore {
 		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (theme_id) REFERENCES themes(id)
 	)`)
-	return &SQLiteStore{DB: db}
+	return &SQLiteStore{db: db}
 }
 
 // GetByID retrieves a clip by its ID.
@@ -40,7 +40,7 @@ func NewSQLiteStore(db *sql.DB) *SQLiteStore {
 func (s *SQLiteStore) GetByID(ctx context.Context, id string) (domain.Clip, error) {
 	var c domain.Clip
 	var promoted int
-	err := s.DB.QueryRowContext(ctx,
+	err := s.db.QueryRowContext(ctx,
 		`SELECT id, theme_id, title, youtube_url, youtube_id, start_seconds, end_seconds, notes, created_by, promoted, promoted_by, created_at FROM clips WHERE id = ?`, id,
 	).Scan(&c.ID, &c.ThemeID, &c.Title, &c.YouTubeURL, &c.YouTubeID, &c.StartSeconds, &c.EndSeconds, &c.Notes, &c.CreatedBy, &promoted, &c.PromotedBy, &c.CreatedAt)
 	c.Promoted = promoted == 1
@@ -55,7 +55,7 @@ func (s *SQLiteStore) Save(ctx context.Context, value domain.Clip) error {
 	if value.Promoted {
 		promoted = 1
 	}
-	_, err := s.DB.ExecContext(ctx,
+	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO clips (id, theme_id, title, youtube_url, youtube_id, start_seconds, end_seconds, notes, created_by, promoted, promoted_by, created_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(id) DO UPDATE SET theme_id=excluded.theme_id, title=excluded.title, youtube_url=excluded.youtube_url,
@@ -70,7 +70,7 @@ func (s *SQLiteStore) Save(ctx context.Context, value domain.Clip) error {
 // PRE: id is non-empty
 // POST: clip is removed from storage
 func (s *SQLiteStore) Delete(ctx context.Context, id string) error {
-	_, err := s.DB.ExecContext(ctx, `DELETE FROM clips WHERE id = ?`, id)
+	_, err := s.db.ExecContext(ctx, `DELETE FROM clips WHERE id = ?`, id)
 	return err
 }
 
@@ -78,7 +78,7 @@ func (s *SQLiteStore) Delete(ctx context.Context, id string) error {
 // PRE: themeID is non-empty
 // POST: returns matching clips or empty slice
 func (s *SQLiteStore) ListByThemeID(ctx context.Context, themeID string) ([]domain.Clip, error) {
-	rows, err := s.DB.QueryContext(ctx,
+	rows, err := s.db.QueryContext(ctx,
 		`SELECT id, theme_id, title, youtube_url, youtube_id, start_seconds, end_seconds, notes, created_by, promoted, promoted_by, created_at FROM clips WHERE theme_id = ? ORDER BY created_at DESC`, themeID)
 	if err != nil {
 		return nil, err
@@ -101,7 +101,7 @@ func (s *SQLiteStore) ListByThemeID(ctx context.Context, themeID string) ([]doma
 // PRE: none
 // POST: returns promoted clips or empty slice
 func (s *SQLiteStore) ListPromoted(ctx context.Context) ([]domain.Clip, error) {
-	rows, err := s.DB.QueryContext(ctx,
+	rows, err := s.db.QueryContext(ctx,
 		`SELECT id, theme_id, title, youtube_url, youtube_id, start_seconds, end_seconds, notes, created_by, promoted, promoted_by, created_at FROM clips WHERE promoted = 1 ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, err

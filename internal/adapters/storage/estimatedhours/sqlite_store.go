@@ -5,18 +5,19 @@ import (
 	"database/sql"
 	"time"
 
+	"workshop/internal/adapters/storage"
 	domain "workshop/internal/domain/estimatedhours"
 )
 
 // SQLiteStore implements Store using SQLite.
 type SQLiteStore struct {
-	db *sql.DB
+	db storage.SQLDB
 }
 
 // NewSQLiteStore creates a new SQLiteStore.
 // PRE: db is a valid database connection
 // POST: returns a new SQLiteStore instance
-func NewSQLiteStore(db *sql.DB) *SQLiteStore {
+func NewSQLiteStore(db storage.SQLDB) *SQLiteStore {
 	return &SQLiteStore{db: db}
 }
 

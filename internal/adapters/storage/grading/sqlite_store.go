@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"time"
 
+	"workshop/internal/adapters/storage"
 	domain "workshop/internal/domain/grading"
 )
 
@@ -12,11 +13,11 @@ const timeLayout = "2006-01-02T15:04:05Z07:00"
 
 // RecordSQLiteStore implements RecordStore using SQLite.
 type RecordSQLiteStore struct {
-	db *sql.DB
+	db storage.SQLDB
 }
 
 // NewRecordSQLiteStore creates a new RecordSQLiteStore.
-func NewRecordSQLiteStore(db *sql.DB) *RecordSQLiteStore {
+func NewRecordSQLiteStore(db storage.SQLDB) *RecordSQLiteStore {
 	return &RecordSQLiteStore{db: db}
 }
 
@@ -98,11 +99,11 @@ func scanRecord(row *sql.Row) (domain.Record, error) {
 
 // ConfigSQLiteStore implements ConfigStore using SQLite.
 type ConfigSQLiteStore struct {
-	db *sql.DB
+	db storage.SQLDB
 }
 
 // NewConfigSQLiteStore creates a new ConfigSQLiteStore.
-func NewConfigSQLiteStore(db *sql.DB) *ConfigSQLiteStore {
+func NewConfigSQLiteStore(db storage.SQLDB) *ConfigSQLiteStore {
 	return &ConfigSQLiteStore{db: db}
 }
 
@@ -170,11 +171,11 @@ func (s *ConfigSQLiteStore) List(ctx context.Context) ([]domain.Config, error) {
 
 // ProposalSQLiteStore implements ProposalStore using SQLite.
 type ProposalSQLiteStore struct {
-	db *sql.DB
+	db storage.SQLDB
 }
 
 // NewProposalSQLiteStore creates a new ProposalSQLiteStore.
-func NewProposalSQLiteStore(db *sql.DB) *ProposalSQLiteStore {
+func NewProposalSQLiteStore(db storage.SQLDB) *ProposalSQLiteStore {
 	return &ProposalSQLiteStore{db: db}
 }
 

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"workshop/internal/adapters/storage"
 	domain "workshop/internal/domain/holiday"
 )
 
@@ -13,11 +14,11 @@ const dateFormat = "2006-01-02"
 
 // SQLiteStore implements Store using SQLite.
 type SQLiteStore struct {
-	db *sql.DB
+	db storage.SQLDB
 }
 
 // NewSQLiteStore creates a new HolidayStore.
-func NewSQLiteStore(db *sql.DB) *SQLiteStore {
+func NewSQLiteStore(db storage.SQLDB) *SQLiteStore {
 	return &SQLiteStore{db: db}
 }
 

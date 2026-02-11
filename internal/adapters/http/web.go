@@ -10,6 +10,7 @@ import (
 
 	"workshop/internal/adapters/email"
 	"workshop/internal/adapters/http/middleware"
+	"workshop/internal/adapters/http/perf"
 	accountStore "workshop/internal/adapters/storage/account"
 	attendanceStore "workshop/internal/adapters/storage/attendance"
 	classTypeStore "workshop/internal/adapters/storage/classtype"
@@ -91,6 +92,9 @@ var sessions *middleware.SessionStore
 // RateLimitPerSecond controls the per-IP rate limit. Tests can increase this.
 var RateLimitPerSecond = 10
 
+// Global perf collector (set by NewMux)
+var perfCollector *perf.Collector
+
 // Global email sender instance (set by SetEmailSender)
 var emailSender email.Sender
 
@@ -106,8 +110,9 @@ func SetEmailSender(sender email.Sender, from, replyTo string) {
 }
 
 // NewMux wires HTTP handlers for the app.
-func NewMux(staticDir string, s *Stores) http.Handler {
+func NewMux(staticDir string, s *Stores, collector *perf.Collector) http.Handler {
 	stores = s
+	perfCollector = collector
 	sessions = middleware.NewSessionStore()
 	middleware.SecureCookies = os.Getenv("WORKSHOP_ENV") == "production"
 
@@ -121,11 +126,12 @@ func NewMux(staticDir string, s *Stores) http.Handler {
 	// Rate limiter: configurable requests per second per IP (OWASP A04)
 	limiter := middleware.NewRateLimiter(RateLimitPerSecond, time.Second)
 
-	// Apply middleware: Auth -> CSRF -> SecurityHeaders -> RateLimit -> Mux
+	// Apply middleware: Timing -> Auth -> CSRF -> SecurityHeaders -> RateLimit -> Mux
 	return middleware.Chain(mux,
 		middleware.SecurityHeaders,
 		middleware.CSRF(csrfKey),
 		middleware.Auth(sessions),
 		middleware.RateLimit(limiter),
+		middleware.Timing(collector),
 	)
 }

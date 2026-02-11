@@ -11,6 +11,7 @@ import (
 
 	emailPkg "workshop/internal/adapters/email"
 	web "workshop/internal/adapters/http"
+	"workshop/internal/adapters/http/perf"
 	"workshop/internal/adapters/storage"
 	accountStore "workshop/internal/adapters/storage/account"
 	attendanceStore "workshop/internal/adapters/storage/attendance"
@@ -65,35 +66,39 @@ func main() {
 
 	log.Println("Database initialized successfully!")
 
-	// Create store instances
-	acctStore := accountStore.NewSQLiteStore(db)
-	progStore := programStore.NewSQLiteStore(db)
-	ctStore := classTypeStore.NewSQLiteStore(db)
+	// Performance instrumentation: wrap DB with timing, create collector
+	collector := perf.NewCollector(perf.DefaultRingSize)
+	timedDB := storage.NewTimedDB(db, collector)
+
+	// Create store instances (using timed DB for query instrumentation)
+	acctStore := accountStore.NewSQLiteStore(timedDB)
+	progStore := programStore.NewSQLiteStore(timedDB)
+	ctStore := classTypeStore.NewSQLiteStore(timedDB)
 	stores := &web.Stores{
 		AccountStore:         acctStore,
-		MemberStore:          memberStore.NewSQLiteStore(db),
-		WaiverStore:          waiverStore.NewSQLiteStore(db),
-		InjuryStore:          injuryStore.NewSQLiteStore(db),
-		AttendanceStore:      attendanceStore.NewSQLiteStore(db),
+		MemberStore:          memberStore.NewSQLiteStore(timedDB),
+		WaiverStore:          waiverStore.NewSQLiteStore(timedDB),
+		InjuryStore:          injuryStore.NewSQLiteStore(timedDB),
+		AttendanceStore:      attendanceStore.NewSQLiteStore(timedDB),
 		ProgramStore:         progStore,
 		ClassTypeStore:       ctStore,
-		ScheduleStore:        scheduleStore.NewSQLiteStore(db),
-		TermStore:            termStore.NewSQLiteStore(db),
-		HolidayStore:         holidayStore.NewSQLiteStore(db),
-		NoticeStore:          noticeStore.NewSQLiteStore(db),
-		GradingRecordStore:   gradingStore.NewRecordSQLiteStore(db),
-		GradingConfigStore:   gradingStore.NewConfigSQLiteStore(db),
-		GradingProposalStore: gradingStore.NewProposalSQLiteStore(db),
-		MessageStore:         messageStore.NewSQLiteStore(db),
-		ObservationStore:     observationStore.NewSQLiteStore(db),
-		MilestoneStore:       milestoneStore.NewSQLiteStore(db),
-		MemberMilestoneStore: milestoneStore.NewMemberMilestoneSQLiteStore(db),
-		TrainingGoalStore:    trainingGoalStore.NewSQLiteStore(db),
-		ThemeStore:           themeStorePkg.NewSQLiteStore(db),
-		ClipStore:            clipStorePkg.NewSQLiteStore(db),
-		EmailStore:           emailStorePkg.NewSQLiteStore(db),
-		EstimatedHoursStore:  estimatedHoursStorePkg.NewSQLiteStore(db),
-		RotorStore:           rotorStorePkg.NewSQLiteStore(db),
+		ScheduleStore:        scheduleStore.NewSQLiteStore(timedDB),
+		TermStore:            termStore.NewSQLiteStore(timedDB),
+		HolidayStore:         holidayStore.NewSQLiteStore(timedDB),
+		NoticeStore:          noticeStore.NewSQLiteStore(timedDB),
+		GradingRecordStore:   gradingStore.NewRecordSQLiteStore(timedDB),
+		GradingConfigStore:   gradingStore.NewConfigSQLiteStore(timedDB),
+		GradingProposalStore: gradingStore.NewProposalSQLiteStore(timedDB),
+		MessageStore:         messageStore.NewSQLiteStore(timedDB),
+		ObservationStore:     observationStore.NewSQLiteStore(timedDB),
+		MilestoneStore:       milestoneStore.NewSQLiteStore(timedDB),
+		MemberMilestoneStore: milestoneStore.NewMemberMilestoneSQLiteStore(timedDB),
+		TrainingGoalStore:    trainingGoalStore.NewSQLiteStore(timedDB),
+		ThemeStore:           themeStorePkg.NewSQLiteStore(timedDB),
+		ClipStore:            clipStorePkg.NewSQLiteStore(timedDB),
+		EmailStore:           emailStorePkg.NewSQLiteStore(timedDB),
+		EstimatedHoursStore:  estimatedHoursStorePkg.NewSQLiteStore(timedDB),
+		RotorStore:           rotorStorePkg.NewSQLiteStore(timedDB),
 	}
 
 	// Seed default admin account if no accounts exist
@@ -168,8 +173,8 @@ func main() {
 		}
 	}
 
-	// Create HTTP handler with middleware
-	mux := web.NewMux("static", stores)
+	// Create HTTP handler with middleware (pass collector for timing + dashboard)
+	mux := web.NewMux("static", stores, collector)
 
 	// Start server
 	addr := envOrDefault("WORKSHOP_ADDR", ":8080")
