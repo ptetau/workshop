@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	attendanceDomain "workshop/internal/domain/attendance"
 	domain "workshop/internal/domain/estimatedhours"
 )
 
@@ -19,6 +20,45 @@ type mockEstimatedHoursStore struct {
 func (m *mockEstimatedHoursStore) Save(_ context.Context, e domain.EstimatedHours) error {
 	m.saved = append(m.saved, e)
 	return nil
+}
+
+// mockAttendanceStoreForOverlap implements AttendanceStoreForOverlap for testing.
+type mockAttendanceStoreForOverlap struct {
+	records []attendanceDomain.Attendance
+	deleted int
+}
+
+// ListByMemberIDAndDateRange implements AttendanceStoreForOverlap.
+// PRE: memberID, startDate, endDate are non-empty
+// POST: Returns records within the date range
+func (m *mockAttendanceStoreForOverlap) ListByMemberIDAndDateRange(_ context.Context, memberID, startDate, endDate string) ([]attendanceDomain.Attendance, error) {
+	var result []attendanceDomain.Attendance
+	for _, r := range m.records {
+		d := r.CheckInTime.Format("2006-01-02")
+		if r.MemberID == memberID && d >= startDate && d <= endDate {
+			result = append(result, r)
+		}
+	}
+	return result, nil
+}
+
+// DeleteByMemberIDAndDateRange implements AttendanceStoreForOverlap.
+// PRE: memberID, startDate, endDate are non-empty
+// POST: Returns count of deleted records
+func (m *mockAttendanceStoreForOverlap) DeleteByMemberIDAndDateRange(_ context.Context, memberID, startDate, endDate string) (int, error) {
+	count := 0
+	var remaining []attendanceDomain.Attendance
+	for _, r := range m.records {
+		d := r.CheckInTime.Format("2006-01-02")
+		if r.MemberID == memberID && d >= startDate && d <= endDate {
+			count++
+		} else {
+			remaining = append(remaining, r)
+		}
+	}
+	m.records = remaining
+	m.deleted += count
+	return count, nil
 }
 
 var fixedTimeEstHours = time.Date(2026, 2, 1, 12, 0, 0, 0, time.UTC)
@@ -62,6 +102,84 @@ func TestExecuteBulkAddEstimatedHours(t *testing.T) {
 	}
 	if len(store.saved) != 1 {
 		t.Errorf("expected 1 saved entry, got %d", len(store.saved))
+	}
+}
+
+// TestCheckEstimatedHoursOverlap_HasOverlap tests overlap detection with existing attendance.
+func TestCheckEstimatedHoursOverlap_HasOverlap(t *testing.T) {
+	attStore := &mockAttendanceStoreForOverlap{
+		records: []attendanceDomain.Attendance{
+			{ID: "a1", MemberID: "m1", CheckInTime: time.Date(2026, 2, 5, 18, 0, 0, 0, time.UTC), MatHours: 1.5},
+			{ID: "a2", MemberID: "m1", CheckInTime: time.Date(2026, 2, 12, 18, 0, 0, 0, time.UTC), MatHours: 2.0},
+		},
+	}
+
+	result, err := CheckEstimatedHoursOverlap(context.Background(), "m1", "2026-02-01", "2026-04-30", attStore)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !result.HasOverlap {
+		t.Fatal("expected HasOverlap=true")
+	}
+	if result.OverlapCount != 2 {
+		t.Errorf("OverlapCount = %d, want 2", result.OverlapCount)
+	}
+	if result.OverlapHours != 3.5 {
+		t.Errorf("OverlapHours = %v, want 3.5", result.OverlapHours)
+	}
+}
+
+// TestCheckEstimatedHoursOverlap_NoOverlap tests no overlap found.
+func TestCheckEstimatedHoursOverlap_NoOverlap(t *testing.T) {
+	attStore := &mockAttendanceStoreForOverlap{records: nil}
+	result, err := CheckEstimatedHoursOverlap(context.Background(), "m1", "2026-02-01", "2026-04-30", attStore)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.HasOverlap {
+		t.Fatal("expected HasOverlap=false")
+	}
+}
+
+// TestExecuteBulkAddEstimatedHours_ReplaceMode tests that overlapping attendance is deleted.
+func TestExecuteBulkAddEstimatedHours_ReplaceMode(t *testing.T) {
+	estStore := &mockEstimatedHoursStore{}
+	attStore := &mockAttendanceStoreForOverlap{
+		records: []attendanceDomain.Attendance{
+			{ID: "a1", MemberID: "m1", CheckInTime: time.Date(2026, 2, 5, 18, 0, 0, 0, time.UTC), MatHours: 1.5},
+		},
+	}
+
+	input := BulkAddEstimatedHoursInput{
+		MemberID:    "m1",
+		StartDate:   "2026-02-01",
+		EndDate:     "2026-04-30",
+		WeeklyHours: 3,
+		CreatedBy:   "coach-1",
+		OverlapMode: OverlapModeReplace,
+	}
+	deps := BulkAddEstimatedHoursDeps{
+		EstimatedHoursStore: estStore,
+		AttendanceStore:     attStore,
+		GenerateID:          func() string { return "est-r1" },
+		Now:                 testNowEstHours,
+	}
+
+	result, err := ExecuteBulkAddEstimatedHours(context.Background(), input, deps)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(estStore.saved) != 1 {
+		t.Errorf("expected 1 saved entry, got %d", len(estStore.saved))
+	}
+	if attStore.deleted != 1 {
+		t.Errorf("expected 1 deleted attendance record, got %d", attStore.deleted)
+	}
+	if len(attStore.records) != 0 {
+		t.Errorf("expected 0 remaining attendance records, got %d", len(attStore.records))
+	}
+	if result.TotalHours == 0 {
+		t.Error("expected non-zero TotalHours")
 	}
 }
 
