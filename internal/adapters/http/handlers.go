@@ -486,6 +486,110 @@ func handleCheckOut(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(record)
 }
 
+// handleEstimatedHours handles GET/POST for /api/estimated-hours
+func handleEstimatedHours(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if r.Method == "GET" {
+		sess, ok := middleware.GetSessionFromContext(ctx)
+		if !ok {
+			http.Error(w, "not authenticated", http.StatusUnauthorized)
+			return
+		}
+		if sess.Role != "admin" && sess.Role != "coach" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		memberID := r.URL.Query().Get("member_id")
+		if memberID == "" {
+			http.Error(w, "member_id is required", http.StatusBadRequest)
+			return
+		}
+		entries, err := stores.EstimatedHoursStore.ListByMemberID(ctx, memberID)
+		if err != nil {
+			internalError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if entries == nil {
+			w.Write([]byte("[]"))
+			return
+		}
+		json.NewEncoder(w).Encode(entries)
+		return
+	}
+
+	if r.Method == "POST" {
+		sess, ok := middleware.GetSessionFromContext(ctx)
+		if !ok {
+			http.Error(w, "not authenticated", http.StatusUnauthorized)
+			return
+		}
+		if sess.Role != "admin" && sess.Role != "coach" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		var input struct {
+			MemberID    string  `json:"MemberID"`
+			StartDate   string  `json:"StartDate"`
+			EndDate     string  `json:"EndDate"`
+			WeeklyHours float64 `json:"WeeklyHours"`
+			Note        string  `json:"Note"`
+		}
+		if err := strictDecode(r, &input); err != nil {
+			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			return
+		}
+		orchInput := orchestrators.BulkAddEstimatedHoursInput{
+			MemberID:    input.MemberID,
+			StartDate:   input.StartDate,
+			EndDate:     input.EndDate,
+			WeeklyHours: input.WeeklyHours,
+			Note:        input.Note,
+			CreatedBy:   sess.AccountID,
+		}
+		orchDeps := orchestrators.BulkAddEstimatedHoursDeps{
+			EstimatedHoursStore: stores.EstimatedHoursStore,
+			GenerateID:          generateID,
+			Now:                 timeNow,
+		}
+		entry, err := orchestrators.ExecuteBulkAddEstimatedHours(ctx, orchInput, orchDeps)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(entry)
+		return
+	}
+
+	if r.Method == "DELETE" {
+		sess, ok := middleware.GetSessionFromContext(ctx)
+		if !ok {
+			http.Error(w, "not authenticated", http.StatusUnauthorized)
+			return
+		}
+		if sess.Role != "admin" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		id := r.URL.Query().Get("id")
+		if id == "" {
+			http.Error(w, "id is required", http.StatusBadRequest)
+			return
+		}
+		if err := stores.EstimatedHoursStore.Delete(ctx, id); err != nil {
+			internalError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	w.WriteHeader(http.StatusMethodNotAllowed)
+}
+
 // handlePostInjuriesReportInjury handles POST /injuries
 func handlePostInjuriesReportInjury(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -996,10 +1100,11 @@ func handleGetTrainingLog(w http.ResponseWriter, r *http.Request) {
 
 	query := projections.GetTrainingLogQuery{MemberID: memberID}
 	deps := projections.GetTrainingLogDeps{
-		AttendanceStore:    stores.AttendanceStore,
-		MemberStore:        stores.MemberStore,
-		GradingRecordStore: stores.GradingRecordStore,
-		GradingConfigStore: stores.GradingConfigStore,
+		AttendanceStore:     stores.AttendanceStore,
+		MemberStore:         stores.MemberStore,
+		GradingRecordStore:  stores.GradingRecordStore,
+		GradingConfigStore:  stores.GradingConfigStore,
+		EstimatedHoursStore: stores.EstimatedHoursStore,
 	}
 	result, err := projections.QueryGetTrainingLog(r.Context(), query, deps)
 	if err != nil {

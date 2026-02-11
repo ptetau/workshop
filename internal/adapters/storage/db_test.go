@@ -78,6 +78,7 @@ var expectedTables = []string{
 	"email",
 	"email_recipient",
 	"email_template",
+	"estimated_hours",
 	"grading_config",
 	"grading_proposal",
 	"grading_record",

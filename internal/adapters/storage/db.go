@@ -24,6 +24,7 @@ var migrations = []migration{
 	{version: 4, description: "curriculum rotor system", apply: migrate4},
 	{version: 5, description: "attendance mat hours", apply: migrate5},
 	{version: 6, description: "member milestone achievements", apply: migrate6},
+	{version: 7, description: "estimated hours", apply: migrate7},
 }
 
 // SchemaVersion returns the current schema version of the database.
@@ -480,6 +481,31 @@ func migrate6(tx *sql.Tx) error {
 	);
 
 	CREATE INDEX IF NOT EXISTS idx_member_milestone_member ON member_milestone(member_id);
+	`
+	_, err := tx.Exec(schema)
+	return err
+}
+
+// --- Migration 7: Estimated hours ---
+// Bulk-estimated mat hours for members with incomplete check-in records.
+func migrate7(tx *sql.Tx) error {
+	schema := `
+	CREATE TABLE IF NOT EXISTS estimated_hours (
+		id TEXT PRIMARY KEY,
+		member_id TEXT NOT NULL,
+		start_date TEXT NOT NULL,
+		end_date TEXT NOT NULL,
+		weekly_hours REAL NOT NULL,
+		total_hours REAL NOT NULL,
+		source TEXT NOT NULL DEFAULT 'estimate',
+		status TEXT NOT NULL DEFAULT 'approved',
+		note TEXT NOT NULL DEFAULT '',
+		created_by TEXT NOT NULL,
+		created_at TEXT NOT NULL,
+		FOREIGN KEY (member_id) REFERENCES member(id)
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_estimated_hours_member ON estimated_hours(member_id);
 	`
 	_, err := tx.Exec(schema)
 	return err
