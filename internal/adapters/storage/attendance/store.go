@@ -18,6 +18,7 @@ type Store interface {
 	ListDistinctMemberIDsByScheduleIDsSince(ctx context.Context, scheduleIDs []string, since string) ([]string, error)
 	ListByMemberIDAndDateRange(ctx context.Context, memberID string, startDate string, endDate string) ([]domain.Attendance, error)
 	DeleteByMemberIDAndDateRange(ctx context.Context, memberID string, startDate string, endDate string) (int, error)
+	SumMatHoursByMemberID(ctx context.Context, memberID string) (float64, error)
 }
 
 // ListFilter carries filtering parameters for List operations.
