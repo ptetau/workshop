@@ -17,7 +17,7 @@ import (
 	scheduleDomain "workshop/internal/domain/schedule"
 )
 
-// TestNavAudit_AdminNavLinks verifies admin nav contains all expected links including Curriculum.
+// TestNavAudit_AdminNavLinks verifies admin nav has core links visible and grouped links in More dropdown.
 func TestNavAudit_AdminNavLinks(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping browser test in short mode")
@@ -31,25 +31,60 @@ func TestNavAudit_AdminNavLinks(t *testing.T) {
 	}
 
 	nav := page.Locator(".nav-links")
+
+	// Core nav links should be directly visible
 	for _, link := range []struct{ text, href string }{
 		{"Members", "/members"},
 		{"Attendance", "/attendance"},
-		{"Schedules", "/admin/schedules"},
-		{"Notices", "/admin/notices"},
-		{"Emails", "/admin/emails"},
 		{"Grading", "/admin/grading"},
-		{"Curriculum", "/curriculum"},
-		{"Themes", "/themes"},
-		{"Library", "/library"},
+		{"Emails", "/admin/emails"},
 	} {
 		loc := nav.Locator(fmt.Sprintf("a[href='%s']", link.href))
 		if visible, _ := loc.IsVisible(); !visible {
-			t.Errorf("admin nav missing link: %s (%s)", link.text, link.href)
+			t.Errorf("admin core nav missing link: %s (%s)", link.text, link.href)
+		}
+	}
+
+	// More dropdown should exist
+	moreToggle := nav.Locator(".nav-more summary")
+	if visible, _ := moreToggle.IsVisible(); !visible {
+		t.Fatal("admin nav missing More dropdown")
+	}
+
+	// Open the More dropdown
+	if err := moreToggle.Click(); err != nil {
+		t.Fatal("failed to open More dropdown:", err)
+	}
+
+	// Links inside More should now be visible
+	for _, link := range []struct{ text, href string }{
+		{"Schedules", "/admin/schedules"},
+		{"Milestones", "/admin/milestones"},
+		{"Curriculum", "/curriculum"},
+		{"Themes", "/themes"},
+		{"Library", "/library"},
+		{"Notices", "/admin/notices"},
+		{"Accounts", "/admin/accounts"},
+		{"Terms", "/admin/terms"},
+		{"Holidays", "/admin/holidays"},
+		{"Inactive Radar", "/admin/inactive"},
+	} {
+		loc := nav.Locator(fmt.Sprintf(".nav-more-menu a[href='%s']", link.href))
+		if visible, _ := loc.IsVisible(); !visible {
+			t.Errorf("admin More menu missing link: %s (%s)", link.text, link.href)
+		}
+	}
+
+	// Verify grouped sections exist
+	for _, label := range []string{"Training", "Content", "Settings"} {
+		loc := nav.Locator(fmt.Sprintf(".nav-more-label:has-text('%s')", label))
+		if visible, _ := loc.IsVisible(); !visible {
+			t.Errorf("admin More menu missing group label: %s", label)
 		}
 	}
 }
 
-// TestNavAudit_CoachNavLinks verifies coach nav contains expected links.
+// TestNavAudit_CoachNavLinks verifies coach nav has core links visible and overflow in More dropdown.
 func TestNavAudit_CoachNavLinks(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping browser test in short mode")
@@ -62,22 +97,45 @@ func TestNavAudit_CoachNavLinks(t *testing.T) {
 	app.impersonate(t, page, "coach")
 
 	nav := page.Locator(".nav-links")
+
+	// Core nav links should be directly visible
 	for _, link := range []struct{ text, href string }{
 		{"Members", "/members"},
 		{"Attendance", "/attendance"},
 		{"Grading", "/admin/grading"},
 		{"Curriculum", "/curriculum"},
-		{"Themes", "/themes"},
-		{"Library", "/library"},
 	} {
 		loc := nav.Locator(fmt.Sprintf("a[href='%s']", link.href))
 		if visible, _ := loc.IsVisible(); !visible {
-			t.Errorf("coach nav missing link: %s (%s)", link.text, link.href)
+			t.Errorf("coach core nav missing link: %s (%s)", link.text, link.href)
+		}
+	}
+
+	// Open More dropdown
+	moreToggle := nav.Locator(".nav-more summary")
+	if visible, _ := moreToggle.IsVisible(); !visible {
+		t.Fatal("coach nav missing More dropdown")
+	}
+	if err := moreToggle.Click(); err != nil {
+		t.Fatal("failed to open coach More dropdown:", err)
+	}
+
+	// Links inside More should now be visible
+	for _, link := range []struct{ text, href string }{
+		{"Schedules", "/admin/schedules"},
+		{"Notices", "/admin/notices"},
+		{"Themes", "/themes"},
+		{"Library", "/library"},
+		{"Kiosk", "/kiosk"},
+	} {
+		loc := nav.Locator(fmt.Sprintf(".nav-more-menu a[href='%s']", link.href))
+		if visible, _ := loc.IsVisible(); !visible {
+			t.Errorf("coach More menu missing link: %s (%s)", link.text, link.href)
 		}
 	}
 
 	// Coach should NOT have admin-only links
-	for _, href := range []string{"/admin/schedules", "/admin/notices", "/admin/emails"} {
+	for _, href := range []string{"/admin/emails", "/admin/accounts", "/admin/terms"} {
 		loc := nav.Locator(fmt.Sprintf("a[href='%s']", href))
 		count, _ := loc.Count()
 		if count > 0 {
@@ -86,7 +144,7 @@ func TestNavAudit_CoachNavLinks(t *testing.T) {
 	}
 }
 
-// TestNavAudit_MemberNavLinks verifies member nav contains expected links.
+// TestNavAudit_MemberNavLinks verifies member nav contains expected links and no More dropdown.
 func TestNavAudit_MemberNavLinks(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping browser test in short mode")
@@ -103,13 +161,19 @@ func TestNavAudit_MemberNavLinks(t *testing.T) {
 		{"Training Log", "/training-log"},
 		{"Messages", "/messages"},
 		{"Curriculum", "/curriculum"},
-		{"Themes", "/themes"},
 		{"Library", "/library"},
 	} {
 		loc := nav.Locator(fmt.Sprintf("a[href='%s']", link.href))
 		if visible, _ := loc.IsVisible(); !visible {
 			t.Errorf("member nav missing link: %s (%s)", link.text, link.href)
 		}
+	}
+
+	// Member should NOT have More dropdown
+	moreToggle := nav.Locator(".nav-more summary")
+	count, _ := moreToggle.Count()
+	if count > 0 {
+		t.Error("member nav should NOT have a More dropdown")
 	}
 }
 
@@ -172,7 +236,7 @@ func TestNavAudit_TrialCurriculumRedirects(t *testing.T) {
 	}
 }
 
-// TestNavAudit_CurriculumLinkNavigates verifies the Curriculum nav link works.
+// TestNavAudit_CurriculumLinkNavigates verifies the Curriculum nav link works via the More dropdown (admin).
 func TestNavAudit_CurriculumLinkNavigates(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping browser test in short mode")
@@ -185,7 +249,12 @@ func TestNavAudit_CurriculumLinkNavigates(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := page.Locator(".nav-links a[href='/curriculum']").Click(); err != nil {
+	// For admin, Curriculum is inside the More dropdown — open it first
+	if err := page.Locator(".nav-more summary").Click(); err != nil {
+		t.Fatal("failed to open More dropdown:", err)
+	}
+
+	if err := page.Locator(".nav-more-menu a[href='/curriculum']").Click(); err != nil {
 		t.Fatal("failed to click Curriculum link:", err)
 	}
 
@@ -271,7 +340,7 @@ func TestNavAudit_CoachDashboardBeltAndMatHours(t *testing.T) {
 	}
 }
 
-// TestNavAudit_DashboardQuickLinks verifies quick links resolve without error.
+// TestNavAudit_DashboardQuickLinks verifies grouped dashboard links resolve without error.
 func TestNavAudit_DashboardQuickLinks(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping browser test in short mode")
@@ -284,11 +353,19 @@ func TestNavAudit_DashboardQuickLinks(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Collect all quick link hrefs
-	links := page.Locator("h2:has-text('Quick Links') + div a")
+	// Admin dashboard now has Training, Content, Settings sections instead of Quick Links
+	for _, section := range []string{"Training", "Content", "Settings"} {
+		heading := page.Locator(fmt.Sprintf("h2:has-text('%s')", section))
+		if visible, _ := heading.IsVisible(); !visible {
+			t.Errorf("admin dashboard missing section: %s", section)
+		}
+	}
+
+	// Collect all link hrefs from grouped sections
+	links := page.Locator("main .card h2 ~ div a")
 	count, _ := links.Count()
 	if count == 0 {
-		t.Fatal("no quick links found on admin dashboard")
+		t.Fatal("no dashboard links found")
 	}
 
 	var hrefs []string
@@ -303,12 +380,12 @@ func TestNavAudit_DashboardQuickLinks(t *testing.T) {
 	for _, href := range hrefs {
 		resp, err := page.Goto(app.BaseURL + href)
 		if err != nil {
-			t.Errorf("quick link %s failed to navigate: %v", href, err)
+			t.Errorf("dashboard link %s failed to navigate: %v", href, err)
 			continue
 		}
 		status := resp.Status()
 		if status >= 400 {
-			t.Errorf("quick link %s returned %d", href, status)
+			t.Errorf("dashboard link %s returned %d", href, status)
 		}
 	}
 }
