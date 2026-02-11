@@ -19,6 +19,9 @@ Environment=WORKSHOP_ENV=production
 Environment=WORKSHOP_ADDR=127.0.0.1:8080
 # WORKSHOP_CSRF_KEY must be set — generate with: openssl rand -hex 32
 # WORKSHOP_ADMIN_EMAIL and WORKSHOP_ADMIN_PASSWORD should be set on first run
+# WORKSHOP_RESEND_KEY must be set for email delivery (API key from resend.com)
+# WORKSHOP_RESEND_FROM defaults to: Workshop Jiu Jitsu <noreply@workshopjiujitsu.co.nz>
+# WORKSHOP_REPLY_TO defaults to: info@workshopjiujitsu.co.nz
 # For secrets, prefer EnvironmentFile over inline Environment:
 #   EnvironmentFile=/opt/workshop/.env
 
