@@ -29,14 +29,6 @@
     </div>
     {{ end }}
 
-    {{ if .Belt }}
-    <div style="display:flex;align-items:center;gap:0.5rem;margin:1rem 0 0.5rem;">
-        <span style="display:inline-block;width:22px;height:12px;border-radius:2px;border:1px solid #ccc;vertical-align:middle;background:{{ if eq .Belt "white" }}#fff{{ else if eq .Belt "blue" }}#1565c0{{ else if eq .Belt "purple" }}#7b1fa2{{ else if eq .Belt "brown" }}#5d4037{{ else if eq .Belt "black" }}#212121{{ else if eq .Belt "yellow" }}#f9a825{{ else if eq .Belt "orange" }}#e65100{{ else if eq .Belt "green" }}#2e7d32{{ else if eq .Belt "grey" }}#9e9e9e{{ else }}#ccc{{ end }};"></span>
-        <span style="font-weight:600;text-transform:capitalize;">{{ .Belt }}</span>
-        {{ range $i := .Stripe | stripeRange }}<span style="display:inline-block;width:6px;height:6px;background:#fff;border:1px solid #999;border-radius:50%;margin-left:2px;vertical-align:middle;"></span>{{ end }}
-    </div>
-    {{ end }}
-
     {{ if .TrainingLog }}
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin:1.5rem 0;">
         <div style="background:var(--white);border:1px solid var(--border);padding:1.25rem;text-align:center;">
@@ -104,10 +96,14 @@
     {{ end }}
 
     <h2>Quick Links</h2>
-    <div style="display:flex;flex-wrap:wrap;gap:0.75rem;margin-top:1rem;">
+    <div style="display:flex;flex-wrap:wrap;gap:0.75rem;margin-top:0.75rem;">
         <a href="/training-log" style="background:var(--orange);color:white;padding:0.5rem 1.25rem;text-decoration:none;font-weight:600;font-size:0.85rem;text-transform:uppercase;letter-spacing:0.5px;">Training Log</a>
         <a href="/messages" style="background:var(--dark);color:white;padding:0.5rem 1.25rem;text-decoration:none;font-weight:600;font-size:0.85rem;text-transform:uppercase;letter-spacing:0.5px;">Messages{{ if gt .UnreadCount 0 }} <span style="background:var(--orange);color:white;border-radius:10px;padding:0.1rem 0.5rem;font-size:0.75rem;margin-left:0.25rem;">{{ .UnreadCount }}</span>{{ end }}</a>
-        {{ if not .IsTrial }}<a href="/curriculum" style="background:var(--dark);color:white;padding:0.5rem 1.25rem;text-decoration:none;font-weight:600;font-size:0.85rem;text-transform:uppercase;letter-spacing:0.5px;">Curriculum</a>{{ end }}
+        {{ if not .IsTrial }}
+        <a href="/curriculum" style="background:var(--dark);color:white;padding:0.5rem 1.25rem;text-decoration:none;font-weight:600;font-size:0.85rem;text-transform:uppercase;letter-spacing:0.5px;">Curriculum</a>
+        <a href="/themes" style="background:var(--dark);color:white;padding:0.5rem 1.25rem;text-decoration:none;font-weight:600;font-size:0.85rem;text-transform:uppercase;letter-spacing:0.5px;">Themes</a>
+        <a href="/library" style="background:var(--dark);color:white;padding:0.5rem 1.25rem;text-decoration:none;font-weight:600;font-size:0.85rem;text-transform:uppercase;letter-spacing:0.5px;">Library</a>
+        {{ end }}
     </div>
 </div>
 {{ end }}
