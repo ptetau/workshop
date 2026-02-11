@@ -285,6 +285,84 @@ func TestComposeEmail_UpdateDraft(t *testing.T) {
 	}
 }
 
+// TestComposeEmail_UpdateFailedEmail tests editing a failed email transitions it back to draft.
+func TestComposeEmail_UpdateFailedEmail(t *testing.T) {
+	store := newMockEmailStore()
+	lookup := newMockMemberLookup()
+
+	store.emails["failed-1"] = emailDomain.Email{
+		ID:        "failed-1",
+		Subject:   "Original Subject",
+		Body:      "Original body",
+		SenderID:  "admin-1",
+		Status:    emailDomain.StatusFailed,
+		CreatedAt: fixedTime.Add(-time.Hour),
+	}
+
+	input := ComposeEmailInput{
+		EmailID:   "failed-1",
+		Subject:   "Revised Subject",
+		Body:      "Revised body",
+		SenderID:  "admin-1",
+		MemberIDs: []string{"member-1"},
+	}
+	deps := ComposeEmailDeps{
+		EmailStore:   store,
+		MemberLookup: lookup,
+		GenerateID:   func() string { return "should-not-use" },
+		Now:          testNow,
+	}
+
+	em, err := ExecuteComposeEmail(context.Background(), input, deps)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if em.Status != emailDomain.StatusDraft {
+		t.Errorf("status = %q, want %q (failed should transition to draft)", em.Status, emailDomain.StatusDraft)
+	}
+	if em.Subject != "Revised Subject" {
+		t.Errorf("subject = %q, want %q", em.Subject, "Revised Subject")
+	}
+}
+
+// TestSendEmail_RetryFromFailed tests that a failed email can be retried via send.
+func TestSendEmail_RetryFromFailed(t *testing.T) {
+	store := newMockEmailStore()
+	sender := newMockEmailSender()
+
+	store.emails["failed-1"] = emailDomain.Email{
+		ID:        "failed-1",
+		Subject:   "Retry Me",
+		Body:      "<p>Please retry</p>",
+		SenderID:  "admin-1",
+		Status:    emailDomain.StatusFailed,
+		CreatedAt: fixedTime,
+	}
+	store.recipients["failed-1"] = []emailDomain.Recipient{
+		{EmailID: "failed-1", MemberID: "member-1", MemberName: "Marcus", MemberEmail: "marcus@email.com"},
+	}
+
+	input := SendEmailInput{EmailID: "failed-1", SenderID: "admin-1"}
+	deps := SendEmailDeps{
+		EmailStore:  store,
+		EmailSender: sender,
+		Now:         testNow,
+		FromAddress: "Workshop <noreply@test.com>",
+		ReplyTo:     "info@test.com",
+	}
+
+	em, err := ExecuteSendEmail(context.Background(), input, deps)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if em.Status != emailDomain.StatusSent {
+		t.Errorf("status = %q, want %q", em.Status, emailDomain.StatusSent)
+	}
+	if sender.sent != 1 {
+		t.Errorf("sent count = %d, want 1", sender.sent)
+	}
+}
+
 // TestComposeEmail_CannotUpdateSentEmail tests that sent emails cannot be updated.
 func TestComposeEmail_CannotUpdateSentEmail(t *testing.T) {
 	store := newMockEmailStore()
