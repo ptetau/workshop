@@ -61,6 +61,35 @@
     </div>
 
     {{ if or (eq (currentRole) "admin") (eq (currentRole) "coach") }}
+    <h2 style="margin-top:2rem;">Estimated Hours</h2>
+    <p style="color:#6c757d;font-size:0.85rem;margin-bottom:0.75rem;">Add estimated mat hours for periods without check-in records.</p>
+    <div id="estimatedHoursList" style="margin-bottom:1rem;color:#6c757d;">Loading...</div>
+    <details style="background:var(--bg,#f8f9fa);padding:1rem;border-radius:2px;">
+        <summary style="cursor:pointer;font-weight:600;font-size:0.85rem;text-transform:uppercase;letter-spacing:0.5px;">Add Estimated Hours</summary>
+        <form id="estHoursForm" style="margin-top:0.75rem;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;">
+                <div class="form-group">
+                    <label for="estStart">Start Date</label>
+                    <input type="date" id="estStart" required>
+                </div>
+                <div class="form-group">
+                    <label for="estEnd">End Date</label>
+                    <input type="date" id="estEnd" required>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="estWeekly">Hours per Week</label>
+                <input type="number" id="estWeekly" min="0.5" max="40" step="0.5" placeholder="e.g. 3" required>
+            </div>
+            <div class="form-group">
+                <label for="estNote">Note (optional)</label>
+                <input type="text" id="estNote" placeholder="e.g. trained at another gym" maxlength="500">
+            </div>
+            <button type="submit">Add Estimated Hours</button>
+            <span id="estMsg" style="margin-left:0.75rem;font-size:0.85rem;"></span>
+        </form>
+    </details>
+
     <h2 style="margin-top:2rem;">Coach Observations</h2>
     <div id="observationList" style="color:#6c757d;margin-bottom:1rem;">Loading...</div>
     <div style="display:flex;gap:0.5rem;">
@@ -118,6 +147,51 @@ function archiveMember() {
 function restoreMember() {
     fetch('/api/members/restore',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({MemberID:memberID})})
     .then(r=>{if(r.ok){document.getElementById('actionMsg').textContent='Restored!';setTimeout(()=>location.reload(),1000);}});
+}
+function loadEstimatedHours() {
+    var el = document.getElementById('estimatedHoursList');
+    if (!el) return;
+    fetch('/api/estimated-hours?member_id='+memberID).then(r=>r.json()).then(data => {
+        if (!data||data.length===0) { el.innerHTML='<p style="font-style:italic;">No estimated hours recorded.</p>'; return; }
+        var html='';
+        data.forEach(e => {
+            html+='<div style="background:#fff;border:1px solid #dee2e6;padding:0.75rem;border-radius:2px;margin-bottom:0.5rem;border-left:3px solid #F9B232;display:flex;justify-content:space-between;align-items:center;">';
+            html+='<div><strong>'+e.StartDate+' → '+e.EndDate+'</strong>';
+            html+=' · '+e.WeeklyHours+'h/week · <strong>'+e.TotalHours+'h total</strong>';
+            if(e.Note){html+=' · <span style="color:#999;">'+e.Note+'</span>';}
+            html+='<div style="font-size:0.8rem;color:#999;margin-top:0.2rem;">'+e.Source+' · '+e.Status+'</div>';
+            html+='</div>';
+            html+='<button onclick="deleteEstHours(\''+e.ID+'\')" style="background:#dc3545;color:#fff;border:none;padding:0.25rem 0.5rem;font-size:0.75rem;cursor:pointer;border-radius:2px;" title="Delete">✕</button>';
+            html+='</div>';
+        });
+        el.innerHTML=html;
+    }).catch(()=>{ el.innerHTML='<p style="color:#dc3545;">Failed to load.</p>'; });
+}
+function deleteEstHours(id) {
+    if (!confirm('Delete this estimated hours entry?')) return;
+    fetch('/api/estimated-hours?id='+id,{method:'DELETE'}).then(r=>{if(r.ok)loadEstimatedHours();});
+}
+var estForm = document.getElementById('estHoursForm');
+if (estForm) {
+    estForm.addEventListener('submit', function(ev) {
+        ev.preventDefault();
+        var msg = document.getElementById('estMsg');
+        msg.textContent='Saving...';msg.style.color='#666';
+        fetch('/api/estimated-hours',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+            MemberID:memberID,
+            StartDate:document.getElementById('estStart').value,
+            EndDate:document.getElementById('estEnd').value,
+            WeeklyHours:parseFloat(document.getElementById('estWeekly').value),
+            Note:document.getElementById('estNote').value
+        })}).then(r=>{
+            if(!r.ok) return r.text().then(t=>{throw new Error(t);});
+            return r.json();
+        }).then(e=>{
+            msg.textContent='Added '+e.TotalHours+'h!';msg.style.color='#2e7d32';
+            estForm.reset();loadEstimatedHours();
+        }).catch(err=>{msg.textContent='Error: '+err.message;msg.style.color='#dc3545';});
+    });
+    loadEstimatedHours();
 }
 if (document.getElementById('observationList')) loadObservations();
 </script>

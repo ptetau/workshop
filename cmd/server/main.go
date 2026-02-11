@@ -17,6 +17,7 @@ import (
 	classTypeStore "workshop/internal/adapters/storage/classtype"
 	clipStorePkg "workshop/internal/adapters/storage/clip"
 	emailStorePkg "workshop/internal/adapters/storage/email"
+	estimatedHoursStorePkg "workshop/internal/adapters/storage/estimatedhours"
 	gradingStore "workshop/internal/adapters/storage/grading"
 	holidayStore "workshop/internal/adapters/storage/holiday"
 	injuryStore "workshop/internal/adapters/storage/injury"
@@ -91,6 +92,7 @@ func main() {
 		ThemeStore:           themeStorePkg.NewSQLiteStore(db),
 		ClipStore:            clipStorePkg.NewSQLiteStore(db),
 		EmailStore:           emailStorePkg.NewSQLiteStore(db),
+		EstimatedHoursStore:  estimatedHoursStorePkg.NewSQLiteStore(db),
 		RotorStore:           rotorStorePkg.NewSQLiteStore(db),
 	}
 

@@ -36,12 +36,18 @@ type TrainingLogGradingConfigStore interface {
 	GetByProgramAndBelt(ctx context.Context, program, belt string) (grading.Config, error)
 }
 
+// TrainingLogEstimatedHoursStore defines the estimated hours store interface needed by the training log projection.
+type TrainingLogEstimatedHoursStore interface {
+	SumApprovedByMemberID(ctx context.Context, memberID string) (float64, error)
+}
+
 // GetTrainingLogDeps holds dependencies for the training log projection.
 type GetTrainingLogDeps struct {
-	AttendanceStore    TrainingLogAttendanceStore
-	MemberStore        TrainingLogMemberStore
-	GradingRecordStore TrainingLogGradingRecordStore // optional: nil skips belt lookup
-	GradingConfigStore TrainingLogGradingConfigStore // optional: nil skips progress bar
+	AttendanceStore     TrainingLogAttendanceStore
+	MemberStore         TrainingLogMemberStore
+	GradingRecordStore  TrainingLogGradingRecordStore  // optional: nil skips belt lookup
+	GradingConfigStore  TrainingLogGradingConfigStore  // optional: nil skips progress bar
+	EstimatedHoursStore TrainingLogEstimatedHoursStore // optional: nil skips bulk estimates
 }
 
 // TrainingLogEntry represents a single attendance entry in the training log.
@@ -56,21 +62,22 @@ type TrainingLogEntry struct {
 
 // TrainingLogResult carries the output of the training log projection.
 type TrainingLogResult struct {
-	MemberID       string
-	MemberName     string
-	Program        string
-	TotalClasses   int
-	TotalMatHours  float64 // "flight time" (recorded + estimated)
-	RecordedHours  float64 // hours from checked-out sessions
-	EstimatedHours float64 // hours from default estimate (no checkout)
-	CurrentStreak  int     // consecutive weeks with at least one check-in
-	LastCheckIn    string  // date of most recent check-in
-	Belt           string  // current belt
-	Stripe         int     // current stripes
-	NextBelt       string  // next belt in progression (empty if at highest)
-	ProgressPct    float64 // percentage progress toward next belt (0-100)
-	RequiredHours  float64 // hours required for next belt
-	Entries        []TrainingLogEntry
+	MemberID           string
+	MemberName         string
+	Program            string
+	TotalClasses       int
+	TotalMatHours      float64 // "flight time" (recorded + session-estimated + bulk-estimated)
+	RecordedHours      float64 // hours from checked-out sessions
+	EstimatedHours     float64 // hours from default estimate (no checkout)
+	BulkEstimatedHours float64 // hours from coach/admin bulk estimates
+	CurrentStreak      int     // consecutive weeks with at least one check-in
+	LastCheckIn        string  // date of most recent check-in
+	Belt               string  // current belt
+	Stripe             int     // current stripes
+	NextBelt           string  // next belt in progression (empty if at highest)
+	ProgressPct        float64 // percentage progress toward next belt (0-100)
+	RequiredHours      float64 // hours required for next belt
+	Entries            []TrainingLogEntry
 }
 
 // QueryGetTrainingLog computes the training log for a member from their attendance history.
@@ -136,6 +143,15 @@ func QueryGetTrainingLog(ctx context.Context, query GetTrainingLogQuery, deps Ge
 	result.RecordedHours = recordedHours
 	result.EstimatedHours = estimatedHours
 	result.TotalMatHours = recordedHours + estimatedHours
+
+	// Add bulk-estimated hours (from §3.4)
+	if deps.EstimatedHoursStore != nil {
+		bulkHours, err := deps.EstimatedHoursStore.SumApprovedByMemberID(ctx, query.MemberID)
+		if err == nil {
+			result.BulkEstimatedHours = bulkHours
+			result.TotalMatHours += bulkHours
+		}
+	}
 	result.Entries = entries
 	result.LastCheckIn = records[len(records)-1].CheckInTime.Format("2006-01-02")
 	result.CurrentStreak = calculateWeekStreak(records)
