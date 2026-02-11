@@ -152,7 +152,7 @@ func newTestApp(t *testing.T) *testApp {
 	web.RateLimitPerSecond = 1000
 
 	// Start HTTP server
-	mux := web.NewMux("static", stores)
+	mux := web.NewMux("static", stores, nil)
 	srv := &http.Server{
 		Addr:    fmt.Sprintf("127.0.0.1:%d", port),
 		Handler: mux,

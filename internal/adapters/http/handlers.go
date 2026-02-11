@@ -2701,6 +2701,23 @@ func handleAdminMilestonesPage(w http.ResponseWriter, r *http.Request) {
 	renderTemplate(w, r, "admin_milestones.html", nil)
 }
 
+// handleAdminPerfPage handles GET /admin/perf
+func handleAdminPerfPage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if _, ok := requireAdmin(w, r); !ok {
+		return
+	}
+	if perfCollector == nil {
+		renderTemplate(w, r, "admin_perf.html", nil)
+		return
+	}
+	snap := perfCollector.Snapshot(time.Now().Add(-1*time.Hour), 10)
+	renderTemplate(w, r, "admin_perf.html", snap)
+}
+
 // handleTrainingLogPage handles GET /training-log
 func handleTrainingLogPage(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {

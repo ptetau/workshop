@@ -69,6 +69,7 @@ func registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/admin/grading", handleAdminGradingPage)
 	mux.HandleFunc("/admin/inactive", handleAdminInactivePage)
 	mux.HandleFunc("/admin/milestones", handleAdminMilestonesPage)
+	mux.HandleFunc("/admin/perf", handleAdminPerfPage)
 
 	// Member pages
 	mux.HandleFunc("/training-log", handleTrainingLogPage)

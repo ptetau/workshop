@@ -1,0 +1,63 @@
+{{ define "content" }}
+<div class="card">
+    <h1>Performance Dashboard</h1>
+    <p style="color:#666;margin-bottom:1.5rem;">Ephemeral in-memory data (resets on restart). Last hour of activity.</p>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:1rem;margin-bottom:2rem;">
+        <div style="background:#f8f9fa;padding:1rem;border-radius:2px;text-align:center;">
+            <div style="font-size:2rem;font-weight:bold;" id="totalReqs">{{ .TotalRequests }}</div>
+            <div style="color:#666;font-size:0.85rem;">Total Requests</div>
+        </div>
+        <div style="background:#f8f9fa;padding:1rem;border-radius:2px;text-align:center;">
+            <div style="font-size:2rem;font-weight:bold;">{{ printf "%.1f" .RequestP50Ms }}ms</div>
+            <div style="color:#666;font-size:0.85rem;">P50 Latency</div>
+        </div>
+        <div style="background:#f8f9fa;padding:1rem;border-radius:2px;text-align:center;">
+            <div style="font-size:2rem;font-weight:bold;">{{ printf "%.1f" .RequestP95Ms }}ms</div>
+            <div style="color:#666;font-size:0.85rem;">P95 Latency</div>
+        </div>
+        <div style="background:#f8f9fa;padding:1rem;border-radius:2px;text-align:center;">
+            <div style="font-size:2rem;font-weight:bold;">{{ printf "%.1f" .RequestP99Ms }}ms</div>
+            <div style="color:#666;font-size:0.85rem;">P99 Latency</div>
+        </div>
+    </div>
+
+    <h2>Slowest Endpoints (by avg)</h2>
+    {{ if .SlowestPaths }}
+    <table>
+        <thead><tr><th>Path</th><th>Avg (ms)</th><th>Max (ms)</th><th>Count</th></tr></thead>
+        <tbody>
+        {{ range .SlowestPaths }}
+        <tr>
+            <td><code>{{ .Path }}</code></td>
+            <td>{{ printf "%.1f" .AvgMs }}</td>
+            <td>{{ printf "%.1f" .MaxMs }}</td>
+            <td>{{ .Count }}</td>
+        </tr>
+        {{ end }}
+        </tbody>
+    </table>
+    {{ else }}
+    <p style="color:#999;">No request data yet.</p>
+    {{ end }}
+
+    <h2 style="margin-top:2rem;">Slowest Queries (by avg)</h2>
+    {{ if .SlowestQueries }}
+    <table>
+        <thead><tr><th>Operation</th><th>Avg (ms)</th><th>Max (ms)</th><th>Count</th></tr></thead>
+        <tbody>
+        {{ range .SlowestQueries }}
+        <tr>
+            <td><code>{{ .Path }}</code></td>
+            <td>{{ printf "%.1f" .AvgMs }}</td>
+            <td>{{ printf "%.1f" .MaxMs }}</td>
+            <td>{{ .Count }}</td>
+        </tr>
+        {{ end }}
+        </tbody>
+    </table>
+    {{ else }}
+    <p style="color:#999;">No query data yet.</p>
+    {{ end }}
+</div>
+{{ end }}

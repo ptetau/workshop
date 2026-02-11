@@ -5,16 +5,17 @@ import (
 	"database/sql"
 	"fmt"
 
+	"workshop/internal/adapters/storage"
 	domain "workshop/internal/domain/program"
 )
 
 // SQLiteStore implements Store using SQLite.
 type SQLiteStore struct {
-	db *sql.DB
+	db storage.SQLDB
 }
 
 // NewSQLiteStore creates a new ProgramStore.
-func NewSQLiteStore(db *sql.DB) *SQLiteStore {
+func NewSQLiteStore(db storage.SQLDB) *SQLiteStore {
 	return &SQLiteStore{db: db}
 }
 

@@ -2,21 +2,21 @@ package theme
 
 import (
 	"context"
-	"database/sql"
 
+	"workshop/internal/adapters/storage"
 	domain "workshop/internal/domain/theme"
 )
 
 // SQLiteStore implements Store using SQLite.
 type SQLiteStore struct {
-	DB *sql.DB
+	db storage.SQLDB
 }
 
 // NewSQLiteStore creates a new SQLiteStore and ensures the table exists.
-// PRE: db is a valid, open *sql.DB
+// PRE: db is a valid, open database connection
 // POST: themes table exists; store is ready for use
-func NewSQLiteStore(db *sql.DB) *SQLiteStore {
-	db.Exec(`CREATE TABLE IF NOT EXISTS themes (
+func NewSQLiteStore(db storage.SQLDB) *SQLiteStore {
+	db.ExecContext(context.Background(), `CREATE TABLE IF NOT EXISTS themes (
 		id TEXT PRIMARY KEY,
 		name TEXT NOT NULL,
 		description TEXT NOT NULL DEFAULT '',
@@ -26,7 +26,7 @@ func NewSQLiteStore(db *sql.DB) *SQLiteStore {
 		created_by TEXT NOT NULL DEFAULT '',
 		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 	)`)
-	return &SQLiteStore{DB: db}
+	return &SQLiteStore{db: db}
 }
 
 // GetByID retrieves a theme by its ID.
@@ -34,7 +34,7 @@ func NewSQLiteStore(db *sql.DB) *SQLiteStore {
 // POST: returns the theme or an error if not found
 func (s *SQLiteStore) GetByID(ctx context.Context, id string) (domain.Theme, error) {
 	var t domain.Theme
-	err := s.DB.QueryRowContext(ctx,
+	err := s.db.QueryRowContext(ctx,
 		`SELECT id, name, description, program, start_date, end_date, created_by, created_at FROM themes WHERE id = ?`, id,
 	).Scan(&t.ID, &t.Name, &t.Description, &t.Program, &t.StartDate, &t.EndDate, &t.CreatedBy, &t.CreatedAt)
 	return t, err
@@ -44,7 +44,7 @@ func (s *SQLiteStore) GetByID(ctx context.Context, id string) (domain.Theme, err
 // PRE: value has a non-empty ID
 // POST: theme is persisted
 func (s *SQLiteStore) Save(ctx context.Context, value domain.Theme) error {
-	_, err := s.DB.ExecContext(ctx,
+	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO themes (id, name, description, program, start_date, end_date, created_by, created_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(id) DO UPDATE SET name=excluded.name, description=excluded.description, program=excluded.program,
@@ -58,7 +58,7 @@ func (s *SQLiteStore) Save(ctx context.Context, value domain.Theme) error {
 // PRE: id is non-empty
 // POST: theme is removed from storage
 func (s *SQLiteStore) Delete(ctx context.Context, id string) error {
-	_, err := s.DB.ExecContext(ctx, `DELETE FROM themes WHERE id = ?`, id)
+	_, err := s.db.ExecContext(ctx, `DELETE FROM themes WHERE id = ?`, id)
 	return err
 }
 
@@ -66,7 +66,7 @@ func (s *SQLiteStore) Delete(ctx context.Context, id string) error {
 // PRE: none
 // POST: returns all themes or empty slice
 func (s *SQLiteStore) List(ctx context.Context) ([]domain.Theme, error) {
-	rows, err := s.DB.QueryContext(ctx, `SELECT id, name, description, program, start_date, end_date, created_by, created_at FROM themes ORDER BY start_date DESC`)
+	rows, err := s.db.QueryContext(ctx, `SELECT id, name, description, program, start_date, end_date, created_by, created_at FROM themes ORDER BY start_date DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +86,7 @@ func (s *SQLiteStore) List(ctx context.Context) ([]domain.Theme, error) {
 // PRE: program is non-empty
 // POST: returns matching themes or empty slice
 func (s *SQLiteStore) ListByProgram(ctx context.Context, program string) ([]domain.Theme, error) {
-	rows, err := s.DB.QueryContext(ctx,
+	rows, err := s.db.QueryContext(ctx,
 		`SELECT id, name, description, program, start_date, end_date, created_by, created_at FROM themes WHERE program = ? ORDER BY start_date DESC`, program)
 	if err != nil {
 		return nil, err
