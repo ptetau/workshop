@@ -101,7 +101,7 @@ function createSchedule() {
         .catch(() => document.getElementById('formMsg').textContent = 'Error creating schedule');
 }
 function deleteSchedule(id) {
-    fetch('/api/schedules?id='+id, { method: 'DELETE' })
+    fetch('/api/schedules?id='+id, { method: 'DELETE', headers: {'Content-Type': 'application/json'} })
         .then(() => loadSchedules());
 }
 loadClassTypes();

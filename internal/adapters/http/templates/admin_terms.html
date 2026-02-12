@@ -64,7 +64,7 @@ function createTerm() {
     .then(()=>{document.getElementById('formMsg').textContent='Created!';loadTerms();setTimeout(()=>document.getElementById('formMsg').textContent='',2000);})
     .catch(()=>document.getElementById('formMsg').textContent='Error');
 }
-function deleteTerm(id) { fetch('/api/terms?id='+id,{method:'DELETE'}).then(()=>loadTerms()); }
+function deleteTerm(id) { fetch('/api/terms?id='+id,{method:'DELETE',headers:{'Content-Type':'application/json'}}).then(()=>loadTerms()); }
 loadTerms();
 </script>
 {{ end }}

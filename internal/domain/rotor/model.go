@@ -2,6 +2,7 @@ package rotor
 
 import (
 	"errors"
+	"strings"
 	"time"
 )
 
@@ -107,6 +108,21 @@ func (r *Rotor) Activate(now time.Time) error {
 	}
 	r.Status = StatusActive
 	r.ActivatedAt = now
+	return nil
+}
+
+// Rename changes the rotor's name.
+// PRE: name is non-empty and within MaxRotorNameLength.
+// POST: Name is updated.
+func (r *Rotor) Rename(name string) error {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return ErrEmptyName
+	}
+	if len(name) > MaxRotorNameLength {
+		return ErrRotorNameTooLong
+	}
+	r.Name = name
 	return nil
 }
 

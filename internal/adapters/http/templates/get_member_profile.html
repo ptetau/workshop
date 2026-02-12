@@ -176,7 +176,7 @@ function loadEstimatedHours() {
 }
 function deleteEstHours(id) {
     if (!confirm('Delete this estimated hours entry?')) return;
-    fetch('/api/estimated-hours?id='+id,{method:'DELETE'}).then(r=>{if(r.ok)loadEstimatedHours();});
+    fetch('/api/estimated-hours?id='+id,{method:'DELETE',headers:{'Content-Type':'application/json'}}).then(r=>{if(r.ok)loadEstimatedHours();});
 }
 function getEstFormData() {
     return {
