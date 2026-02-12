@@ -24,7 +24,7 @@ func NewSQLiteStore(db storage.SQLDB) *SQLiteStore {
 // PRE: id is non-empty
 // POST: Returns the entity or an error if not found
 func (s *SQLiteStore) GetByID(ctx context.Context, id string) (domain.Member, error) {
-	query := "SELECT id, account_id, email, fee, frequency, name, program, status FROM member WHERE id = ?"
+	query := "SELECT id, account_id, email, fee, frequency, name, program, status, grading_metric FROM member WHERE id = ?"
 
 	row := s.db.QueryRowContext(ctx, query, id)
 
@@ -39,6 +39,7 @@ func (s *SQLiteStore) GetByID(ctx context.Context, id string) (domain.Member, er
 		&entity.Name,
 		&entity.Program,
 		&entity.Status,
+		&entity.GradingMetric,
 	)
 	if accountID.Valid {
 		entity.AccountID = accountID.String
@@ -53,7 +54,7 @@ func (s *SQLiteStore) GetByID(ctx context.Context, id string) (domain.Member, er
 // PRE: email is non-empty
 // POST: Returns the entity or an error if not found
 func (s *SQLiteStore) GetByEmail(ctx context.Context, email string) (domain.Member, error) {
-	query := "SELECT id, account_id, email, fee, frequency, name, program, status FROM member WHERE email = ?"
+	query := "SELECT id, account_id, email, fee, frequency, name, program, status, grading_metric FROM member WHERE email = ?"
 
 	row := s.db.QueryRowContext(ctx, query, email)
 
@@ -68,6 +69,7 @@ func (s *SQLiteStore) GetByEmail(ctx context.Context, email string) (domain.Memb
 		&entity.Name,
 		&entity.Program,
 		&entity.Status,
+		&entity.GradingMetric,
 	)
 	if accountID.Valid {
 		entity.AccountID = accountID.String
@@ -89,9 +91,9 @@ func (s *SQLiteStore) Save(ctx context.Context, entity domain.Member) error {
 	defer tx.Rollback()
 
 	// Upsert implementation
-	fields := []string{"id", "account_id", "email", "fee", "frequency", "name", "program", "status"}
-	placeholders := []string{"?", "?", "?", "?", "?", "?", "?", "?"}
-	updates := []string{"account_id=excluded.account_id", "email=excluded.email", "fee=excluded.fee", "frequency=excluded.frequency", "name=excluded.name", "program=excluded.program", "status=excluded.status"}
+	fields := []string{"id", "account_id", "email", "fee", "frequency", "name", "program", "status", "grading_metric"}
+	placeholders := []string{"?", "?", "?", "?", "?", "?", "?", "?", "?"}
+	updates := []string{"account_id=excluded.account_id", "email=excluded.email", "fee=excluded.fee", "frequency=excluded.frequency", "name=excluded.name", "program=excluded.program", "status=excluded.status", "grading_metric=excluded.grading_metric"}
 
 	query := fmt.Sprintf(
 		"INSERT INTO member (%s) VALUES (%s) ON CONFLICT(id) DO UPDATE SET %s",
@@ -114,6 +116,7 @@ func (s *SQLiteStore) Save(ctx context.Context, entity domain.Member) error {
 		entity.Name,
 		entity.Program,
 		entity.Status,
+		entity.GradingMetric,
 	)
 	if err != nil {
 		return err
@@ -134,7 +137,7 @@ func (s *SQLiteStore) Delete(ctx context.Context, id string) error {
 // PRE: query is non-empty, limit > 0
 // POST: Returns matching members ordered by name
 func (s *SQLiteStore) SearchByName(ctx context.Context, query string, limit int) ([]domain.Member, error) {
-	q := "SELECT id, account_id, email, fee, frequency, name, program, status FROM member WHERE name LIKE ? AND status != 'archived' ORDER BY name LIMIT ?"
+	q := "SELECT id, account_id, email, fee, frequency, name, program, status, grading_metric FROM member WHERE name LIKE ? AND status != 'archived' ORDER BY name LIMIT ?"
 	rows, err := s.db.QueryContext(ctx, q, "%"+query+"%", limit)
 	if err != nil {
 		return nil, err
@@ -154,6 +157,7 @@ func (s *SQLiteStore) SearchByName(ctx context.Context, query string, limit int)
 			&entity.Name,
 			&entity.Program,
 			&entity.Status,
+			&entity.GradingMetric,
 		); err != nil {
 			return nil, err
 		}
@@ -218,7 +222,7 @@ func (s *SQLiteStore) Count(ctx context.Context, filter ListFilter) (int, error)
 // POST: Returns matching entities
 func (s *SQLiteStore) List(ctx context.Context, filter ListFilter) ([]domain.Member, error) {
 	where, args := listWhereClause(filter)
-	query := "SELECT id, account_id, email, fee, frequency, name, program, status FROM member" + where
+	query := "SELECT id, account_id, email, fee, frequency, name, program, status, grading_metric FROM member" + where
 	query += sortClause(filter)
 
 	limit := filter.Limit
@@ -247,6 +251,7 @@ func (s *SQLiteStore) List(ctx context.Context, filter ListFilter) ([]domain.Mem
 			&entity.Name,
 			&entity.Program,
 			&entity.Status,
+			&entity.GradingMetric,
 		); err != nil {
 			return nil, err
 		}

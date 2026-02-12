@@ -82,11 +82,12 @@ function loadReadiness() {
             html+='<th style="'+thStyle+'">Member</th><th style="'+thStyle+'">Belt</th><th style="'+thStyle+'">Hours</th><th style="'+thStyle+'">Progress</th>';
             html+='</tr></thead><tbody>';
             data.Adults.forEach(m => {
+                var isKidsHours = m.Program==='kids';
                 html+='<tr style="border-bottom:1px solid var(--border);">';
-                html+='<td style="padding:0.5rem;font-weight:600;">'+m.MemberName+'</td>';
+                html+='<td style="padding:0.5rem;font-weight:600;">'+m.MemberName+(isKidsHours?' <span style="font-size:0.7rem;color:#6c757d;">(kids/hours)</span>':'')+'</td>';
                 html+='<td style="padding:0.5rem;">'+m.CurrentBelt+' → '+m.TargetBelt+'</td>';
                 html+='<td style="padding:0.5rem;">'+m.MatHours.toFixed(1)+'h / '+m.RequiredHours+'h</td>';
-                html+='<td style="padding:0.5rem;">'+m.PercentReady.toFixed(0)+'%</td>';
+                html+='<td style="padding:0.5rem;">'+m.PercentReady.toFixed(0)+'%'+(isKidsHours?' <button onclick="toggleMetric(\''+m.MemberID+'\',\'sessions\')" style="background:none;border:1px solid #6c757d;padding:0.1rem 0.4rem;border-radius:2px;font-size:0.7rem;cursor:pointer;margin-left:0.5rem;" title="Switch back to session-based grading">→ Sessions</button>':'')+'</td>';
                 html+='</tr>';
             });
             html+='</tbody></table>';
@@ -100,7 +101,7 @@ function loadReadiness() {
         html+='<h3 style="margin-top:1.5rem;">Kids (Term Attendance'+termLabel+')</h3>';
         if (data.Kids && data.Kids.length>0) {
             html+='<table style="width:100%;border-collapse:collapse;"><thead><tr style="border-bottom:2px solid var(--border);">';
-            html+='<th style="'+thStyle+'">Member</th><th style="'+thStyle+'">Belt</th><th style="'+thStyle+'">Sessions</th><th style="'+thStyle+'">Attendance</th><th style="'+thStyle+'">Status</th>';
+            html+='<th style="'+thStyle+'">Member</th><th style="'+thStyle+'">Belt</th><th style="'+thStyle+'">Sessions</th><th style="'+thStyle+'">Attendance</th><th style="'+thStyle+'">Status</th><th style="'+thStyle+'">Metric</th>';
             html+='</tr></thead><tbody>';
             data.Kids.forEach(k => {
                 var statusBadge = k.Eligible
@@ -112,6 +113,7 @@ function loadReadiness() {
                 html+='<td style="padding:0.5rem;">'+k.Attended+' / '+k.TotalSessions+'</td>';
                 html+='<td style="padding:0.5rem;">'+k.AttendancePct.toFixed(0)+'%</td>';
                 html+='<td style="padding:0.5rem;">'+statusBadge+'</td>';
+                html+='<td style="padding:0.5rem;"><button onclick="toggleMetric(\''+k.MemberID+'\',\'hours\')" style="background:none;border:1px solid #6c757d;padding:0.15rem 0.5rem;border-radius:2px;font-size:0.75rem;cursor:pointer;" title="Switch to hours-based grading">→ Hours</button></td>';
                 html+='</tr>';
             });
             html+='</tbody></table>';
@@ -144,6 +146,11 @@ function createConfig() {
     })}).then(r=>{if(!r.ok)throw r;return r.json();})
     .then(()=>{document.getElementById('cfgMsg').textContent='Created!';loadConfigs();setTimeout(()=>document.getElementById('cfgMsg').textContent='',2000);})
     .catch(r=>{if(r&&r.text)r.text().then(t=>document.getElementById('cfgMsg').textContent=t||'Error');else document.getElementById('cfgMsg').textContent='Error';});
+}
+function toggleMetric(memberID, metric) {
+    fetch('/api/grading/metric',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({MemberID:memberID,Metric:metric})})
+    .then(r=>{if(!r.ok)throw r;loadReadiness();})
+    .catch(()=>{alert('Failed to toggle metric');});
 }
 loadProposals();
 loadReadiness();
