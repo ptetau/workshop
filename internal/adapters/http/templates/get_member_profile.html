@@ -162,11 +162,18 @@ function loadEstimatedHours() {
         if (!data||data.length===0) { el.innerHTML='<p style="font-style:italic;">No estimated hours recorded.</p>'; return; }
         var html='';
         data.forEach(e => {
-            html+='<div style="background:#fff;border:1px solid #dee2e6;padding:0.75rem;border-radius:2px;margin-bottom:0.5rem;border-left:3px solid #F9B232;display:flex;justify-content:space-between;align-items:center;">';
+            var borderColor = e.Source==='self_estimate' ? '#1565c0' : e.Source==='credit' ? '#7b1fa2' : '#F9B232';
+            var statusColor = e.Status==='approved' ? '#2e7d32' : e.Status==='rejected' ? '#dc3545' : '#F9B232';
+            html+='<div style="background:#fff;border:1px solid #dee2e6;padding:0.75rem;border-radius:2px;margin-bottom:0.5rem;border-left:3px solid '+borderColor+';display:flex;justify-content:space-between;align-items:center;">';
             html+='<div><strong>'+e.StartDate+' → '+e.EndDate+'</strong>';
             html+=' · '+e.WeeklyHours+'h/week · <strong>'+e.TotalHours+'h total</strong>';
             if(e.Note){html+=' · <span style="color:#999;">'+e.Note+'</span>';}
-            html+='<div style="font-size:0.8rem;color:#999;margin-top:0.2rem;">'+e.Source+' · '+e.Status+'</div>';
+            var srcLabel = e.Source==='self_estimate' ? 'self-estimate' : e.Source;
+            html+='<div style="font-size:0.8rem;margin-top:0.2rem;">';
+            html+='<span style="display:inline-block;padding:0.1rem 0.4rem;border-radius:2px;font-size:0.7rem;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;background:'+borderColor+';color:#fff;">'+srcLabel+'</span> ';
+            html+='<span style="display:inline-block;padding:0.1rem 0.4rem;border-radius:2px;font-size:0.7rem;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;background:'+statusColor+';color:#fff;">'+e.Status+'</span>';
+            if(e.ReviewNote){html+=' <span style="color:#666;font-size:0.8rem;font-style:italic;">'+e.ReviewNote+'</span>';}
+            html+='</div>';
             html+='</div>';
             html+='<button onclick="deleteEstHours(\''+e.ID+'\')" style="background:#dc3545;color:#fff;border:none;padding:0.25rem 0.5rem;font-size:0.75rem;cursor:pointer;border-radius:2px;" title="Delete">✕</button>';
             html+='</div>';

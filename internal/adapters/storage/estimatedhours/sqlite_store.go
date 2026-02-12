@@ -43,14 +43,16 @@ func parseTime(s string) time.Time {
 // POST: entry is persisted
 func (s *SQLiteStore) Save(ctx context.Context, e domain.EstimatedHours) error {
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO estimated_hours (id, member_id, start_date, end_date, weekly_hours, total_hours, source, status, note, created_by, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`INSERT INTO estimated_hours (id, member_id, start_date, end_date, weekly_hours, total_hours, source, status, note, created_by, created_at, reviewed_by, reviewed_at, review_note)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(id) DO UPDATE SET
 		   member_id=excluded.member_id, start_date=excluded.start_date, end_date=excluded.end_date,
 		   weekly_hours=excluded.weekly_hours, total_hours=excluded.total_hours, source=excluded.source,
-		   status=excluded.status, note=excluded.note, created_by=excluded.created_by, created_at=excluded.created_at`,
+		   status=excluded.status, note=excluded.note, created_by=excluded.created_by, created_at=excluded.created_at,
+		   reviewed_by=excluded.reviewed_by, reviewed_at=excluded.reviewed_at, review_note=excluded.review_note`,
 		e.ID, e.MemberID, e.StartDate, e.EndDate, e.WeeklyHours, e.TotalHours,
-		e.Source, e.Status, e.Note, e.CreatedBy, formatTime(e.CreatedAt))
+		e.Source, e.Status, e.Note, e.CreatedBy, formatTime(e.CreatedAt),
+		e.ReviewedBy, formatTime(e.ReviewedAt), e.ReviewNote)
 	return err
 }
 
@@ -59,16 +61,17 @@ func (s *SQLiteStore) Save(ctx context.Context, e domain.EstimatedHours) error {
 // POST: returns the entry or error if not found
 func (s *SQLiteStore) GetByID(ctx context.Context, id string) (domain.EstimatedHours, error) {
 	var e domain.EstimatedHours
-	var createdAt string
+	var createdAt, reviewedAt string
 	err := s.db.QueryRowContext(ctx,
-		`SELECT id, member_id, start_date, end_date, weekly_hours, total_hours, source, status, note, created_by, created_at
+		`SELECT id, member_id, start_date, end_date, weekly_hours, total_hours, source, status, note, created_by, created_at, reviewed_by, reviewed_at, review_note
 		 FROM estimated_hours WHERE id = ?`, id).
 		Scan(&e.ID, &e.MemberID, &e.StartDate, &e.EndDate, &e.WeeklyHours, &e.TotalHours,
-			&e.Source, &e.Status, &e.Note, &e.CreatedBy, &createdAt)
+			&e.Source, &e.Status, &e.Note, &e.CreatedBy, &createdAt, &e.ReviewedBy, &reviewedAt, &e.ReviewNote)
 	if err != nil {
 		return domain.EstimatedHours{}, err
 	}
 	e.CreatedAt = parseTime(createdAt)
+	e.ReviewedAt = parseTime(reviewedAt)
 	return e, nil
 }
 
@@ -77,21 +80,41 @@ func (s *SQLiteStore) GetByID(ctx context.Context, id string) (domain.EstimatedH
 // POST: returns entries or empty slice
 func (s *SQLiteStore) ListByMemberID(ctx context.Context, memberID string) ([]domain.EstimatedHours, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, member_id, start_date, end_date, weekly_hours, total_hours, source, status, note, created_by, created_at
+		`SELECT id, member_id, start_date, end_date, weekly_hours, total_hours, source, status, note, created_by, created_at, reviewed_by, reviewed_at, review_note
 		 FROM estimated_hours WHERE member_id = ? ORDER BY start_date DESC`, memberID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
+	return scanEstimatedHoursRows(rows)
+}
+
+// ListPending returns all pending estimated hours entries, ordered by created_at asc.
+// PRE: none
+// POST: returns pending entries or empty slice
+func (s *SQLiteStore) ListPending(ctx context.Context) ([]domain.EstimatedHours, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT id, member_id, start_date, end_date, weekly_hours, total_hours, source, status, note, created_by, created_at, reviewed_by, reviewed_at, review_note
+		 FROM estimated_hours WHERE status = 'pending' ORDER BY created_at ASC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanEstimatedHoursRows(rows)
+}
+
+// scanEstimatedHoursRows scans rows into EstimatedHours slice.
+func scanEstimatedHoursRows(rows *sql.Rows) ([]domain.EstimatedHours, error) {
 	var result []domain.EstimatedHours
 	for rows.Next() {
 		var e domain.EstimatedHours
-		var createdAt string
+		var createdAt, reviewedAt string
 		if err := rows.Scan(&e.ID, &e.MemberID, &e.StartDate, &e.EndDate, &e.WeeklyHours, &e.TotalHours,
-			&e.Source, &e.Status, &e.Note, &e.CreatedBy, &createdAt); err != nil {
+			&e.Source, &e.Status, &e.Note, &e.CreatedBy, &createdAt, &e.ReviewedBy, &reviewedAt, &e.ReviewNote); err != nil {
 			return nil, err
 		}
 		e.CreatedAt = parseTime(createdAt)
+		e.ReviewedAt = parseTime(reviewedAt)
 		result = append(result, e)
 	}
 	return result, rows.Err()
