@@ -376,3 +376,63 @@ func TestKidsTermReadiness_HighestBeltSkipped(t *testing.T) {
 		t.Errorf("expected kid2, got %s", result.Entries[0].MemberID)
 	}
 }
+
+// TestKidsTermReadiness_CrossTermIsolation verifies attendance from a previous term
+// does not count in a new term (#59: term attendance counts reset).
+func TestKidsTermReadiness_CrossTermIsolation(t *testing.T) {
+	deps := newKidsReadinessTestDeps()
+
+	// Add a second term: Term 2 runs 2026-04-27 to 2026-07-03
+	term2Start := time.Date(2026, 4, 27, 0, 0, 0, 0, time.UTC)
+	term2End := time.Date(2026, 7, 3, 0, 0, 0, 0, time.UTC)
+	deps.TermStore = &mockKRTermStore{
+		terms: []term.Term{
+			{ID: "term1", Name: "Term 1 2026", StartDate: time.Date(2026, 1, 19, 0, 0, 0, 0, time.UTC), EndDate: time.Date(2026, 4, 10, 0, 0, 0, 0, time.UTC)},
+			{ID: "term2", Name: "Term 2 2026", StartDate: term2Start, EndDate: term2End},
+		},
+	}
+
+	// kid1 attended many sessions in Term 1 (Mondays in Jan-Mar)
+	var records []attendance.Attendance
+	d := time.Date(2026, 1, 19, 16, 0, 0, 0, time.UTC)
+	for i := 0; d.Before(time.Date(2026, 4, 11, 0, 0, 0, 0, time.UTC)); d = d.AddDate(0, 0, 7) {
+		records = append(records, attendance.Attendance{
+			ID: fmt.Sprintf("att-t1-%d", i), MemberID: "kid1", ScheduleID: "sched-mon",
+			CheckInTime: d, ClassDate: d.Format("2006-01-02"),
+		})
+		i++
+	}
+	deps.AttendanceStore = &mockKRAttendanceStore{records: records}
+
+	// Query Term 1 — kid1 should have attendance
+	q1 := GetKidsTermReadinessQuery{Now: time.Date(2026, 2, 15, 0, 0, 0, 0, time.UTC)}
+	r1, err := QueryGetKidsTermReadiness(context.Background(), q1, deps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var kid1T1 *KidsTermReadinessEntry
+	for _, e := range r1.Entries {
+		if e.MemberID == "kid1" {
+			kid1T1 = &e
+			break
+		}
+	}
+	if kid1T1 == nil || kid1T1.Attended == 0 {
+		t.Fatal("expected kid1 to have attendance in Term 1")
+	}
+
+	// Query Term 2 — kid1 should have 0 attendance (reset)
+	q2 := GetKidsTermReadinessQuery{Now: time.Date(2026, 5, 15, 0, 0, 0, 0, time.UTC)}
+	r2, err := QueryGetKidsTermReadiness(context.Background(), q2, deps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r2.TermName != "Term 2 2026" {
+		t.Fatalf("expected Term 2, got %q", r2.TermName)
+	}
+	for _, e := range r2.Entries {
+		if e.MemberID == "kid1" && e.Attended != 0 {
+			t.Errorf("kid1 should have 0 attendance in Term 2 (got %d) — term counts must reset", e.Attended)
+		}
+	}
+}
