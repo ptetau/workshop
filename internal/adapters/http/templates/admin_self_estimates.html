@@ -30,6 +30,7 @@
 
 <script>
 function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+function escJS(s){return esc(s).replace(/'/g,'&#39;');}
 var currentReviewID = '';
 
 function loadPending() {
@@ -51,7 +52,7 @@ function loadPending() {
             if (e.Note) html += '<div style="color:#666;font-size:0.85rem;margin-top:0.25rem;font-style:italic;">"'+esc(e.Note)+'"</div>';
             html += '<div style="color:#999;font-size:0.8rem;margin-top:0.25rem;">Submitted '+esc(e.CreatedAt.substring(0,10))+'</div>';
             html += '</div>';
-            html += '<button onclick="openReview(\''+e.ID+'\',\''+esc(e.MemberName)+'\','+e.TotalHours+')" style="white-space:nowrap;">Review</button>';
+            html += '<button onclick="openReview(\''+e.ID+'\',\''+escJS(e.MemberName || 'Unknown')+'\','+e.TotalHours+')" style="white-space:nowrap;">Review</button>';
             html += '</div>';
             html += '</div>';
         });
