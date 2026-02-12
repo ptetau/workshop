@@ -15,6 +15,7 @@ const (
 const (
 	SourceEstimate     = "estimate"      // added by coach/admin
 	SourceSelfEstimate = "self_estimate" // submitted by member (§3.5)
+	SourceCredit       = "credit"        // direct mat hours credit from admin (§4.7)
 )
 
 // Status constants.
@@ -84,7 +85,7 @@ func (e *EstimatedHours) Validate() error {
 	if e.WeeklyHours > 40 {
 		return ErrWeeklyHoursTooHigh
 	}
-	if e.Source != SourceEstimate && e.Source != SourceSelfEstimate {
+	if e.Source != SourceEstimate && e.Source != SourceSelfEstimate && e.Source != SourceCredit {
 		return ErrInvalidSource
 	}
 	if e.Status != StatusApproved && e.Status != StatusPending {
