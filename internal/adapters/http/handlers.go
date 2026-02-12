@@ -32,6 +32,7 @@ import (
 	emailDomain "workshop/internal/domain/email"
 	gradingDomain "workshop/internal/domain/grading"
 	holidayDomain "workshop/internal/domain/holiday"
+	memberDomain "workshop/internal/domain/member"
 	messageDomain "workshop/internal/domain/message"
 	milestoneDomain "workshop/internal/domain/milestone"
 	noticeDomain "workshop/internal/domain/notice"
@@ -2253,7 +2254,11 @@ func handleGradingReadiness(w http.ResponseWriter, r *http.Request) {
 
 	var adults []adultEntry
 	for _, m := range members {
-		if m.Status != "active" || m.Program == "kids" {
+		if m.Status != "active" {
+			continue
+		}
+		// Skip kids in sessions mode — they appear in kids term attendance section
+		if m.Program == "kids" && m.GradingMetric != memberDomain.MetricHours {
 			continue
 		}
 		// Get member's latest grading record to find current belt
@@ -2355,6 +2360,56 @@ func handleGradingReadiness(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
+}
+
+// handleGradingMetricToggle handles POST /api/grading/metric
+// Toggles a kid's grading metric between "sessions" and "hours".
+func handleGradingMetricToggle(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	sess, ok := middleware.GetSessionFromContext(r.Context())
+	if !ok {
+		http.Error(w, "not authenticated", http.StatusUnauthorized)
+		return
+	}
+	if sess.Role != "admin" && sess.Role != "coach" {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
+	var body struct {
+		MemberID string `json:"MemberID"`
+		Metric   string `json:"Metric"`
+	}
+	if err := strictDecode(r, &body); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+	if body.Metric != memberDomain.MetricSessions && body.Metric != memberDomain.MetricHours {
+		http.Error(w, "Metric must be 'sessions' or 'hours'", http.StatusBadRequest)
+		return
+	}
+
+	ctx := r.Context()
+	m, err := stores.MemberStore.GetByID(ctx, body.MemberID)
+	if err != nil {
+		http.Error(w, "Member not found", http.StatusNotFound)
+		return
+	}
+	if m.Program != memberDomain.ProgramKids {
+		http.Error(w, "Metric toggle is only for kids", http.StatusBadRequest)
+		return
+	}
+
+	m.GradingMetric = body.Metric
+	if err := stores.MemberStore.Save(ctx, m); err != nil {
+		internalError(w, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // nextBeltFor returns the next belt in progression, or "" if at highest.

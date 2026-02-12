@@ -328,6 +328,31 @@ func TestKidsTermReadiness_ByTermID(t *testing.T) {
 	}
 }
 
+// TestKidsTermReadiness_HoursMetricExcluded verifies kids toggled to hours mode are excluded.
+func TestKidsTermReadiness_HoursMetricExcluded(t *testing.T) {
+	deps := newKidsReadinessTestDeps()
+	// Toggle kid1 to hours mode
+	deps.MemberStore = &mockKRMemberStore{
+		members: []member.Member{
+			{ID: "kid1", Name: "Alice Kid", Program: "kids", Status: "active", Email: "alice@test.com", GradingMetric: "hours"},
+			{ID: "kid2", Name: "Bob Kid", Program: "kids", Status: "active", Email: "bob@test.com", GradingMetric: "sessions"},
+		},
+	}
+
+	query := GetKidsTermReadinessQuery{Now: time.Date(2026, 2, 15, 0, 0, 0, 0, time.UTC)}
+	result, err := QueryGetKidsTermReadiness(context.Background(), query, deps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Only kid2 should appear (kid1 is in hours mode)
+	if len(result.Entries) != 1 {
+		t.Fatalf("expected 1 entry (kid1 hours-mode excluded), got %d", len(result.Entries))
+	}
+	if result.Entries[0].MemberID != "kid2" {
+		t.Errorf("expected kid2, got %s", result.Entries[0].MemberID)
+	}
+}
+
 // TestKidsTermReadiness_HighestBeltSkipped verifies kids at highest belt are excluded.
 func TestKidsTermReadiness_HighestBeltSkipped(t *testing.T) {
 	deps := newKidsReadinessTestDeps()

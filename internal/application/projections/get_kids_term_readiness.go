@@ -199,6 +199,10 @@ func QueryGetKidsTermReadiness(ctx context.Context, query GetKidsTermReadinessQu
 	}
 
 	for _, m := range members {
+		// Skip kids toggled to hours mode — they appear in adult-style readiness
+		if m.GradingMetric == member.MetricHours {
+			continue
+		}
 
 		// Get current belt
 		currentBelt := grading.BeltWhite

@@ -17,6 +17,8 @@ const (
 	StatusArchived = "archived"
 	ProgramAdults  = "adults"
 	ProgramKids    = "kids"
+	MetricSessions = "sessions"
+	MetricHours    = "hours"
 )
 
 // Domain errors
@@ -28,14 +30,15 @@ var (
 
 // Member holds state for the concept.
 type Member struct {
-	ID        string
-	AccountID string
-	Email     string
-	Fee       int
-	Frequency string
-	Name      string
-	Program   string
-	Status    string
+	ID            string
+	AccountID     string
+	Email         string
+	Fee           int
+	Frequency     string
+	Name          string
+	Program       string
+	Status        string
+	GradingMetric string // "sessions" or "hours"; only meaningful for kids
 }
 
 // Validate checks if the Member has valid data.

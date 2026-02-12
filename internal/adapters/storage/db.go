@@ -25,6 +25,7 @@ var migrations = []migration{
 	{version: 5, description: "attendance mat hours", apply: migrate5},
 	{version: 6, description: "member milestone achievements", apply: migrate6},
 	{version: 7, description: "estimated hours", apply: migrate7},
+	{version: 8, description: "member grading metric", apply: migrate8},
 }
 
 // SchemaVersion returns the current schema version of the database.
@@ -508,5 +509,12 @@ func migrate7(tx *sql.Tx) error {
 	CREATE INDEX IF NOT EXISTS idx_estimated_hours_member ON estimated_hours(member_id);
 	`
 	_, err := tx.Exec(schema)
+	return err
+}
+
+// --- Migration 8: Member grading metric ---
+// Adds grading_metric column so kids can be toggled between sessions and hours mode.
+func migrate8(tx *sql.Tx) error {
+	_, err := tx.Exec(`ALTER TABLE member ADD COLUMN grading_metric TEXT NOT NULL DEFAULT 'sessions'`)
 	return err
 }
