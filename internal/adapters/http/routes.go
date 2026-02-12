@@ -86,6 +86,8 @@ func registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/notices/pin", handleNoticePin)
 	mux.HandleFunc("/api/grading/proposals/decide", handleGradingDecide)
 	mux.HandleFunc("/api/grading/config", handleGradingConfig)
+	mux.HandleFunc("/api/grading/force-promote", handleGradingForcePromote)
+	mux.HandleFunc("/api/grading/member-config", handleGradingMemberConfig)
 	mux.HandleFunc("/api/grading/readiness", handleGradingReadiness)
 	mux.HandleFunc("/api/grading/metric", handleGradingMetricToggle)
 	mux.HandleFunc("/api/training-goals", handleTrainingGoals)

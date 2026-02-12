@@ -36,30 +36,31 @@ import (
 
 // Stores holds all storage dependencies.
 type Stores struct {
-	AccountStore         accountStore.Store
-	MemberStore          memberStore.Store
-	WaiverStore          waiverStore.Store
-	InjuryStore          injuryStore.Store
-	AttendanceStore      attendanceStore.Store
-	ProgramStore         programStore.Store
-	ClassTypeStore       classTypeStore.Store
-	ScheduleStore        scheduleStore.Store
-	TermStore            termStore.Store
-	HolidayStore         holidayStore.Store
-	NoticeStore          noticeStore.Store
-	GradingRecordStore   gradingStore.RecordStore
-	GradingConfigStore   gradingStore.ConfigStore
-	GradingProposalStore gradingStore.ProposalStore
-	MessageStore         messageStore.Store
-	ObservationStore     observationStore.Store
-	MilestoneStore       milestoneStore.Store
-	MemberMilestoneStore milestoneStore.MemberMilestoneStore
-	TrainingGoalStore    trainingGoalStore.Store
-	ThemeStore           themeStore.Store
-	ClipStore            clipStore.Store
-	EmailStore           emailStore.Store
-	EstimatedHoursStore  estimatedHoursStore.Store
-	RotorStore           rotorStore.Store
+	AccountStore             accountStore.Store
+	MemberStore              memberStore.Store
+	WaiverStore              waiverStore.Store
+	InjuryStore              injuryStore.Store
+	AttendanceStore          attendanceStore.Store
+	ProgramStore             programStore.Store
+	ClassTypeStore           classTypeStore.Store
+	ScheduleStore            scheduleStore.Store
+	TermStore                termStore.Store
+	HolidayStore             holidayStore.Store
+	NoticeStore              noticeStore.Store
+	GradingRecordStore       gradingStore.RecordStore
+	GradingConfigStore       gradingStore.ConfigStore
+	GradingProposalStore     gradingStore.ProposalStore
+	GradingMemberConfigStore gradingStore.MemberConfigStore
+	MessageStore             messageStore.Store
+	ObservationStore         observationStore.Store
+	MilestoneStore           milestoneStore.Store
+	MemberMilestoneStore     milestoneStore.MemberMilestoneStore
+	TrainingGoalStore        trainingGoalStore.Store
+	ThemeStore               themeStore.Store
+	ClipStore                clipStore.Store
+	EmailStore               emailStore.Store
+	EstimatedHoursStore      estimatedHoursStore.Store
+	RotorStore               rotorStore.Store
 }
 
 // loadCSRFKey reads the CSRF secret from WORKSHOP_CSRF_KEY (hex-encoded, 32 bytes).

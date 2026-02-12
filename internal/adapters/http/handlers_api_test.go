@@ -381,6 +381,44 @@ func (m *mockGradingConfigStore) List(ctx context.Context) ([]gradingDomain.Conf
 	return list, nil
 }
 
+type mockGradingMemberConfigStore struct {
+	configs map[string]gradingDomain.MemberConfig
+}
+
+// Save implements the mock GradingMemberConfigStore for testing.
+// PRE: valid parameters
+// POST: returns expected result
+func (m *mockGradingMemberConfigStore) Save(ctx context.Context, mc gradingDomain.MemberConfig) error {
+	if m.configs == nil {
+		m.configs = make(map[string]gradingDomain.MemberConfig)
+	}
+	m.configs[mc.MemberID+"|"+mc.Belt] = mc
+	return nil
+}
+
+// GetByMemberAndBelt implements the mock GradingMemberConfigStore for testing.
+// PRE: valid parameters
+// POST: returns expected result
+func (m *mockGradingMemberConfigStore) GetByMemberAndBelt(ctx context.Context, memberID, belt string) (gradingDomain.MemberConfig, error) {
+	if mc, ok := m.configs[memberID+"|"+belt]; ok {
+		return mc, nil
+	}
+	return gradingDomain.MemberConfig{}, sql.ErrNoRows
+}
+
+// ListByMemberID implements the mock GradingMemberConfigStore for testing.
+// PRE: valid parameters
+// POST: returns expected result
+func (m *mockGradingMemberConfigStore) ListByMemberID(ctx context.Context, memberID string) ([]gradingDomain.MemberConfig, error) {
+	var list []gradingDomain.MemberConfig
+	for _, mc := range m.configs {
+		if mc.MemberID == memberID {
+			list = append(list, mc)
+		}
+	}
+	return list, nil
+}
+
 type mockGradingProposalStore struct {
 	proposals map[string]gradingDomain.Proposal
 }
@@ -850,25 +888,26 @@ func (m *mockProgramStore) List(ctx context.Context) ([]programDomain.Program, e
 // newFullStores returns a Stores with all mock stores initialized.
 func newFullStores() *Stores {
 	return &Stores{
-		AccountStore:         &mockAccountStore{accounts: make(map[string]accountDomain.Account)},
-		MemberStore:          &mockMemberStore{members: make(map[string]memberDomain.Member)},
-		WaiverStore:          &mockWaiverStore{waivers: make(map[string]waiverDomain.Waiver)},
-		InjuryStore:          &mockInjuryStore{injuries: make(map[string]injuryDomain.Injury)},
-		AttendanceStore:      &mockAttendanceStore{attendances: make(map[string]attendanceDomain.Attendance)},
-		ProgramStore:         &mockProgramStore{programs: make(map[string]programDomain.Program)},
-		ClassTypeStore:       &mockClassTypeStore{classTypes: make(map[string]classTypeDomain.ClassType)},
-		ScheduleStore:        &mockScheduleStore{schedules: make(map[string]scheduleDomain.Schedule)},
-		TermStore:            &mockTermStore{terms: make(map[string]termDomain.Term)},
-		HolidayStore:         &mockHolidayStore{holidays: make(map[string]holidayDomain.Holiday)},
-		NoticeStore:          &mockNoticeStore{notices: make(map[string]noticeDomain.Notice)},
-		GradingRecordStore:   &mockGradingRecordStore{records: make(map[string]gradingDomain.Record)},
-		GradingConfigStore:   &mockGradingConfigStore{configs: make(map[string]gradingDomain.Config)},
-		GradingProposalStore: &mockGradingProposalStore{proposals: make(map[string]gradingDomain.Proposal)},
-		MessageStore:         &mockMessageStore{messages: make(map[string]messageDomain.Message)},
-		ObservationStore:     &mockObservationStore{observations: make(map[string]observationDomain.Observation)},
-		MilestoneStore:       &mockMilestoneStore{milestones: make(map[string]milestoneDomain.Milestone)},
-		MemberMilestoneStore: &mockMemberMilestoneStore{items: make(map[string]milestoneDomain.MemberMilestone)},
-		TrainingGoalStore:    &mockTrainingGoalStore{goals: make(map[string]trainingGoalDomain.TrainingGoal)},
+		AccountStore:             &mockAccountStore{accounts: make(map[string]accountDomain.Account)},
+		MemberStore:              &mockMemberStore{members: make(map[string]memberDomain.Member)},
+		WaiverStore:              &mockWaiverStore{waivers: make(map[string]waiverDomain.Waiver)},
+		InjuryStore:              &mockInjuryStore{injuries: make(map[string]injuryDomain.Injury)},
+		AttendanceStore:          &mockAttendanceStore{attendances: make(map[string]attendanceDomain.Attendance)},
+		ProgramStore:             &mockProgramStore{programs: make(map[string]programDomain.Program)},
+		ClassTypeStore:           &mockClassTypeStore{classTypes: make(map[string]classTypeDomain.ClassType)},
+		ScheduleStore:            &mockScheduleStore{schedules: make(map[string]scheduleDomain.Schedule)},
+		TermStore:                &mockTermStore{terms: make(map[string]termDomain.Term)},
+		HolidayStore:             &mockHolidayStore{holidays: make(map[string]holidayDomain.Holiday)},
+		NoticeStore:              &mockNoticeStore{notices: make(map[string]noticeDomain.Notice)},
+		GradingRecordStore:       &mockGradingRecordStore{records: make(map[string]gradingDomain.Record)},
+		GradingConfigStore:       &mockGradingConfigStore{configs: make(map[string]gradingDomain.Config)},
+		GradingProposalStore:     &mockGradingProposalStore{proposals: make(map[string]gradingDomain.Proposal)},
+		GradingMemberConfigStore: &mockGradingMemberConfigStore{configs: make(map[string]gradingDomain.MemberConfig)},
+		MessageStore:             &mockMessageStore{messages: make(map[string]messageDomain.Message)},
+		ObservationStore:         &mockObservationStore{observations: make(map[string]observationDomain.Observation)},
+		MilestoneStore:           &mockMilestoneStore{milestones: make(map[string]milestoneDomain.Milestone)},
+		MemberMilestoneStore:     &mockMemberMilestoneStore{items: make(map[string]milestoneDomain.MemberMilestone)},
+		TrainingGoalStore:        &mockTrainingGoalStore{goals: make(map[string]trainingGoalDomain.TrainingGoal)},
 	}
 }
 

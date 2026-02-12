@@ -26,6 +26,7 @@ var migrations = []migration{
 	{version: 6, description: "member milestone achievements", apply: migrate6},
 	{version: 7, description: "estimated hours", apply: migrate7},
 	{version: 8, description: "member grading metric", apply: migrate8},
+	{version: 9, description: "grading member config overrides", apply: migrate9},
 }
 
 // SchemaVersion returns the current schema version of the database.
@@ -516,5 +517,23 @@ func migrate7(tx *sql.Tx) error {
 // Adds grading_metric column so kids can be toggled between sessions and hours mode.
 func migrate8(tx *sql.Tx) error {
 	_, err := tx.Exec(`ALTER TABLE member ADD COLUMN grading_metric TEXT NOT NULL DEFAULT 'sessions'`)
+	return err
+}
+
+// --- Migration 9: Grading member config overrides ---
+// Adds per-member threshold overrides for grading eligibility.
+func migrate9(tx *sql.Tx) error {
+	_, err := tx.Exec(`
+	CREATE TABLE IF NOT EXISTS grading_member_config (
+		id TEXT PRIMARY KEY,
+		member_id TEXT NOT NULL,
+		belt TEXT NOT NULL,
+		flight_time_hours REAL NOT NULL DEFAULT 0,
+		attendance_pct REAL NOT NULL DEFAULT 0,
+		FOREIGN KEY (member_id) REFERENCES member(id),
+		UNIQUE(member_id, belt)
+	);
+	CREATE INDEX IF NOT EXISTS idx_grading_member_config_member ON grading_member_config(member_id);
+	`)
 	return err
 }

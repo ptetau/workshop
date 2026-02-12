@@ -279,6 +279,66 @@ func scanProposals(rows *sql.Rows) ([]domain.Proposal, error) {
 	return proposals, rows.Err()
 }
 
+// --- MemberConfigSQLiteStore ---
+
+// MemberConfigSQLiteStore implements MemberConfigStore using SQLite.
+type MemberConfigSQLiteStore struct {
+	db storage.SQLDB
+}
+
+// NewMemberConfigSQLiteStore creates a new MemberConfigSQLiteStore.
+func NewMemberConfigSQLiteStore(db storage.SQLDB) *MemberConfigSQLiteStore {
+	return &MemberConfigSQLiteStore{db: db}
+}
+
+// Save persists a MemberConfig to the database (upsert on member_id+belt).
+// PRE: entity has been validated
+// POST: Entity is persisted (insert or update)
+func (s *MemberConfigSQLiteStore) Save(ctx context.Context, mc domain.MemberConfig) error {
+	_, err := s.db.ExecContext(ctx,
+		`INSERT INTO grading_member_config (id, member_id, belt, flight_time_hours, attendance_pct)
+		 VALUES (?, ?, ?, ?, ?)
+		 ON CONFLICT(member_id, belt) DO UPDATE SET
+		   flight_time_hours=excluded.flight_time_hours,
+		   attendance_pct=excluded.attendance_pct`,
+		mc.ID, mc.MemberID, mc.Belt, mc.FlightTimeHours, mc.AttendancePct)
+	return err
+}
+
+// GetByMemberAndBelt retrieves a MemberConfig for a specific member and belt.
+// PRE: memberID and belt are non-empty
+// POST: Returns the config or sql.ErrNoRows
+func (s *MemberConfigSQLiteStore) GetByMemberAndBelt(ctx context.Context, memberID, belt string) (domain.MemberConfig, error) {
+	var mc domain.MemberConfig
+	err := s.db.QueryRowContext(ctx,
+		`SELECT id, member_id, belt, flight_time_hours, attendance_pct
+		 FROM grading_member_config WHERE member_id = ? AND belt = ?`, memberID, belt).
+		Scan(&mc.ID, &mc.MemberID, &mc.Belt, &mc.FlightTimeHours, &mc.AttendancePct)
+	return mc, err
+}
+
+// ListByMemberID retrieves all MemberConfig entries for a member.
+// PRE: memberID is non-empty
+// POST: Returns configs for the given member
+func (s *MemberConfigSQLiteStore) ListByMemberID(ctx context.Context, memberID string) ([]domain.MemberConfig, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT id, member_id, belt, flight_time_hours, attendance_pct
+		 FROM grading_member_config WHERE member_id = ?`, memberID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var configs []domain.MemberConfig
+	for rows.Next() {
+		var mc domain.MemberConfig
+		if err := rows.Scan(&mc.ID, &mc.MemberID, &mc.Belt, &mc.FlightTimeHours, &mc.AttendancePct); err != nil {
+			return nil, err
+		}
+		configs = append(configs, mc)
+	}
+	return configs, rows.Err()
+}
+
 func nullStr(s string) interface{} {
 	if s == "" {
 		return nil
