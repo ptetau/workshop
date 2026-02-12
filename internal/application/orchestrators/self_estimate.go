@@ -2,6 +2,7 @@ package orchestrators
 
 import (
 	"context"
+	"log/slog"
 	"time"
 
 	domain "workshop/internal/domain/estimatedhours"
@@ -58,6 +59,7 @@ func ExecuteSubmitSelfEstimate(ctx context.Context, input SubmitSelfEstimateInpu
 		return domain.EstimatedHours{}, err
 	}
 
+	slog.Info("self_estimate_event", "event", "self_estimate_submitted", "entry_id", entry.ID, "member_id", entry.MemberID, "total_hours", entry.TotalHours)
 	return entry, nil
 }
 
@@ -104,5 +106,6 @@ func ExecuteReviewSelfEstimate(ctx context.Context, input ReviewSelfEstimateInpu
 		return domain.EstimatedHours{}, err
 	}
 
+	slog.Info("self_estimate_event", "event", "self_estimate_reviewed", "entry_id", entry.ID, "action", input.Action, "reviewer_id", input.ReviewerID, "member_id", entry.MemberID)
 	return entry, nil
 }
