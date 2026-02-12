@@ -250,12 +250,25 @@ func TestCurriculum_ScheduleAndAdvancement(t *testing.T) {
 		t.Fatal("expected active schedule for topic2")
 	}
 
-	// Complete topic2
+	// Complete topic2 — should auto-advance to topic1 (cycling)
 	completeResp := apiPost(t, page, app.BaseURL+"/api/rotors/schedule/action", map[string]interface{}{
 		"action": "complete", "rotor_theme_id": themeID,
 	})
-	if completeResp.(map[string]interface{})["Status"].(string) != "completed" {
+	completeMap := completeResp.(map[string]interface{})
+	completed := completeMap["completed"].(map[string]interface{})
+	if completed["Status"].(string) != "completed" {
 		t.Fatal("expected completed status")
+	}
+	// Auto-advance should have started the next topic (topic1, wrapping around)
+	if completeMap["next_started"] == nil {
+		t.Fatal("expected next_started from auto-advance")
+	}
+	nextStarted := completeMap["next_started"].(map[string]interface{})
+	if nextStarted["TopicID"].(string) != topic1ID {
+		t.Fatalf("expected auto-advance to topic1 (wrap-around), got topic %s", nextStarted["TopicID"])
+	}
+	if nextStarted["Status"].(string) != "active" {
+		t.Fatal("expected next_started to be active")
 	}
 
 	// Verify curriculum view returns correct state

@@ -5308,8 +5308,29 @@ func handleTopicScheduleAction(w http.ResponseWriter, r *http.Request) {
 		// Clear votes for the completed topic
 		stores.RotorStore.DeleteVotesForTopic(ctx, sched.TopicID)
 
+		// Auto-advance: activate the next topic in queue order (wraps around)
+		var nextSched *rotorDomain.TopicSchedule
+		allTopics, _ := stores.RotorStore.ListTopicsByTheme(ctx, input.RotorThemeID)
+		nextTopic := rotorDomain.NextTopicInQueue(allTopics, sched.TopicID)
+		if nextTopic != nil {
+			ns := rotorDomain.TopicSchedule{
+				ID:           generateID(),
+				TopicID:      nextTopic.ID,
+				RotorThemeID: input.RotorThemeID,
+				StartDate:    now,
+				EndDate:      now.AddDate(0, 0, nextTopic.DurationWeeks*7),
+				Status:       rotorDomain.ScheduleStatusActive,
+			}
+			if err := stores.RotorStore.SaveTopicSchedule(ctx, ns); err == nil {
+				nextSched = &ns
+			}
+		}
+
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(sched)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"completed":    sched,
+			"next_started": nextSched,
+		})
 
 	case "skip":
 		sched, err := stores.RotorStore.GetActiveScheduleForTheme(ctx, input.RotorThemeID)
