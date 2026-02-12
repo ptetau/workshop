@@ -60,6 +60,35 @@
         </div>
     </div>
 
+    <h2 style="margin-top:2rem;">Submit Estimated Hours</h2>
+    <p style="color:#6c757d;font-size:0.85rem;margin-bottom:0.75rem;">Trained elsewhere while travelling? Submit an estimate for review.</p>
+    <div id="selfEstList" style="margin-bottom:1rem;color:#6c757d;"></div>
+    <details style="background:var(--bg,#f8f9fa);padding:1rem;border-radius:2px;">
+        <summary style="cursor:pointer;font-weight:600;font-size:0.85rem;text-transform:uppercase;letter-spacing:0.5px;">New Estimate</summary>
+        <form id="selfEstForm" style="margin-top:0.75rem;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;">
+                <div class="form-group">
+                    <label for="seStart">Start Date</label>
+                    <input type="date" id="seStart" required>
+                </div>
+                <div class="form-group">
+                    <label for="seEnd">End Date</label>
+                    <input type="date" id="seEnd" required>
+                </div>
+            </div>
+            <div class="form-group" style="margin-top:0.75rem;">
+                <label for="seWeekly">Hours per Week</label>
+                <input type="number" id="seWeekly" min="0.5" max="40" step="0.5" value="3" required style="width:100px;">
+            </div>
+            <div class="form-group" style="margin-top:0.75rem;">
+                <label for="seNote">Note (e.g. where you trained)</label>
+                <input type="text" id="seNote" placeholder="e.g. Trained at Checkmat SP while travelling" maxlength="500">
+            </div>
+            <button type="submit">Submit for Review</button>
+            <span id="seMsg" style="margin-left:0.75rem;font-size:0.85rem;"></span>
+        </form>
+    </details>
+
     <h2 style="margin-top:2rem;">Recent Attendance</h2>
     <div id="attendanceList" style="color:#6c757d;"><p style="font-style:italic;">No recent sessions. Check in at the kiosk to start tracking your training!</p></div>
 
@@ -192,6 +221,52 @@ function loadMilestones() {
         document.getElementById('badgesList').innerHTML = html;
     }).catch(function(){});
 }
-if (memberID) { loadTrainingLog(); loadGoal(); loadMilestones(); }
+function loadSelfEstimates() {
+    if (!memberID) return;
+    fetch('/api/estimated-hours?member_id='+memberID).then(r=>r.json()).then(data => {
+        var el = document.getElementById('selfEstList');
+        // Filter to self_estimate source only
+        var selfEsts = (data||[]).filter(function(e){ return e.Source === 'self_estimate'; });
+        if (selfEsts.length === 0) { el.innerHTML = ''; return; }
+        var html = '';
+        selfEsts.forEach(function(e) {
+            var statusColor = e.Status === 'approved' ? '#2e7d32' : e.Status === 'rejected' ? '#dc3545' : '#F9B232';
+            var borderColor = e.Status === 'approved' ? '#2e7d32' : e.Status === 'rejected' ? '#dc3545' : '#F9B232';
+            html += '<div style="background:#fff;border:1px solid #dee2e6;padding:0.75rem;border-radius:2px;margin-bottom:0.5rem;border-left:3px solid '+borderColor+';">';
+            html += '<div style="display:flex;justify-content:space-between;align-items:center;">';
+            html += '<div><strong>'+esc(e.StartDate)+' to '+esc(e.EndDate)+'</strong> — '+e.WeeklyHours+'h/wk = '+e.TotalHours+'h total</div>';
+            html += '<span style="font-size:0.8rem;font-weight:600;color:'+statusColor+';text-transform:uppercase;">'+esc(e.Status)+'</span>';
+            html += '</div>';
+            if (e.Note) html += '<div style="color:#666;font-size:0.85rem;margin-top:0.25rem;">'+esc(e.Note)+'</div>';
+            if (e.ReviewNote) html += '<div style="color:#666;font-size:0.85rem;margin-top:0.25rem;font-style:italic;">Review: '+esc(e.ReviewNote)+'</div>';
+            html += '</div>';
+        });
+        el.innerHTML = html;
+    }).catch(function(){});
+}
+var seForm = document.getElementById('selfEstForm');
+if (seForm) {
+    seForm.addEventListener('submit', function(ev) {
+        ev.preventDefault();
+        var msg = document.getElementById('seMsg');
+        var data = {
+            StartDate: document.getElementById('seStart').value,
+            EndDate: document.getElementById('seEnd').value,
+            WeeklyHours: parseFloat(document.getElementById('seWeekly').value) || 0,
+            Note: document.getElementById('seNote').value
+        };
+        if (!data.StartDate || !data.EndDate || !data.WeeklyHours) {
+            msg.textContent = 'Fill all required fields'; msg.style.color = '#dc3545'; return;
+        }
+        msg.textContent = 'Submitting...'; msg.style.color = '#666';
+        fetch('/api/self-estimates', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)})
+        .then(function(r) { if (!r.ok) return r.text().then(function(t){ throw new Error(t); }); return r.json(); })
+        .then(function(e) {
+            msg.textContent = 'Submitted '+e.TotalHours+'h for review!'; msg.style.color = '#2e7d32';
+            seForm.reset(); loadSelfEstimates();
+        }).catch(function(err) { msg.textContent = 'Error: '+err.message; msg.style.color = '#dc3545'; });
+    });
+}
+if (memberID) { loadTrainingLog(); loadGoal(); loadMilestones(); loadSelfEstimates(); }
 </script>
 {{ end }}

@@ -37,6 +37,9 @@ func registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/attendance/checkout", handleCheckOut)
 	mux.HandleFunc("/api/estimated-hours", handleEstimatedHours)
 	mux.HandleFunc("/api/estimated-hours/check-overlap", handleEstimatedHoursCheckOverlap)
+	mux.HandleFunc("/api/self-estimates", handleSelfEstimates)
+	mux.HandleFunc("/api/self-estimates/pending", handleSelfEstimatesPending)
+	mux.HandleFunc("/api/self-estimates/review", handleSelfEstimatesReview)
 	mux.HandleFunc("/api/classes/today", handleTodaysClasses)
 	mux.HandleFunc("/api/kiosk/launch", handleKioskLaunch)
 	mux.HandleFunc("/api/kiosk/exit", handleKioskExit)
@@ -70,6 +73,7 @@ func registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/admin/inactive", handleAdminInactivePage)
 	mux.HandleFunc("/admin/milestones", handleAdminMilestonesPage)
 	mux.HandleFunc("/admin/perf", handleAdminPerfPage)
+	mux.HandleFunc("/admin/self-estimates", handleSelfEstimatesPage)
 
 	// Member pages
 	mux.HandleFunc("/training-log", handleTrainingLogPage)

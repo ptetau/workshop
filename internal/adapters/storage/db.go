@@ -28,6 +28,7 @@ var migrations = []migration{
 	{version: 8, description: "member grading metric", apply: migrate8},
 	{version: 9, description: "grading notes", apply: migrate9},
 	{version: 10, description: "grading member config overrides", apply: migrate10},
+	{version: 11, description: "self-estimate review fields", apply: migrate11},
 }
 
 // SchemaVersion returns the current schema version of the database.
@@ -545,6 +546,18 @@ func migrate10(tx *sql.Tx) error {
 		UNIQUE(member_id, belt)
 	);
 	CREATE INDEX IF NOT EXISTS idx_grading_member_config_member ON grading_member_config(member_id);
+	`)
+	return err
+}
+
+// --- Migration 11: Self-estimate review fields ---
+// Adds review columns for the self-estimate approval workflow (§3.5).
+func migrate11(tx *sql.Tx) error {
+	_, err := tx.Exec(`
+	ALTER TABLE estimated_hours ADD COLUMN reviewed_by TEXT NOT NULL DEFAULT '';
+	ALTER TABLE estimated_hours ADD COLUMN reviewed_at TEXT NOT NULL DEFAULT '';
+	ALTER TABLE estimated_hours ADD COLUMN review_note TEXT NOT NULL DEFAULT '';
+	CREATE INDEX IF NOT EXISTS idx_estimated_hours_status ON estimated_hours(status);
 	`)
 	return err
 }

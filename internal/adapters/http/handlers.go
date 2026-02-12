@@ -636,6 +636,180 @@ func handleEstimatedHoursCheckOverlap(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(result)
 }
 
+// handleSelfEstimates handles POST /api/self-estimates — member submits a self-estimate.
+func handleSelfEstimates(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	sess, ok := middleware.GetSessionFromContext(r.Context())
+	if !ok {
+		http.Error(w, "not authenticated", http.StatusUnauthorized)
+		return
+	}
+	// Look up the member record for the logged-in user
+	m, err := stores.MemberStore.GetByEmail(r.Context(), sess.Email)
+	if err != nil {
+		http.Error(w, "no member record found for this account", http.StatusForbidden)
+		return
+	}
+	var input struct {
+		StartDate   string  `json:"StartDate"`
+		EndDate     string  `json:"EndDate"`
+		WeeklyHours float64 `json:"WeeklyHours"`
+		Note        string  `json:"Note"`
+	}
+	if err := strictDecode(r, &input); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	orchInput := orchestrators.SubmitSelfEstimateInput{
+		MemberID:    m.ID,
+		StartDate:   input.StartDate,
+		EndDate:     input.EndDate,
+		WeeklyHours: input.WeeklyHours,
+		Note:        input.Note,
+	}
+	orchDeps := orchestrators.SubmitSelfEstimateDeps{
+		EstimatedHoursStore: stores.EstimatedHoursStore,
+		GenerateID:          generateID,
+		Now:                 timeNow,
+	}
+	entry, err := orchestrators.ExecuteSubmitSelfEstimate(r.Context(), orchInput, orchDeps)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(entry)
+}
+
+// handleSelfEstimatesPending handles GET /api/self-estimates/pending — admin/coach review queue.
+func handleSelfEstimatesPending(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	sess, ok := middleware.GetSessionFromContext(r.Context())
+	if !ok {
+		http.Error(w, "not authenticated", http.StatusUnauthorized)
+		return
+	}
+	if sess.Role != "admin" && sess.Role != "coach" {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	entries, err := stores.EstimatedHoursStore.ListPending(r.Context())
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	// Enrich with member names
+	type pendingEntry struct {
+		ID          string  `json:"ID"`
+		MemberID    string  `json:"MemberID"`
+		MemberName  string  `json:"MemberName"`
+		StartDate   string  `json:"StartDate"`
+		EndDate     string  `json:"EndDate"`
+		WeeklyHours float64 `json:"WeeklyHours"`
+		TotalHours  float64 `json:"TotalHours"`
+		Note        string  `json:"Note"`
+		CreatedAt   string  `json:"CreatedAt"`
+	}
+	result := make([]pendingEntry, 0, len(entries))
+	for _, e := range entries {
+		name := ""
+		if m, err := stores.MemberStore.GetByID(r.Context(), e.MemberID); err == nil {
+			name = m.Name
+		}
+		result = append(result, pendingEntry{
+			ID:          e.ID,
+			MemberID:    e.MemberID,
+			MemberName:  name,
+			StartDate:   e.StartDate,
+			EndDate:     e.EndDate,
+			WeeklyHours: e.WeeklyHours,
+			TotalHours:  e.TotalHours,
+			Note:        e.Note,
+			CreatedAt:   e.CreatedAt.Format(time.RFC3339),
+		})
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if len(result) == 0 {
+		w.Write([]byte("[]"))
+		return
+	}
+	json.NewEncoder(w).Encode(result)
+}
+
+// handleSelfEstimatesReview handles POST /api/self-estimates/review — admin/coach approves or rejects.
+func handleSelfEstimatesReview(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	sess, ok := middleware.GetSessionFromContext(r.Context())
+	if !ok {
+		http.Error(w, "not authenticated", http.StatusUnauthorized)
+		return
+	}
+	if sess.Role != "admin" && sess.Role != "coach" {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	var input struct {
+		ID            string  `json:"ID"`
+		Action        string  `json:"Action"`
+		AdjustedHours float64 `json:"AdjustedHours"`
+		ReviewNote    string  `json:"ReviewNote"`
+	}
+	if err := strictDecode(r, &input); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if input.ID == "" || (input.Action != "approve" && input.Action != "reject") {
+		http.Error(w, "ID and Action (approve/reject) are required", http.StatusBadRequest)
+		return
+	}
+	orchInput := orchestrators.ReviewSelfEstimateInput{
+		ID:            input.ID,
+		Action:        input.Action,
+		AdjustedHours: input.AdjustedHours,
+		ReviewNote:    input.ReviewNote,
+		ReviewerID:    sess.AccountID,
+	}
+	orchDeps := orchestrators.ReviewSelfEstimateDeps{
+		EstimatedHoursStore: stores.EstimatedHoursStore,
+		Now:                 timeNow,
+	}
+	entry, err := orchestrators.ExecuteReviewSelfEstimate(r.Context(), orchInput, orchDeps)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(entry)
+}
+
+// handleSelfEstimatesPage handles GET /admin/self-estimates — admin review queue page.
+func handleSelfEstimatesPage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	sess, ok := middleware.GetSessionFromContext(r.Context())
+	if !ok {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	if sess.Role != "admin" && sess.Role != "coach" {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	renderTemplate(w, r, "admin_self_estimates.html", nil)
+}
+
 // handlePostInjuriesReportInjury handles POST /injuries
 func handlePostInjuriesReportInjury(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()

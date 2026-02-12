@@ -22,6 +22,7 @@ const (
 const (
 	StatusApproved = "approved"
 	StatusPending  = "pending"
+	StatusRejected = "rejected"
 )
 
 // Domain errors.
@@ -32,10 +33,12 @@ var (
 	ErrStartAfterEnd      = errors.New("start date cannot be after end date")
 	ErrInvalidWeekly      = errors.New("weekly hours must be greater than zero")
 	ErrInvalidSource      = errors.New("source must be 'estimate' or 'self_estimate'")
-	ErrInvalidStatus      = errors.New("status must be 'approved' or 'pending'")
+	ErrInvalidStatus      = errors.New("status must be 'approved', 'pending', or 'rejected'")
 	ErrNoteTooLong        = errors.New("note cannot exceed 500 characters")
 	ErrEmptyCreatedBy     = errors.New("created by cannot be empty")
 	ErrWeeklyHoursTooHigh = errors.New("weekly hours cannot exceed 40")
+	ErrNotPending         = errors.New("only pending estimates can be reviewed")
+	ErrReviewNoteTooLong  = errors.New("review note cannot exceed 500 characters")
 )
 
 // EstimatedHours represents a bulk-estimated mat hours entry for a member.
@@ -49,10 +52,13 @@ type EstimatedHours struct {
 	WeeklyHours float64 // hours per week
 	TotalHours  float64 // computed total
 	Source      string  // estimate or self_estimate
-	Status      string  // approved or pending
+	Status      string  // approved, pending, or rejected
 	Note        string
 	CreatedBy   string // account ID
 	CreatedAt   time.Time
+	ReviewedBy  string // account ID of reviewer (admin/coach)
+	ReviewedAt  time.Time
+	ReviewNote  string // reason for rejection or adjustment note
 }
 
 // Validate checks the estimated hours invariants.
@@ -88,7 +94,7 @@ func (e *EstimatedHours) Validate() error {
 	if e.Source != SourceEstimate && e.Source != SourceSelfEstimate && e.Source != SourceCredit {
 		return ErrInvalidSource
 	}
-	if e.Status != StatusApproved && e.Status != StatusPending {
+	if e.Status != StatusApproved && e.Status != StatusPending && e.Status != StatusRejected {
 		return ErrInvalidStatus
 	}
 	if len(e.Note) > MaxNoteLength {
@@ -97,6 +103,43 @@ func (e *EstimatedHours) Validate() error {
 	if e.CreatedBy == "" {
 		return ErrEmptyCreatedBy
 	}
+	return nil
+}
+
+// Approve marks the estimate as approved, optionally adjusting the total hours.
+// PRE: Status must be pending. reviewerID is non-empty. adjustedHours > 0 if provided, else keeps original.
+// POST: Status becomes approved, ReviewedBy/ReviewedAt set.
+func (e *EstimatedHours) Approve(reviewerID string, adjustedHours float64, reviewNote string, now time.Time) error {
+	if e.Status != StatusPending {
+		return ErrNotPending
+	}
+	if len(reviewNote) > MaxNoteLength {
+		return ErrReviewNoteTooLong
+	}
+	if adjustedHours > 0 {
+		e.TotalHours = adjustedHours
+	}
+	e.Status = StatusApproved
+	e.ReviewedBy = reviewerID
+	e.ReviewedAt = now
+	e.ReviewNote = reviewNote
+	return nil
+}
+
+// Reject marks the estimate as rejected with a reason.
+// PRE: Status must be pending. reviewerID is non-empty.
+// POST: Status becomes rejected, ReviewedBy/ReviewedAt/ReviewNote set.
+func (e *EstimatedHours) Reject(reviewerID string, reason string, now time.Time) error {
+	if e.Status != StatusPending {
+		return ErrNotPending
+	}
+	if len(reason) > MaxNoteLength {
+		return ErrReviewNoteTooLong
+	}
+	e.Status = StatusRejected
+	e.ReviewedBy = reviewerID
+	e.ReviewedAt = now
+	e.ReviewNote = reason
 	return nil
 }
 

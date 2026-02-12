@@ -1,0 +1,104 @@
+{{ define "content" }}
+<div class="card">
+    <h1>Self-Estimate Review Queue</h1>
+    <p style="color:#6c757d;font-size:0.85rem;margin-bottom:1.5rem;">Members who trained elsewhere can submit estimated hours for approval. Review and approve, adjust, or reject below.</p>
+
+    <div id="pendingList" style="color:#6c757d;">Loading...</div>
+    <div id="emptyMsg" style="display:none;color:#6c757d;font-style:italic;">No pending self-estimates to review.</div>
+
+    <div id="reviewModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+        <div style="background:#fff;padding:2rem;border-radius:4px;max-width:500px;width:90%;margin:auto;margin-top:10vh;">
+            <h2 style="margin-top:0;" id="modalTitle">Review Estimate</h2>
+            <div id="modalDetails" style="margin-bottom:1rem;"></div>
+            <div class="form-group">
+                <label for="adjHours">Adjusted Hours (0 = keep original)</label>
+                <input type="number" id="adjHours" min="0" step="0.5" value="0" style="width:120px;">
+            </div>
+            <div class="form-group" style="margin-top:0.75rem;">
+                <label for="revNote">Note (required for rejection)</label>
+                <input type="text" id="revNote" placeholder="Reason or comment" maxlength="500">
+            </div>
+            <div style="display:flex;gap:0.75rem;margin-top:1rem;">
+                <button onclick="submitReview('approve')" style="background:#2e7d32;color:#fff;">Approve</button>
+                <button onclick="submitReview('reject')" style="background:#dc3545;color:#fff;">Reject</button>
+                <button onclick="closeModal()" style="background:#6c757d;color:#fff;">Cancel</button>
+            </div>
+            <span id="revMsg" style="display:block;margin-top:0.5rem;font-size:0.85rem;"></span>
+        </div>
+    </div>
+</div>
+
+<script>
+function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+var currentReviewID = '';
+
+function loadPending() {
+    fetch('/api/self-estimates/pending').then(r=>r.json()).then(data => {
+        var el = document.getElementById('pendingList');
+        if (!data || data.length === 0) {
+            el.innerHTML = '';
+            document.getElementById('emptyMsg').style.display = 'block';
+            return;
+        }
+        document.getElementById('emptyMsg').style.display = 'none';
+        var html = '';
+        data.forEach(function(e) {
+            html += '<div style="background:#fff;border:1px solid #dee2e6;padding:1rem;border-radius:2px;margin-bottom:0.75rem;border-left:3px solid #F9B232;">';
+            html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;">';
+            html += '<div>';
+            html += '<strong>'+esc(e.MemberName || 'Unknown')+'</strong>';
+            html += '<div style="color:#666;font-size:0.9rem;margin-top:0.25rem;">'+esc(e.StartDate)+' to '+esc(e.EndDate)+' — '+e.WeeklyHours+'h/wk = <strong>'+e.TotalHours+'h</strong> total</div>';
+            if (e.Note) html += '<div style="color:#666;font-size:0.85rem;margin-top:0.25rem;font-style:italic;">"'+esc(e.Note)+'"</div>';
+            html += '<div style="color:#999;font-size:0.8rem;margin-top:0.25rem;">Submitted '+esc(e.CreatedAt.substring(0,10))+'</div>';
+            html += '</div>';
+            html += '<button onclick="openReview(\''+e.ID+'\',\''+esc(e.MemberName)+'\','+e.TotalHours+')" style="white-space:nowrap;">Review</button>';
+            html += '</div>';
+            html += '</div>';
+        });
+        el.innerHTML = html;
+    }).catch(function() {
+        document.getElementById('pendingList').innerHTML = '<p style="color:#dc3545;">Failed to load.</p>';
+    });
+}
+
+function openReview(id, name, hours) {
+    currentReviewID = id;
+    document.getElementById('modalTitle').textContent = 'Review: ' + name;
+    document.getElementById('modalDetails').innerHTML = 'Original total: <strong>' + hours + 'h</strong>';
+    document.getElementById('adjHours').value = 0;
+    document.getElementById('revNote').value = '';
+    document.getElementById('revMsg').textContent = '';
+    document.getElementById('reviewModal').style.display = 'flex';
+}
+
+function closeModal() {
+    document.getElementById('reviewModal').style.display = 'none';
+    currentReviewID = '';
+}
+
+function submitReview(action) {
+    if (!currentReviewID) return;
+    var msg = document.getElementById('revMsg');
+    var note = document.getElementById('revNote').value;
+    if (action === 'reject' && !note.trim()) {
+        msg.textContent = 'A note is required when rejecting.'; msg.style.color = '#dc3545';
+        return;
+    }
+    var data = {
+        ID: currentReviewID,
+        Action: action,
+        AdjustedHours: parseFloat(document.getElementById('adjHours').value) || 0,
+        ReviewNote: note
+    };
+    msg.textContent = 'Processing...'; msg.style.color = '#666';
+    fetch('/api/self-estimates/review', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)})
+    .then(function(r) { if (!r.ok) return r.text().then(function(t){ throw new Error(t); }); return r.json(); })
+    .then(function() {
+        closeModal();
+        loadPending();
+    }).catch(function(err) { msg.textContent = 'Error: ' + err.message; msg.style.color = '#dc3545'; });
+}
+
+loadPending();
+</script>
+{{ end }}
