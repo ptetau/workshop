@@ -64,7 +64,7 @@ function createHoliday() {
     .then(()=>{document.getElementById('formMsg').textContent='Created!';loadHolidays();setTimeout(()=>document.getElementById('formMsg').textContent='',2000);})
     .catch(()=>document.getElementById('formMsg').textContent='Error');
 }
-function deleteHoliday(id) { fetch('/api/holidays?id='+id,{method:'DELETE'}).then(()=>loadHolidays()); }
+function deleteHoliday(id) { fetch('/api/holidays?id='+id,{method:'DELETE',headers:{'Content-Type':'application/json'}}).then(()=>loadHolidays()); }
 loadHolidays();
 </script>
 {{ end }}

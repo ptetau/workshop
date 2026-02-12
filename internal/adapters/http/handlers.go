@@ -4744,6 +4744,32 @@ func handleRotorByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if r.Method == "PUT" {
+		var input struct {
+			Name string `json:"name"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			return
+		}
+		rotor, err := stores.RotorStore.GetRotor(ctx, id)
+		if err != nil {
+			http.Error(w, "Rotor not found", http.StatusNotFound)
+			return
+		}
+		if err := rotor.Rename(input.Name); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := stores.RotorStore.SaveRotor(ctx, rotor); err != nil {
+			internalError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(rotor)
+		return
+	}
+
 	if r.Method == "DELETE" {
 		rotor, err := stores.RotorStore.GetRotor(ctx, id)
 		if err != nil {

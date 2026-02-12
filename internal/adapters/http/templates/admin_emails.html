@@ -59,7 +59,7 @@ function statusBadge(status) {
 
 function deleteEmail(id) {
     if (!confirm('Delete this draft?')) return;
-    fetch('/api/emails/delete?id='+encodeURIComponent(id),{method:'DELETE'})
+    fetch('/api/emails/delete?id='+encodeURIComponent(id),{method:'DELETE',headers:{'Content-Type':'application/json'}})
     .then(function(r){ if(!r.ok) throw r; loadEmails(); })
     .catch(function(){ alert('Failed to delete'); });
 }
