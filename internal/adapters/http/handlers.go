@@ -1392,6 +1392,72 @@ func handleGradingProposals(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusMethodNotAllowed)
 }
 
+// handleGradingNotes handles GET/POST for /api/grading/notes
+func handleGradingNotes(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if r.Method == "GET" {
+		if _, ok := middleware.GetSessionFromContext(ctx); !ok {
+			http.Error(w, "not authenticated", http.StatusUnauthorized)
+			return
+		}
+		memberID := r.URL.Query().Get("member_id")
+		if memberID == "" {
+			http.Error(w, "member_id is required", http.StatusBadRequest)
+			return
+		}
+		notes, err := stores.GradingNoteStore.ListByMemberID(ctx, memberID)
+		if err != nil {
+			internalError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if notes == nil {
+			w.Write([]byte("[]"))
+			return
+		}
+		json.NewEncoder(w).Encode(notes)
+		return
+	}
+
+	if r.Method == "POST" {
+		sess, ok := middleware.GetSessionFromContext(ctx)
+		if !ok {
+			http.Error(w, "not authenticated", http.StatusUnauthorized)
+			return
+		}
+		var input struct {
+			MemberID string `json:"MemberID"`
+			Content  string `json:"Content"`
+		}
+		if err := strictDecode(r, &input); err != nil {
+			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			return
+		}
+		note := gradingDomain.Note{
+			ID:        generateID(),
+			MemberID:  input.MemberID,
+			Content:   input.Content,
+			CreatedBy: sess.AccountID,
+			CreatedAt: timeNow(),
+		}
+		if err := note.Validate(); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := stores.GradingNoteStore.Save(ctx, note); err != nil {
+			internalError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(note)
+		return
+	}
+
+	w.WriteHeader(http.StatusMethodNotAllowed)
+}
+
 // handleMessages handles GET/POST for /api/messages
 func handleMessages(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()

@@ -95,6 +95,7 @@ func newTestApp(t *testing.T) *testApp {
 		GradingRecordStore:   gradingStore.NewRecordSQLiteStore(db),
 		GradingConfigStore:   gradingStore.NewConfigSQLiteStore(db),
 		GradingProposalStore: gradingStore.NewProposalSQLiteStore(db),
+		GradingNoteStore:     gradingStore.NewNoteSQLiteStore(db),
 		MessageStore:         messageStore.NewSQLiteStore(db),
 		ObservationStore:     observationStore.NewSQLiteStore(db),
 		MilestoneStore:       milestoneStore.NewSQLiteStore(db),

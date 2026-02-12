@@ -279,6 +279,54 @@ func scanProposals(rows *sql.Rows) ([]domain.Proposal, error) {
 	return proposals, rows.Err()
 }
 
+// --- NoteSQLiteStore ---
+
+// NoteSQLiteStore implements NoteStore using SQLite.
+type NoteSQLiteStore struct {
+	db storage.SQLDB
+}
+
+// NewNoteSQLiteStore creates a new NoteSQLiteStore.
+func NewNoteSQLiteStore(db storage.SQLDB) *NoteSQLiteStore {
+	return &NoteSQLiteStore{db: db}
+}
+
+// Save persists a grading Note to the database.
+// PRE: entity has been validated
+// POST: Entity is persisted (insert or update)
+func (s *NoteSQLiteStore) Save(ctx context.Context, n domain.Note) error {
+	_, err := s.db.ExecContext(ctx,
+		`INSERT INTO grading_note (id, member_id, content, created_by, created_at)
+		 VALUES (?, ?, ?, ?, ?)
+		 ON CONFLICT(id) DO UPDATE SET content=excluded.content`,
+		n.ID, n.MemberID, n.Content, n.CreatedBy, n.CreatedAt.Format(timeLayout))
+	return err
+}
+
+// ListByMemberID retrieves grading Notes for a member.
+// PRE: memberID is non-empty
+// POST: Returns notes for the given member ordered by creation time desc
+func (s *NoteSQLiteStore) ListByMemberID(ctx context.Context, memberID string) ([]domain.Note, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT id, member_id, content, created_by, created_at
+		 FROM grading_note WHERE member_id = ? ORDER BY created_at DESC`, memberID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var notes []domain.Note
+	for rows.Next() {
+		var n domain.Note
+		var createdAt string
+		if err := rows.Scan(&n.ID, &n.MemberID, &n.Content, &n.CreatedBy, &createdAt); err != nil {
+			return nil, err
+		}
+		n.CreatedAt, _ = time.Parse(timeLayout, createdAt)
+		notes = append(notes, n)
+	}
+	return notes, rows.Err()
+}
+
 func nullStr(s string) interface{} {
 	if s == "" {
 		return nil

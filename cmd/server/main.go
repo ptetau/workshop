@@ -89,6 +89,7 @@ func main() {
 		GradingRecordStore:   gradingStore.NewRecordSQLiteStore(timedDB),
 		GradingConfigStore:   gradingStore.NewConfigSQLiteStore(timedDB),
 		GradingProposalStore: gradingStore.NewProposalSQLiteStore(timedDB),
+		GradingNoteStore:     gradingStore.NewNoteSQLiteStore(timedDB),
 		MessageStore:         messageStore.NewSQLiteStore(timedDB),
 		ObservationStore:     observationStore.NewSQLiteStore(timedDB),
 		MilestoneStore:       milestoneStore.NewSQLiteStore(timedDB),

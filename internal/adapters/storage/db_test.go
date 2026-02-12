@@ -80,6 +80,7 @@ var expectedTables = []string{
 	"email_template",
 	"estimated_hours",
 	"grading_config",
+	"grading_note",
 	"grading_proposal",
 	"grading_record",
 	"holiday",

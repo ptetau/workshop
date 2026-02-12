@@ -50,6 +50,7 @@ type Stores struct {
 	GradingRecordStore   gradingStore.RecordStore
 	GradingConfigStore   gradingStore.ConfigStore
 	GradingProposalStore gradingStore.ProposalStore
+	GradingNoteStore     gradingStore.NoteStore
 	MessageStore         messageStore.Store
 	ObservationStore     observationStore.Store
 	MilestoneStore       milestoneStore.Store

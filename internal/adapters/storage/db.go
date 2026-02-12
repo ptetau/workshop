@@ -26,6 +26,7 @@ var migrations = []migration{
 	{version: 6, description: "member milestone achievements", apply: migrate6},
 	{version: 7, description: "estimated hours", apply: migrate7},
 	{version: 8, description: "member grading metric", apply: migrate8},
+	{version: 9, description: "grading notes", apply: migrate9},
 }
 
 // SchemaVersion returns the current schema version of the database.
@@ -509,6 +510,23 @@ func migrate7(tx *sql.Tx) error {
 	CREATE INDEX IF NOT EXISTS idx_estimated_hours_member ON estimated_hours(member_id);
 	`
 	_, err := tx.Exec(schema)
+	return err
+}
+
+// --- Migration 9: Grading notes ---
+// Adds grading_note table for coach/admin notes on member readiness.
+func migrate9(tx *sql.Tx) error {
+	_, err := tx.Exec(`
+	CREATE TABLE IF NOT EXISTS grading_note (
+		id TEXT PRIMARY KEY,
+		member_id TEXT NOT NULL,
+		content TEXT NOT NULL,
+		created_by TEXT NOT NULL,
+		created_at TEXT NOT NULL,
+		FOREIGN KEY (member_id) REFERENCES member(id)
+	);
+	CREATE INDEX IF NOT EXISTS idx_grading_note_member ON grading_note(member_id);
+	`)
 	return err
 }
 
