@@ -179,6 +179,31 @@ func (p *Proposal) Reject(adminID string) error {
 	return nil
 }
 
+// Note represents a coach/admin note attached to a member's grading readiness.
+type Note struct {
+	ID        string
+	MemberID  string
+	Content   string
+	CreatedBy string // AccountID of author
+	CreatedAt time.Time
+}
+
+// Validate checks if the Note has valid data.
+// PRE: Note struct is populated
+// POST: Returns nil if valid, error otherwise
+func (n *Note) Validate() error {
+	if n.MemberID == "" {
+		return ErrEmptyMemberID
+	}
+	if n.Content == "" {
+		return errors.New("note content is required")
+	}
+	if n.CreatedBy == "" {
+		return errors.New("created_by is required")
+	}
+	return nil
+}
+
 // InferStripe calculates the stripe count a member should have on their current belt
 // based on accumulated mat hours and the config for the next belt in progression.
 // PRE: config.FlightTimeHours > 0 and config.StripeCount > 0

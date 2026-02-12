@@ -381,6 +381,34 @@ func (m *mockGradingConfigStore) List(ctx context.Context) ([]gradingDomain.Conf
 	return list, nil
 }
 
+type mockGradingNoteStore struct {
+	notes map[string]gradingDomain.Note
+}
+
+// Save implements the mock GradingNoteStore for testing.
+// PRE: valid parameters
+// POST: returns expected result
+func (m *mockGradingNoteStore) Save(ctx context.Context, n gradingDomain.Note) error {
+	if m.notes == nil {
+		m.notes = make(map[string]gradingDomain.Note)
+	}
+	m.notes[n.ID] = n
+	return nil
+}
+
+// ListByMemberID implements the mock GradingNoteStore for testing.
+// PRE: valid parameters
+// POST: returns expected result
+func (m *mockGradingNoteStore) ListByMemberID(ctx context.Context, memberID string) ([]gradingDomain.Note, error) {
+	var list []gradingDomain.Note
+	for _, n := range m.notes {
+		if n.MemberID == memberID {
+			list = append(list, n)
+		}
+	}
+	return list, nil
+}
+
 type mockGradingProposalStore struct {
 	proposals map[string]gradingDomain.Proposal
 }
@@ -864,6 +892,7 @@ func newFullStores() *Stores {
 		GradingRecordStore:   &mockGradingRecordStore{records: make(map[string]gradingDomain.Record)},
 		GradingConfigStore:   &mockGradingConfigStore{configs: make(map[string]gradingDomain.Config)},
 		GradingProposalStore: &mockGradingProposalStore{proposals: make(map[string]gradingDomain.Proposal)},
+		GradingNoteStore:     &mockGradingNoteStore{notes: make(map[string]gradingDomain.Note)},
 		MessageStore:         &mockMessageStore{messages: make(map[string]messageDomain.Message)},
 		ObservationStore:     &mockObservationStore{observations: make(map[string]observationDomain.Observation)},
 		MilestoneStore:       &mockMilestoneStore{milestones: make(map[string]milestoneDomain.Milestone)},

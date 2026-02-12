@@ -21,6 +21,12 @@ type ConfigStore interface {
 	List(ctx context.Context) ([]domain.Config, error)
 }
 
+// NoteStore persists GradingNote state.
+type NoteStore interface {
+	Save(ctx context.Context, value domain.Note) error
+	ListByMemberID(ctx context.Context, memberID string) ([]domain.Note, error)
+}
+
 // ProposalStore persists GradingProposal state.
 type ProposalStore interface {
 	GetByID(ctx context.Context, id string) (domain.Proposal, error)
