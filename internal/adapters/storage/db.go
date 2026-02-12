@@ -27,6 +27,7 @@ var migrations = []migration{
 	{version: 7, description: "estimated hours", apply: migrate7},
 	{version: 8, description: "member grading metric", apply: migrate8},
 	{version: 9, description: "grading notes", apply: migrate9},
+	{version: 10, description: "grading member config overrides", apply: migrate10},
 }
 
 // SchemaVersion returns the current schema version of the database.
@@ -526,6 +527,24 @@ func migrate9(tx *sql.Tx) error {
 		FOREIGN KEY (member_id) REFERENCES member(id)
 	);
 	CREATE INDEX IF NOT EXISTS idx_grading_note_member ON grading_note(member_id);
+	`)
+	return err
+}
+
+// --- Migration 10: Grading member config overrides ---
+// Adds per-member threshold overrides for grading eligibility.
+func migrate10(tx *sql.Tx) error {
+	_, err := tx.Exec(`
+	CREATE TABLE IF NOT EXISTS grading_member_config (
+		id TEXT PRIMARY KEY,
+		member_id TEXT NOT NULL,
+		belt TEXT NOT NULL,
+		flight_time_hours REAL NOT NULL DEFAULT 0,
+		attendance_pct REAL NOT NULL DEFAULT 0,
+		FOREIGN KEY (member_id) REFERENCES member(id),
+		UNIQUE(member_id, belt)
+	);
+	CREATE INDEX IF NOT EXISTS idx_grading_member_config_member ON grading_member_config(member_id);
 	`)
 	return err
 }
