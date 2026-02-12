@@ -2472,6 +2472,123 @@ func handleGradingReadiness(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
+// handleGradingForcePromote handles POST /api/grading/force-promote
+// Allows admin to immediately promote a member, bypassing the proposal flow.
+func handleGradingForcePromote(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	sess, ok := requireAdmin(w, r)
+	if !ok {
+		return
+	}
+	var input struct {
+		MemberID   string `json:"MemberID"`
+		TargetBelt string `json:"TargetBelt"`
+		Reason     string `json:"Reason"`
+	}
+	if err := strictDecode(r, &input); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	record := gradingDomain.Record{
+		ID:         generateID(),
+		MemberID:   input.MemberID,
+		Belt:       input.TargetBelt,
+		Stripe:     0,
+		PromotedAt: timeNow(),
+		ProposedBy: sess.AccountID,
+		ApprovedBy: sess.AccountID,
+		Method:     gradingDomain.MethodOverride,
+	}
+	if err := record.Validate(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := stores.GradingRecordStore.Save(r.Context(), record); err != nil {
+		internalError(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(record)
+}
+
+// handleGradingMemberConfig handles GET/POST for /api/grading/member-config
+// Allows admin to set per-member threshold overrides for grading eligibility.
+func handleGradingMemberConfig(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if r.Method == "GET" {
+		sess, ok := middleware.GetSessionFromContext(ctx)
+		if !ok {
+			http.Error(w, "not authenticated", http.StatusUnauthorized)
+			return
+		}
+		if sess.Role != "admin" && sess.Role != "coach" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		memberID := r.URL.Query().Get("member_id")
+		if memberID == "" {
+			http.Error(w, "member_id is required", http.StatusBadRequest)
+			return
+		}
+		configs, err := stores.GradingMemberConfigStore.ListByMemberID(ctx, memberID)
+		if err != nil {
+			internalError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if configs == nil {
+			w.Write([]byte("[]"))
+			return
+		}
+		json.NewEncoder(w).Encode(configs)
+		return
+	}
+
+	if r.Method == "POST" {
+		sess, ok := requireAdmin(w, r)
+		if !ok {
+			return
+		}
+		_ = sess
+		var input struct {
+			MemberID        string  `json:"MemberID"`
+			Belt            string  `json:"Belt"`
+			FlightTimeHours float64 `json:"FlightTimeHours"`
+			AttendancePct   float64 `json:"AttendancePct"`
+		}
+		if err := strictDecode(r, &input); err != nil {
+			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			return
+		}
+		mc := gradingDomain.MemberConfig{
+			ID:              generateID(),
+			MemberID:        input.MemberID,
+			Belt:            input.Belt,
+			FlightTimeHours: input.FlightTimeHours,
+			AttendancePct:   input.AttendancePct,
+		}
+		if err := mc.Validate(); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := stores.GradingMemberConfigStore.Save(ctx, mc); err != nil {
+			internalError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(mc)
+		return
+	}
+
+	w.WriteHeader(http.StatusMethodNotAllowed)
+}
+
 // handleGradingCredit handles POST /api/grading/credit
 // Allows admin to add a direct mat hours credit to a member's record.
 func handleGradingCredit(w http.ResponseWriter, r *http.Request) {

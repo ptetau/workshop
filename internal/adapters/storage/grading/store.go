@@ -27,6 +27,13 @@ type NoteStore interface {
 	ListByMemberID(ctx context.Context, memberID string) ([]domain.Note, error)
 }
 
+// MemberConfigStore persists per-member grading threshold overrides.
+type MemberConfigStore interface {
+	Save(ctx context.Context, value domain.MemberConfig) error
+	GetByMemberAndBelt(ctx context.Context, memberID, belt string) (domain.MemberConfig, error)
+	ListByMemberID(ctx context.Context, memberID string) ([]domain.MemberConfig, error)
+}
+
 // ProposalStore persists GradingProposal state.
 type ProposalStore interface {
 	GetByID(ctx context.Context, id string) (domain.Proposal, error)

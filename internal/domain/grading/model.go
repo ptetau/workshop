@@ -109,6 +109,35 @@ func (c *Config) Validate() error {
 	return nil
 }
 
+// MemberConfig holds per-member threshold overrides set by Admin.
+// When present, these override the global Config values for readiness calculation.
+type MemberConfig struct {
+	ID              string
+	MemberID        string
+	Belt            string  // target belt this override applies to
+	FlightTimeHours float64 // custom required mat hours (0 = use global)
+	AttendancePct   float64 // custom required attendance % (0 = use global)
+}
+
+// Validate checks if the MemberConfig has valid data.
+// PRE: MemberConfig struct is populated
+// POST: Returns nil if valid, error otherwise
+func (mc *MemberConfig) Validate() error {
+	if mc.MemberID == "" {
+		return ErrEmptyMemberID
+	}
+	if !isValidBelt(mc.Belt) {
+		return ErrInvalidBelt
+	}
+	if mc.FlightTimeHours < 0 {
+		return errors.New("flight time hours cannot be negative")
+	}
+	if mc.AttendancePct < 0 || mc.AttendancePct > 100 {
+		return errors.New("attendance percentage must be between 0 and 100")
+	}
+	return nil
+}
+
 // Proposal represents a coach-proposed promotion awaiting admin approval.
 type Proposal struct {
 	ID         string
