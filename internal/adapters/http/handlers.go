@@ -31,6 +31,7 @@ import (
 	"workshop/internal/domain/attendance"
 	clipDomain "workshop/internal/domain/clip"
 	emailDomain "workshop/internal/domain/email"
+	estimatedHoursDomain "workshop/internal/domain/estimatedhours"
 	gradingDomain "workshop/internal/domain/grading"
 	holidayDomain "workshop/internal/domain/holiday"
 	memberDomain "workshop/internal/domain/member"
@@ -2469,6 +2470,61 @@ func handleGradingReadiness(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
+}
+
+// handleGradingCredit handles POST /api/grading/credit
+// Allows admin to add a direct mat hours credit to a member's record.
+func handleGradingCredit(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	sess, ok := requireAdmin(w, r)
+	if !ok {
+		return
+	}
+	var input struct {
+		MemberID string  `json:"MemberID"`
+		Hours    float64 `json:"Hours"`
+		Reason   string  `json:"Reason"`
+	}
+	if err := strictDecode(r, &input); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if input.MemberID == "" {
+		http.Error(w, "MemberID is required", http.StatusBadRequest)
+		return
+	}
+	if input.Hours <= 0 || input.Hours > 1000 {
+		http.Error(w, "Hours must be between 0 and 1000", http.StatusBadRequest)
+		return
+	}
+	today := timeNow().Format("2006-01-02")
+	entry := estimatedHoursDomain.EstimatedHours{
+		ID:          generateID(),
+		MemberID:    input.MemberID,
+		StartDate:   today,
+		EndDate:     today,
+		WeeklyHours: input.Hours,
+		TotalHours:  input.Hours,
+		Source:      estimatedHoursDomain.SourceCredit,
+		Status:      estimatedHoursDomain.StatusApproved,
+		Note:        input.Reason,
+		CreatedBy:   sess.AccountID,
+		CreatedAt:   timeNow(),
+	}
+	if err := entry.Validate(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := stores.EstimatedHoursStore.Save(r.Context(), entry); err != nil {
+		internalError(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(entry)
 }
 
 // handleGradingMetricToggle handles POST /api/grading/metric
