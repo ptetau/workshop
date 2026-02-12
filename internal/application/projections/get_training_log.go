@@ -77,6 +77,13 @@ type TrainingLogResult struct {
 	NextBelt           string  // next belt in progression (empty if at highest)
 	ProgressPct        float64 // percentage progress toward next belt (0-100)
 	RequiredHours      float64 // hours required for next belt
+	GradingMetric      string  // "sessions" or "hours"
+	TermName           string  // current term name (kids sessions mode only)
+	TermAttended       int     // sessions attended this term
+	TermTotal          int     // total available sessions this term
+	TermAttendancePct  float64 // attendance percentage this term
+	TermThresholdPct   float64 // required attendance percentage
+	TermEligible       bool    // whether eligible for promotion
 	Entries            []TrainingLogEntry
 }
 
@@ -98,9 +105,10 @@ func QueryGetTrainingLog(ctx context.Context, query GetTrainingLogQuery, deps Ge
 	})
 
 	result := TrainingLogResult{
-		MemberID:   m.ID,
-		MemberName: m.Name,
-		Program:    m.Program,
+		MemberID:      m.ID,
+		MemberName:    m.Name,
+		Program:       m.Program,
+		GradingMetric: m.GradingMetric,
 	}
 
 	if len(records) == 0 {

@@ -98,7 +98,21 @@ function loadTrainingLog() {
         }
 
         // Progress bar toward next belt
-        if (data.NextBelt && data.RequiredHours > 0) {
+        if (data.GradingMetric === 'sessions' && data.TermTotal > 0) {
+            // Kids sessions mode: show term attendance progress
+            document.getElementById('progressSection').style.display = 'block';
+            document.getElementById('nextBeltName').textContent = data.NextBelt || 'next belt';
+            var pct = Math.min(data.TermAttendancePct || 0, 100);
+            document.getElementById('progressBar').style.width = pct.toFixed(0) + '%';
+            document.getElementById('progressBar').style.background = data.TermEligible
+                ? 'linear-gradient(90deg,#2e7d32,#43a047)'
+                : 'linear-gradient(90deg,#F9B232,#e65100)';
+            var label = (data.TermAttended||0) + ' / ' + data.TermTotal + ' sessions';
+            if (data.TermName) label += ' (' + data.TermName + ')';
+            label += ' — ' + Math.round(pct) + '%';
+            if (data.TermEligible) label += ' ✓ eligible';
+            document.getElementById('progressLabel').textContent = label;
+        } else if (data.NextBelt && data.RequiredHours > 0) {
             document.getElementById('progressSection').style.display = 'block';
             document.getElementById('nextBeltName').textContent = data.NextBelt;
             document.getElementById('progressBar').style.width = Math.min(data.ProgressPct || 0, 100).toFixed(0) + '%';

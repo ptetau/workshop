@@ -1155,6 +1155,40 @@ func handleGetTrainingLog(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
+
+	// For kids in sessions mode, enrich with term attendance data
+	if result.Program == "kids" && (result.GradingMetric == "" || result.GradingMetric == memberDomain.MetricSessions) {
+		if result.GradingMetric == "" {
+			result.GradingMetric = memberDomain.MetricSessions
+		}
+		kidsQuery := projections.GetKidsTermReadinessQuery{Now: time.Now()}
+		kidsDeps := projections.GetKidsTermReadinessDeps{
+			TermStore:          stores.TermStore,
+			ProgramStore:       stores.ProgramStore,
+			ClassTypeStore:     stores.ClassTypeStore,
+			ScheduleStore:      stores.ScheduleStore,
+			HolidayStore:       stores.HolidayStore,
+			MemberStore:        stores.MemberStore,
+			AttendanceStore:    stores.AttendanceStore,
+			GradingRecordStore: stores.GradingRecordStore,
+			GradingConfigStore: stores.GradingConfigStore,
+		}
+		kidsResult, err := projections.QueryGetKidsTermReadiness(r.Context(), kidsQuery, kidsDeps)
+		if err == nil {
+			result.TermName = kidsResult.TermName
+			for _, e := range kidsResult.Entries {
+				if e.MemberID == memberID {
+					result.TermAttended = e.Attended
+					result.TermTotal = e.TotalSessions
+					result.TermAttendancePct = e.AttendancePct
+					result.TermThresholdPct = e.ThresholdPct
+					result.TermEligible = e.Eligible
+					break
+				}
+			}
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(result)
 }
