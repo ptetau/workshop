@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -2449,6 +2450,14 @@ func handleGradingReadiness(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 	}
+
+	// Sort by proximity to eligibility (highest % first) — #63
+	sort.Slice(adults, func(i, j int) bool {
+		return adults[i].PercentReady > adults[j].PercentReady
+	})
+	sort.Slice(kids, func(i, j int) bool {
+		return kids[i].AttendancePct > kids[j].AttendancePct
+	})
 
 	resp := readinessResponse{Adults: adults, Kids: kids, TermName: termName}
 	if resp.Adults == nil {
