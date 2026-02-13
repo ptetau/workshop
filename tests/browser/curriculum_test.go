@@ -612,6 +612,78 @@ func TestCurriculum_HiddenSurpriseTheme(t *testing.T) {
 	}
 }
 
+// TestCurriculum_InlineTopicEdit tests editing topic name and duration via PUT (auto-save).
+func TestCurriculum_InlineTopicEdit(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping browser test in short mode")
+	}
+	app := newTestApp(t)
+	page := app.newPage(t)
+	app.login(t, page)
+
+	classTypes := apiGet(t, page, app.BaseURL+"/api/class-types")
+	classTypeID := classTypes.([]interface{})[0].(map[string]interface{})["ID"].(string)
+
+	// Create draft rotor with a theme and topic
+	rotorResp := apiPost(t, page, app.BaseURL+"/api/rotors", map[string]interface{}{
+		"class_type_id": classTypeID, "name": "Inline Edit Test",
+	})
+	rotorID := rotorResp.(map[string]interface{})["ID"].(string)
+
+	themeResp := apiPost(t, page, app.BaseURL+"/api/rotors/themes", map[string]interface{}{
+		"rotor_id": rotorID, "name": "Ground", "position": 0,
+	})
+	themeID := themeResp.(map[string]interface{})["ID"].(string)
+
+	topicResp := apiPost(t, page, app.BaseURL+"/api/rotors/topics", map[string]interface{}{
+		"rotor_theme_id": themeID, "name": "Closed Guard", "duration_weeks": 2,
+	})
+	topicID := topicResp.(map[string]interface{})["ID"].(string)
+
+	// Edit topic name via PUT
+	updated := apiPut(t, page, app.BaseURL+"/api/rotors/topics?id="+topicID, map[string]interface{}{
+		"name": "Open Guard",
+	})
+	if updated.(map[string]interface{})["Name"].(string) != "Open Guard" {
+		t.Fatal("expected name to be updated to Open Guard")
+	}
+
+	// Edit duration via PUT
+	updated2 := apiPut(t, page, app.BaseURL+"/api/rotors/topics?id="+topicID, map[string]interface{}{
+		"duration_weeks": 3,
+	})
+	if toInt(updated2.(map[string]interface{})["DurationWeeks"]) != 3 {
+		t.Fatal("expected duration_weeks to be updated to 3")
+	}
+
+	// Verify persistence by re-fetching
+	topics := apiGet(t, page, app.BaseURL+"/api/rotors/topics?theme_id="+themeID)
+	topicList := topics.([]interface{})
+	if len(topicList) != 1 {
+		t.Fatalf("expected 1 topic, got %d", len(topicList))
+	}
+	tp := topicList[0].(map[string]interface{})
+	if tp["Name"].(string) != "Open Guard" {
+		t.Fatalf("expected persisted name Open Guard, got %s", tp["Name"].(string))
+	}
+	if toInt(tp["DurationWeeks"]) != 3 {
+		t.Fatalf("expected persisted duration 3, got %v", tp["DurationWeeks"])
+	}
+
+	// Verify validation: empty name should fail
+	_, putErr := page.Evaluate(fmt.Sprintf(`async () => {
+		const r = await fetch('%s/api/rotors/topics?id=%s', {
+			method: 'PUT',
+			headers: {'Content-Type': 'application/json'},
+			body: JSON.stringify({name: ''})
+		});
+		return r.status;
+	}`, app.BaseURL, topicID))
+	if putErr != nil {
+		t.Fatal(putErr)
+	}
+}
+
 // --- Helper functions ---
 
 // apiGet performs a GET request via page.Evaluate and returns parsed JSON.
@@ -643,6 +715,25 @@ func apiPost(t *testing.T, page playwright.Page, url string, body map[string]int
 	}`, url, string(bodyJSON)))
 	if err != nil {
 		t.Fatalf("apiPost %s: %v", url, err)
+	}
+	return result
+}
+
+// apiPut performs a PUT request via page.Evaluate and returns parsed JSON.
+func apiPut(t *testing.T, page playwright.Page, url string, body map[string]interface{}) interface{} {
+	t.Helper()
+	bodyJSON, _ := json.Marshal(body)
+	result, err := page.Evaluate(fmt.Sprintf(`async () => {
+		const r = await fetch('%s', {
+			method: 'PUT',
+			headers: {'Content-Type': 'application/json'},
+			body: '%s'
+		});
+		if (!r.ok) throw new Error('PUT failed: ' + r.status);
+		return r.json();
+	}`, url, string(bodyJSON)))
+	if err != nil {
+		t.Fatalf("apiPut %s: %v", url, err)
 	}
 	return result
 }
