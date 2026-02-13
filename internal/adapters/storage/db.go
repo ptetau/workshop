@@ -30,6 +30,7 @@ var migrations = []migration{
 	{version: 10, description: "grading member config overrides", apply: migrate10},
 	{version: 11, description: "self-estimate review fields", apply: migrate11},
 	{version: 12, description: "hidden surprise themes", apply: migrate12},
+	{version: 13, description: "calendar events", apply: migrate13},
 }
 
 // SchemaVersion returns the current schema version of the database.
@@ -567,6 +568,24 @@ func migrate11(tx *sql.Tx) error {
 // Adds hidden column to rotor_theme so coaches can mark themes as surprises.
 func migrate12(tx *sql.Tx) error {
 	_, err := tx.Exec(`ALTER TABLE rotor_theme ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0`)
+	return err
+}
+
+// --- Migration 13: Calendar events ---
+// Creates calendar_events table for club events and competitions.
+func migrate13(tx *sql.Tx) error {
+	_, err := tx.Exec(`CREATE TABLE IF NOT EXISTS calendar_event (
+		id TEXT PRIMARY KEY,
+		title TEXT NOT NULL,
+		type TEXT NOT NULL DEFAULT 'event',
+		description TEXT NOT NULL DEFAULT '',
+		location TEXT NOT NULL DEFAULT '',
+		start_date TEXT NOT NULL,
+		end_date TEXT NOT NULL DEFAULT '',
+		registration_url TEXT NOT NULL DEFAULT '',
+		created_by TEXT NOT NULL DEFAULT '',
+		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)`)
 	return err
 }
 

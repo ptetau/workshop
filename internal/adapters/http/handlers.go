@@ -29,6 +29,7 @@ import (
 	"workshop/internal/application/projections"
 	accountDomain "workshop/internal/domain/account"
 	"workshop/internal/domain/attendance"
+	calendarDomain "workshop/internal/domain/calendar"
 	clipDomain "workshop/internal/domain/clip"
 	emailDomain "workshop/internal/domain/email"
 	estimatedHoursDomain "workshop/internal/domain/estimatedhours"
@@ -5627,4 +5628,131 @@ func handleCurriculumView(w http.ResponseWriter, r *http.Request) {
 		"rotor":  rotor,
 		"themes": themeViews,
 	})
+}
+
+// --- Phase 9: Calendar Handlers ---
+
+// handleCalendarPage handles GET /calendar — renders the club calendar page.
+func handleCalendarPage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !middleware.IsRole(r.Context(), "admin", "coach", "member", "trial") {
+		http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
+		return
+	}
+	renderTemplate(w, r, "calendar.html", map[string]interface{}{
+		"Title": "Club Calendar",
+	})
+}
+
+// handleCalendarEvents handles GET/POST/PUT/DELETE for /api/calendar/events
+func handleCalendarEvents(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if r.Method == "GET" {
+		from := r.URL.Query().Get("from")
+		to := r.URL.Query().Get("to")
+		if from == "" || to == "" {
+			http.Error(w, "from and to date params required (YYYY-MM-DD)", http.StatusBadRequest)
+			return
+		}
+		events, err := stores.CalendarEventStore.ListByDateRange(ctx, from, to)
+		if err != nil {
+			internalError(w, err)
+			return
+		}
+		if events == nil {
+			events = []calendarDomain.Event{}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(events)
+		return
+	}
+
+	if r.Method == "POST" {
+		if !middleware.IsRole(ctx, "admin") {
+			http.Error(w, "admin only", http.StatusForbidden)
+			return
+		}
+		var input struct {
+			Title           string `json:"title"`
+			Type            string `json:"type"`
+			Description     string `json:"description"`
+			Location        string `json:"location"`
+			StartDate       string `json:"start_date"`
+			EndDate         string `json:"end_date"`
+			RegistrationURL string `json:"registration_url"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			return
+		}
+		startDate, err := time.Parse("2006-01-02", input.StartDate)
+		if err != nil {
+			http.Error(w, "invalid start_date format (use YYYY-MM-DD)", http.StatusBadRequest)
+			return
+		}
+		var endDate time.Time
+		if input.EndDate != "" {
+			endDate, err = time.Parse("2006-01-02", input.EndDate)
+			if err != nil {
+				http.Error(w, "invalid end_date format (use YYYY-MM-DD)", http.StatusBadRequest)
+				return
+			}
+		}
+		if input.Type == "" {
+			input.Type = "event"
+		}
+		sess, ok := middleware.GetSessionFromContext(ctx)
+		if !ok {
+			http.Error(w, "not authenticated", http.StatusUnauthorized)
+			return
+		}
+		event := calendarDomain.Event{
+			ID:              generateID(),
+			Title:           input.Title,
+			Type:            input.Type,
+			Description:     input.Description,
+			Location:        input.Location,
+			StartDate:       startDate,
+			EndDate:         endDate,
+			RegistrationURL: input.RegistrationURL,
+			CreatedBy:       sess.AccountID,
+			CreatedAt:       time.Now(),
+		}
+		if err := event.Validate(); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := stores.CalendarEventStore.Save(ctx, event); err != nil {
+			internalError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(event)
+		return
+	}
+
+	if r.Method == "DELETE" {
+		if !middleware.IsRole(ctx, "admin") {
+			http.Error(w, "admin only", http.StatusForbidden)
+			return
+		}
+		id := r.URL.Query().Get("id")
+		if id == "" {
+			http.Error(w, "id is required", http.StatusBadRequest)
+			return
+		}
+		if err := stores.CalendarEventStore.Delete(ctx, id); err != nil {
+			internalError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	w.WriteHeader(http.StatusMethodNotAllowed)
 }

@@ -13,6 +13,7 @@ import (
 	"workshop/internal/adapters/http/perf"
 	accountStore "workshop/internal/adapters/storage/account"
 	attendanceStore "workshop/internal/adapters/storage/attendance"
+	calendarStore "workshop/internal/adapters/storage/calendar"
 	classTypeStore "workshop/internal/adapters/storage/classtype"
 	clipStore "workshop/internal/adapters/storage/clip"
 	emailStore "workshop/internal/adapters/storage/email"
@@ -62,6 +63,7 @@ type Stores struct {
 	EmailStore               emailStore.Store
 	EstimatedHoursStore      estimatedHoursStore.Store
 	RotorStore               rotorStore.Store
+	CalendarEventStore       calendarStore.Store
 }
 
 // loadCSRFKey reads the CSRF secret from WORKSHOP_CSRF_KEY (hex-encoded, 32 bytes).

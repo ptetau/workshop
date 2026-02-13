@@ -126,6 +126,10 @@ func registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/curriculum/view", handleCurriculumView)
 	mux.HandleFunc("/api/curriculum/overview", handleCurriculumOverview)
 
+	// Calendar routes
+	mux.HandleFunc("/calendar", handleCalendarPage)
+	mux.HandleFunc("/api/calendar/events", handleCalendarEvents)
+
 	// DevMode routes (admin-only impersonation)
 	mux.HandleFunc("/api/devmode/impersonate", handleDevModeImpersonate)
 	mux.HandleFunc("/api/devmode/restore", handleDevModeRestore)
