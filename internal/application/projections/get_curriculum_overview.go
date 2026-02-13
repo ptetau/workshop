@@ -52,6 +52,7 @@ type CurriculumThemeView struct {
 	ThemeID     string                `json:"theme_id"`
 	ThemeName   string                `json:"theme_name"`
 	Position    int                   `json:"position"`
+	Hidden      bool                  `json:"hidden"`
 	ActiveTopic *CurriculumTopicView  `json:"active_topic"`
 	Upcoming    []CurriculumTopicView `json:"upcoming"`
 }
@@ -98,6 +99,7 @@ func QueryGetCurriculumOverview(ctx context.Context, query GetCurriculumOverview
 				ThemeID:   th.ID,
 				ThemeName: th.Name,
 				Position:  th.Position,
+				Hidden:    th.Hidden,
 			}
 
 			topics, _ := deps.RotorStore.ListTopicsByTheme(ctx, th.ID)
@@ -123,6 +125,10 @@ func QueryGetCurriculumOverview(ctx context.Context, query GetCurriculumOverview
 
 			if tv.Upcoming == nil {
 				tv.Upcoming = []CurriculumTopicView{}
+			}
+			// Hidden themes are only visible to members when they have an active topic (surprise reveal)
+			if th.Hidden && query.Role != "admin" && query.Role != "coach" && tv.ActiveTopic == nil {
+				continue
 			}
 			cc.Themes = append(cc.Themes, tv)
 		}

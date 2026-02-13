@@ -145,6 +145,7 @@ type RotorTheme struct {
 	RotorID  string
 	Name     string // e.g. "Standing", "Guard", "Pinning"
 	Position int    // display order (0-indexed)
+	Hidden   bool   // hidden themes are only revealed when active (surprise themes)
 }
 
 // Validate checks the theme's invariants.

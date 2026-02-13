@@ -150,11 +150,11 @@ func boolToInt(b bool) int {
 // POST: theme is persisted
 func (s *SQLiteStore) SaveRotorTheme(ctx context.Context, t domain.RotorTheme) error {
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO rotor_theme (id, rotor_id, name, position)
-		 VALUES (?, ?, ?, ?)
+		`INSERT INTO rotor_theme (id, rotor_id, name, position, hidden)
+		 VALUES (?, ?, ?, ?, ?)
 		 ON CONFLICT(id) DO UPDATE SET
-		   rotor_id=excluded.rotor_id, name=excluded.name, position=excluded.position`,
-		t.ID, t.RotorID, t.Name, t.Position)
+		   rotor_id=excluded.rotor_id, name=excluded.name, position=excluded.position, hidden=excluded.hidden`,
+		t.ID, t.RotorID, t.Name, t.Position, boolToInt(t.Hidden))
 	return err
 }
 
@@ -163,7 +163,7 @@ func (s *SQLiteStore) SaveRotorTheme(ctx context.Context, t domain.RotorTheme) e
 // POST: returns themes or empty slice
 func (s *SQLiteStore) ListThemesByRotor(ctx context.Context, rotorID string) ([]domain.RotorTheme, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, rotor_id, name, position FROM rotor_theme WHERE rotor_id = ? ORDER BY position`, rotorID)
+		`SELECT id, rotor_id, name, position, hidden FROM rotor_theme WHERE rotor_id = ? ORDER BY position`, rotorID)
 	if err != nil {
 		return nil, err
 	}
@@ -171,9 +171,11 @@ func (s *SQLiteStore) ListThemesByRotor(ctx context.Context, rotorID string) ([]
 	var result []domain.RotorTheme
 	for rows.Next() {
 		var t domain.RotorTheme
-		if err := rows.Scan(&t.ID, &t.RotorID, &t.Name, &t.Position); err != nil {
+		var hidden int
+		if err := rows.Scan(&t.ID, &t.RotorID, &t.Name, &t.Position, &hidden); err != nil {
 			return nil, err
 		}
+		t.Hidden = hidden == 1
 		result = append(result, t)
 	}
 	return result, rows.Err()

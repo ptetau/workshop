@@ -5068,6 +5068,7 @@ func handleRotorThemes(w http.ResponseWriter, r *http.Request) {
 			RotorID  string `json:"rotor_id"`
 			Name     string `json:"name"`
 			Position int    `json:"position"`
+			Hidden   bool   `json:"hidden"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 			http.Error(w, "invalid JSON", http.StatusBadRequest)
@@ -5090,6 +5091,7 @@ func handleRotorThemes(w http.ResponseWriter, r *http.Request) {
 			RotorID:  input.RotorID,
 			Name:     input.Name,
 			Position: input.Position,
+			Hidden:   input.Hidden,
 		}
 		if err := theme.Validate(); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
