@@ -227,6 +227,24 @@ func (s *TopicSchedule) IsActive(now time.Time) bool {
 		(s.EndDate.IsZero() || !now.After(s.EndDate))
 }
 
+// NextTopicInQueue returns the next topic in position order after currentTopicID,
+// wrapping around to the first topic when the end of the queue is reached.
+// PRE: topics is sorted by Position ascending, currentTopicID is non-empty.
+// POST: returns the next topic or nil if the queue is empty or has only one topic.
+func NextTopicInQueue(topics []Topic, currentTopicID string) *Topic {
+	if len(topics) <= 1 {
+		return nil
+	}
+	for i, t := range topics {
+		if t.ID == currentTopicID {
+			next := (i + 1) % len(topics)
+			return &topics[next]
+		}
+	}
+	// currentTopicID not found — return first topic as fallback
+	return &topics[0]
+}
+
 // Vote represents a member's vote for a topic.
 // PRE: TopicID and AccountID are non-empty.
 // INVARIANT: One vote per member per topic per rotation cycle.

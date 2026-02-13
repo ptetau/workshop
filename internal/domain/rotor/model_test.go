@@ -230,3 +230,55 @@ func TestTopicSchedule_IsActive(t *testing.T) {
 		}
 	})
 }
+
+// TestNextTopicInQueue tests the cycling/wrap-around logic for topic queues.
+func TestNextTopicInQueue(t *testing.T) {
+	topics := []rotor.Topic{
+		{ID: "t1", Name: "Topic A", Position: 0, DurationWeeks: 1},
+		{ID: "t2", Name: "Topic B", Position: 1, DurationWeeks: 1},
+		{ID: "t3", Name: "Topic C", Position: 2, DurationWeeks: 1},
+	}
+
+	t.Run("advances from first to second", func(t *testing.T) {
+		next := rotor.NextTopicInQueue(topics, "t1")
+		if next == nil || next.ID != "t2" {
+			t.Errorf("expected t2, got %v", next)
+		}
+	})
+
+	t.Run("advances from middle to next", func(t *testing.T) {
+		next := rotor.NextTopicInQueue(topics, "t2")
+		if next == nil || next.ID != "t3" {
+			t.Errorf("expected t3, got %v", next)
+		}
+	})
+
+	t.Run("wraps around from last to first", func(t *testing.T) {
+		next := rotor.NextTopicInQueue(topics, "t3")
+		if next == nil || next.ID != "t1" {
+			t.Errorf("expected t1 (wrap-around), got %v", next)
+		}
+	})
+
+	t.Run("single topic returns nil", func(t *testing.T) {
+		single := []rotor.Topic{{ID: "t1", Name: "Only", Position: 0, DurationWeeks: 1}}
+		next := rotor.NextTopicInQueue(single, "t1")
+		if next != nil {
+			t.Errorf("expected nil for single topic queue, got %v", next)
+		}
+	})
+
+	t.Run("empty queue returns nil", func(t *testing.T) {
+		next := rotor.NextTopicInQueue(nil, "t1")
+		if next != nil {
+			t.Errorf("expected nil for empty queue, got %v", next)
+		}
+	})
+
+	t.Run("unknown topic ID falls back to first", func(t *testing.T) {
+		next := rotor.NextTopicInQueue(topics, "unknown")
+		if next == nil || next.ID != "t1" {
+			t.Errorf("expected t1 (fallback), got %v", next)
+		}
+	})
+}
