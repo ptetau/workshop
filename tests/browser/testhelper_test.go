@@ -22,6 +22,7 @@ import (
 	"workshop/internal/adapters/storage"
 	accountStore "workshop/internal/adapters/storage/account"
 	attendanceStore "workshop/internal/adapters/storage/attendance"
+	calendarStorePkg "workshop/internal/adapters/storage/calendar"
 	classTypeStore "workshop/internal/adapters/storage/classtype"
 	clipStore "workshop/internal/adapters/storage/clip"
 	emailStore "workshop/internal/adapters/storage/email"
@@ -107,6 +108,7 @@ func newTestApp(t *testing.T) *testApp {
 		EmailStore:               emailStore.NewSQLiteStore(db),
 		RotorStore:               rotorStorePkg.NewSQLiteStore(db),
 		EstimatedHoursStore:      estimatedHoursStore.NewSQLiteStore(db),
+		CalendarEventStore:       calendarStorePkg.NewSQLiteStore(db),
 	}
 
 	// Seed admin (without PasswordChangeRequired so login goes straight to dashboard)

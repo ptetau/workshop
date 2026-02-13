@@ -1,0 +1,280 @@
+{{ define "content" }}
+<div class="card">
+    <h1>Club Calendar</h1>
+
+    <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem;flex-wrap:wrap;">
+        <button onclick="prevMonth()" style="padding:0.3rem 0.6rem;font-size:1rem;">←</button>
+        <h2 id="monthTitle" style="margin:0;min-width:180px;text-align:center;"></h2>
+        <button onclick="nextMonth()" style="padding:0.3rem 0.6rem;font-size:1rem;">→</button>
+        <button onclick="goToday()" style="padding:0.25rem 0.6rem;font-size:0.85rem;margin-left:0.5rem;">Today</button>
+        {{ if eq (currentRole) "admin" }}
+        <button onclick="showAddEvent()" style="padding:0.25rem 0.6rem;font-size:0.85rem;margin-left:auto;">+ Event</button>
+        {{ end }}
+    </div>
+
+    <div id="addEventForm" style="display:none;background:#f8f9fa;padding:1rem;border-radius:4px;margin-bottom:1rem;border:1px solid #dee2e6;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem 1rem;max-width:600px;">
+            <div style="grid-column:1/-1;">
+                <label style="font-size:0.85rem;font-weight:600;">Title</label>
+                <input type="text" id="eventTitle" maxlength="200" placeholder="e.g. End of Year BBQ" style="width:100%;padding:0.4rem;border:1px solid #ccc;border-radius:4px;">
+            </div>
+            <div>
+                <label style="font-size:0.85rem;font-weight:600;">Type</label>
+                <select id="eventType" style="width:100%;padding:0.4rem;border:1px solid #ccc;border-radius:4px;">
+                    <option value="event">Club Event</option>
+                    <option value="competition">Competition</option>
+                </select>
+            </div>
+            <div>
+                <label style="font-size:0.85rem;font-weight:600;">Location</label>
+                <input type="text" id="eventLocation" maxlength="200" placeholder="e.g. Workshop HQ" style="width:100%;padding:0.4rem;border:1px solid #ccc;border-radius:4px;">
+            </div>
+            <div>
+                <label style="font-size:0.85rem;font-weight:600;">Start Date</label>
+                <input type="date" id="eventStart" style="width:100%;padding:0.4rem;border:1px solid #ccc;border-radius:4px;">
+            </div>
+            <div>
+                <label style="font-size:0.85rem;font-weight:600;">End Date <span style="color:#6c757d;font-weight:400;">(optional)</span></label>
+                <input type="date" id="eventEnd" style="width:100%;padding:0.4rem;border:1px solid #ccc;border-radius:4px;">
+            </div>
+            <div id="regUrlRow" style="grid-column:1/-1;display:none;">
+                <label style="font-size:0.85rem;font-weight:600;">Registration URL</label>
+                <input type="url" id="eventRegURL" maxlength="2048" placeholder="https://..." style="width:100%;padding:0.4rem;border:1px solid #ccc;border-radius:4px;">
+            </div>
+            <div style="grid-column:1/-1;">
+                <label style="font-size:0.85rem;font-weight:600;">Description <span style="color:#6c757d;font-weight:400;">(optional)</span></label>
+                <textarea id="eventDesc" maxlength="2000" rows="2" style="width:100%;padding:0.4rem;border:1px solid #ccc;border-radius:4px;resize:vertical;"></textarea>
+            </div>
+            <div style="grid-column:1/-1;display:flex;gap:0.5rem;align-items:center;">
+                <button onclick="saveEvent()" style="padding:0.3rem 0.8rem;">Save</button>
+                <button onclick="hideAddEvent()" style="background:#6c757d;padding:0.3rem 0.8rem;">Cancel</button>
+                <span id="eventErr" style="color:#dc3545;font-size:0.85rem;"></span>
+            </div>
+        </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+        <table id="calGrid" style="width:100%;border-collapse:collapse;table-layout:fixed;">
+            <thead>
+                <tr>
+                    <th style="padding:0.4rem;text-align:center;font-size:0.85rem;color:#6c757d;border-bottom:2px solid #dee2e6;">Mon</th>
+                    <th style="padding:0.4rem;text-align:center;font-size:0.85rem;color:#6c757d;border-bottom:2px solid #dee2e6;">Tue</th>
+                    <th style="padding:0.4rem;text-align:center;font-size:0.85rem;color:#6c757d;border-bottom:2px solid #dee2e6;">Wed</th>
+                    <th style="padding:0.4rem;text-align:center;font-size:0.85rem;color:#6c757d;border-bottom:2px solid #dee2e6;">Thu</th>
+                    <th style="padding:0.4rem;text-align:center;font-size:0.85rem;color:#6c757d;border-bottom:2px solid #dee2e6;">Fri</th>
+                    <th style="padding:0.4rem;text-align:center;font-size:0.85rem;color:#6c757d;border-bottom:2px solid #dee2e6;">Sat</th>
+                    <th style="padding:0.4rem;text-align:center;font-size:0.85rem;color:#6c757d;border-bottom:2px solid #dee2e6;">Sun</th>
+                </tr>
+            </thead>
+            <tbody id="calBody"></tbody>
+        </table>
+    </div>
+
+    <div id="eventList" style="margin-top:1.5rem;"></div>
+
+    <p style="margin-top:2rem;"><a href="/dashboard" style="color:#F9B232;text-decoration:none;font-weight:600;">← Back to Dashboard</a></p>
+</div>
+
+<script>
+var currentYear, currentMonth;
+var calEvents = [];
+
+function init() {
+    var now = new Date();
+    currentYear = now.getFullYear();
+    currentMonth = now.getMonth();
+    document.getElementById('eventType').addEventListener('change', function() {
+        document.getElementById('regUrlRow').style.display = this.value === 'competition' ? 'block' : 'none';
+    });
+    renderMonth();
+}
+
+function prevMonth() {
+    currentMonth--;
+    if (currentMonth < 0) { currentMonth = 11; currentYear--; }
+    renderMonth();
+}
+function nextMonth() {
+    currentMonth++;
+    if (currentMonth > 11) { currentMonth = 0; currentYear++; }
+    renderMonth();
+}
+function goToday() {
+    var now = new Date();
+    currentYear = now.getFullYear();
+    currentMonth = now.getMonth();
+    renderMonth();
+}
+
+function renderMonth() {
+    var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    document.getElementById('monthTitle').textContent = months[currentMonth] + ' ' + currentYear;
+
+    var firstDay = new Date(currentYear, currentMonth, 1);
+    var lastDay = new Date(currentYear, currentMonth + 1, 0);
+    var startDow = (firstDay.getDay() + 6) % 7;
+
+    var from = new Date(firstDay);
+    from.setDate(from.getDate() - startDow);
+    var to = new Date(lastDay);
+    var endDow = (to.getDay() + 6) % 7;
+    to.setDate(to.getDate() + (6 - endDow));
+
+    var fromStr = formatDate(from);
+    var toStr = formatDate(to);
+
+    fetch('/api/calendar/events?from=' + fromStr + '&to=' + toStr)
+        .then(function(r) { return r.json(); })
+        .then(function(events) {
+            calEvents = events || [];
+            drawGrid(from, lastDay.getDate(), startDow);
+            drawEventList();
+        });
+}
+
+function drawGrid(startDate, daysInMonth, startDow) {
+    var today = new Date();
+    var todayStr = formatDate(today);
+    var body = document.getElementById('calBody');
+    var html = '';
+    var d = new Date(startDate);
+    var totalCells = startDow + daysInMonth;
+    var rows = Math.ceil(totalCells / 7);
+
+    for (var row = 0; row < rows; row++) {
+        html += '<tr>';
+        for (var col = 0; col < 7; col++) {
+            var dateStr = formatDate(d);
+            var isCurrentMonth = d.getMonth() === currentMonth;
+            var isToday = dateStr === todayStr;
+            var dayEvents = calEvents.filter(function(e) {
+                var eStart = e.StartDate ? e.StartDate.substring(0, 10) : '';
+                var eEnd = e.EndDate ? e.EndDate.substring(0, 10) : eStart;
+                if (eEnd === '' || eEnd === '0001-01-01') eEnd = eStart;
+                return dateStr >= eStart && dateStr <= eEnd;
+            });
+
+            var bg = isToday ? '#FFF8E1' : (isCurrentMonth ? '#fff' : '#f8f9fa');
+            var color = isCurrentMonth ? '#212529' : '#adb5bd';
+            html += '<td style="padding:0.25rem;border:1px solid #eee;vertical-align:top;height:5rem;background:' + bg + ';">';
+            html += '<div style="font-size:0.8rem;font-weight:' + (isToday ? '700' : '400') + ';color:' + color + ';">' + d.getDate() + '</div>';
+
+            dayEvents.forEach(function(ev) {
+                var evColor = ev.Type === 'competition' ? '#dc3545' : '#F9B232';
+                html += '<div style="font-size:0.7rem;padding:0.1rem 0.2rem;margin-top:0.1rem;background:' + evColor + ';color:#fff;border-radius:2px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;cursor:pointer;" title="' + escHtml(ev.Title) + '">';
+                html += escHtml(ev.Title);
+                html += '</div>';
+            });
+
+            html += '</td>';
+            d.setDate(d.getDate() + 1);
+        }
+        html += '</tr>';
+    }
+    body.innerHTML = html;
+}
+
+function drawEventList() {
+    var el = document.getElementById('eventList');
+    var upcoming = calEvents.filter(function(e) {
+        var eStart = e.StartDate ? e.StartDate.substring(0, 10) : '';
+        return eStart >= formatDate(new Date(currentYear, currentMonth, 1));
+    });
+    upcoming.sort(function(a, b) {
+        return (a.StartDate || '').localeCompare(b.StartDate || '');
+    });
+
+    if (upcoming.length === 0) {
+        el.innerHTML = '<p style="color:#6c757d;">No events this month.</p>';
+        return;
+    }
+
+    var html = '<h3 style="margin-bottom:0.5rem;">Events This Month</h3>';
+    upcoming.forEach(function(ev) {
+        var startStr = ev.StartDate ? ev.StartDate.substring(0, 10) : '';
+        var endStr = (ev.EndDate && ev.EndDate.substring(0, 10) !== '0001-01-01') ? ev.EndDate.substring(0, 10) : '';
+        var typeLabel = ev.Type === 'competition'
+            ? '<span style="background:#dc3545;color:#fff;font-size:0.7rem;padding:0.1rem 0.3rem;border-radius:3px;margin-left:0.5rem;">Competition</span>'
+            : '<span style="background:#F9B232;color:#fff;font-size:0.7rem;padding:0.1rem 0.3rem;border-radius:3px;margin-left:0.5rem;">Event</span>';
+
+        html += '<div style="border:1px solid #dee2e6;border-radius:4px;padding:0.75rem;margin-bottom:0.5rem;" data-event-id="' + ev.ID + '">';
+        html += '<div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">';
+        html += '<strong>' + escHtml(ev.Title) + '</strong>' + typeLabel;
+        html += '<span style="color:#6c757d;font-size:0.85rem;margin-left:auto;">' + startStr;
+        if (endStr && endStr !== startStr) html += ' → ' + endStr;
+        html += '</span>';
+        {{ if eq (currentRole) "admin" }}
+        html += '<button onclick="deleteEvent(\'' + ev.ID + '\')" style="background:#dc3545;padding:0.1rem 0.4rem;font-size:0.7rem;">×</button>';
+        {{ end }}
+        html += '</div>';
+        if (ev.Location) html += '<div style="font-size:0.85rem;color:#6c757d;margin-top:0.25rem;">📍 ' + escHtml(ev.Location) + '</div>';
+        if (ev.Description) html += '<div style="font-size:0.85rem;margin-top:0.25rem;">' + escHtml(ev.Description) + '</div>';
+        if (ev.RegistrationURL) html += '<div style="margin-top:0.25rem;"><a href="' + escHtml(ev.RegistrationURL) + '" target="_blank" style="color:#F9B232;font-size:0.85rem;">Register →</a></div>';
+        html += '</div>';
+    });
+    el.innerHTML = html;
+}
+
+function showAddEvent() {
+    document.getElementById('addEventForm').style.display = 'block';
+    document.getElementById('eventTitle').value = '';
+    document.getElementById('eventType').value = 'event';
+    document.getElementById('eventLocation').value = '';
+    document.getElementById('eventStart').value = '';
+    document.getElementById('eventEnd').value = '';
+    document.getElementById('eventRegURL').value = '';
+    document.getElementById('eventDesc').value = '';
+    document.getElementById('eventErr').textContent = '';
+    document.getElementById('regUrlRow').style.display = 'none';
+    document.getElementById('eventTitle').focus();
+}
+function hideAddEvent() { document.getElementById('addEventForm').style.display = 'none'; }
+
+function saveEvent() {
+    var title = document.getElementById('eventTitle').value.trim();
+    if (!title) { document.getElementById('eventErr').textContent = 'Title required'; return; }
+    var startDate = document.getElementById('eventStart').value;
+    if (!startDate) { document.getElementById('eventErr').textContent = 'Start date required'; return; }
+    document.getElementById('eventErr').textContent = '';
+
+    var body = {
+        title: title,
+        type: document.getElementById('eventType').value,
+        description: document.getElementById('eventDesc').value.trim(),
+        location: document.getElementById('eventLocation').value.trim(),
+        start_date: startDate,
+        end_date: document.getElementById('eventEnd').value || '',
+        registration_url: document.getElementById('eventRegURL').value.trim()
+    };
+
+    fetch('/api/calendar/events', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body)
+    })
+    .then(function(r) { if (!r.ok) return r.text().then(function(t) { throw new Error(t); }); return r.json(); })
+    .then(function() { hideAddEvent(); renderMonth(); })
+    .catch(function(e) { document.getElementById('eventErr').textContent = e.message; });
+}
+
+function deleteEvent(id) {
+    if (!confirm('Delete this event?')) return;
+    fetch('/api/calendar/events?id=' + id, {method: 'DELETE', headers: {'Content-Type': 'application/json'}})
+        .then(function() { renderMonth(); });
+}
+
+function formatDate(d) {
+    var y = d.getFullYear();
+    var m = ('0' + (d.getMonth() + 1)).slice(-2);
+    var day = ('0' + d.getDate()).slice(-2);
+    return y + '-' + m + '-' + day;
+}
+
+function escHtml(s) {
+    if (!s) return '';
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+init();
+</script>
+{{ end }}
