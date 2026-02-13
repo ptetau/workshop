@@ -5185,6 +5185,48 @@ func handleTopics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if r.Method == "PUT" {
+		id := r.URL.Query().Get("id")
+		if id == "" {
+			http.Error(w, "id is required", http.StatusBadRequest)
+			return
+		}
+		var input struct {
+			Name          *string `json:"name"`
+			Description   *string `json:"description"`
+			DurationWeeks *int    `json:"duration_weeks"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			return
+		}
+		topic, err := stores.RotorStore.GetTopic(ctx, id)
+		if err != nil {
+			http.Error(w, "topic not found", http.StatusNotFound)
+			return
+		}
+		if input.Name != nil {
+			topic.Name = *input.Name
+		}
+		if input.Description != nil {
+			topic.Description = *input.Description
+		}
+		if input.DurationWeeks != nil {
+			topic.DurationWeeks = *input.DurationWeeks
+		}
+		if err := topic.Validate(); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := stores.RotorStore.SaveTopic(ctx, topic); err != nil {
+			internalError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(topic)
+		return
+	}
+
 	if r.Method == "DELETE" {
 		id := r.URL.Query().Get("id")
 		if id == "" {

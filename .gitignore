@@ -29,6 +29,7 @@ tmp/
 *.db
 *.db-shm
 *.db-wal
+*.db.bak-*
 
 # Secrets — NEVER commit these
 .env
