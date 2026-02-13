@@ -521,6 +521,97 @@ func TestCurriculum_TopicReorder(t *testing.T) {
 	}
 }
 
+// TestCurriculum_HiddenSurpriseTheme tests that hidden themes are only visible to members when active.
+func TestCurriculum_HiddenSurpriseTheme(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping browser test in short mode")
+	}
+	app := newTestApp(t)
+	page := app.newPage(t)
+	app.login(t, page)
+
+	classTypes := apiGet(t, page, app.BaseURL+"/api/class-types")
+	classTypeID := classTypes.([]interface{})[0].(map[string]interface{})["ID"].(string)
+
+	// Create rotor with a normal theme and a hidden theme
+	rotorResp := apiPost(t, page, app.BaseURL+"/api/rotors", map[string]interface{}{
+		"class_type_id": classTypeID, "name": "Hidden Theme Test",
+	})
+	rotorID := rotorResp.(map[string]interface{})["ID"].(string)
+
+	apiPost(t, page, app.BaseURL+"/api/rotors/themes", map[string]interface{}{
+		"rotor_id": rotorID, "name": "Visible Theme", "position": 0, "hidden": false,
+	})
+	hiddenTheme := apiPost(t, page, app.BaseURL+"/api/rotors/themes", map[string]interface{}{
+		"rotor_id": rotorID, "name": "Surprise Theme", "position": 1, "hidden": true,
+	})
+	hiddenThemeID := hiddenTheme.(map[string]interface{})["ID"].(string)
+
+	// Verify hidden flag is persisted
+	if hiddenTheme.(map[string]interface{})["Hidden"] != true {
+		t.Fatal("expected hidden to be true")
+	}
+
+	// Add a topic to the hidden theme
+	topic := apiPost(t, page, app.BaseURL+"/api/rotors/topics", map[string]interface{}{
+		"rotor_theme_id": hiddenThemeID, "name": "Secret Topic", "duration_weeks": 1,
+	})
+	topicID := topic.(map[string]interface{})["ID"].(string)
+
+	// Activate rotor
+	apiPost(t, page, app.BaseURL+"/api/rotors/activate", map[string]interface{}{"id": rotorID})
+
+	// Admin overview should show both themes
+	adminOverview := apiGet(t, page, app.BaseURL+"/api/curriculum/overview")
+	adminCurriculums := adminOverview.(map[string]interface{})["class_curriculums"].([]interface{})
+	var adminThemeCount int
+	for _, cc := range adminCurriculums {
+		ccMap := cc.(map[string]interface{})
+		if ccMap["class_type_id"].(string) == classTypeID {
+			adminThemeCount = len(ccMap["themes"].([]interface{}))
+		}
+	}
+	if adminThemeCount != 2 {
+		t.Fatalf("admin should see 2 themes, got %d", adminThemeCount)
+	}
+
+	// Impersonate as member — hidden theme with no active topic should be invisible
+	app.impersonate(t, page, "member")
+	memberOverview := apiGet(t, page, app.BaseURL+"/api/curriculum/overview")
+	memberCurriculums := memberOverview.(map[string]interface{})["class_curriculums"].([]interface{})
+	var memberThemeCount int
+	for _, cc := range memberCurriculums {
+		ccMap := cc.(map[string]interface{})
+		if ccMap["class_type_id"].(string) == classTypeID {
+			memberThemeCount = len(ccMap["themes"].([]interface{}))
+		}
+	}
+	if memberThemeCount != 1 {
+		t.Fatalf("member should see 1 theme (hidden has no active topic), got %d", memberThemeCount)
+	}
+
+	// Switch back to admin to activate a topic on the hidden theme
+	app.impersonate(t, page, "admin")
+	apiPost(t, page, app.BaseURL+"/api/rotors/schedule/action", map[string]interface{}{
+		"action": "activate", "topic_id": topicID, "rotor_theme_id": hiddenThemeID,
+	})
+
+	// Impersonate as member again — surprise reveal with active topic
+	app.impersonate(t, page, "member")
+	memberOverview2 := apiGet(t, page, app.BaseURL+"/api/curriculum/overview")
+	memberCurriculums2 := memberOverview2.(map[string]interface{})["class_curriculums"].([]interface{})
+	var memberThemeCount2 int
+	for _, cc := range memberCurriculums2 {
+		ccMap := cc.(map[string]interface{})
+		if ccMap["class_type_id"].(string) == classTypeID {
+			memberThemeCount2 = len(ccMap["themes"].([]interface{}))
+		}
+	}
+	if memberThemeCount2 != 2 {
+		t.Fatalf("member should see 2 themes after surprise reveal, got %d", memberThemeCount2)
+	}
+}
+
 // --- Helper functions ---
 
 // apiGet performs a GET request via page.Evaluate and returns parsed JSON.

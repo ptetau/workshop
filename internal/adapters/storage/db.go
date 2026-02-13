@@ -29,6 +29,7 @@ var migrations = []migration{
 	{version: 9, description: "grading notes", apply: migrate9},
 	{version: 10, description: "grading member config overrides", apply: migrate10},
 	{version: 11, description: "self-estimate review fields", apply: migrate11},
+	{version: 12, description: "hidden surprise themes", apply: migrate12},
 }
 
 // SchemaVersion returns the current schema version of the database.
@@ -559,6 +560,13 @@ func migrate11(tx *sql.Tx) error {
 	ALTER TABLE estimated_hours ADD COLUMN review_note TEXT NOT NULL DEFAULT '';
 	CREATE INDEX IF NOT EXISTS idx_estimated_hours_status ON estimated_hours(status);
 	`)
+	return err
+}
+
+// --- Migration 12: Hidden surprise themes ---
+// Adds hidden column to rotor_theme so coaches can mark themes as surprises.
+func migrate12(tx *sql.Tx) error {
+	_, err := tx.Exec(`ALTER TABLE rotor_theme ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0`)
 	return err
 }
 
