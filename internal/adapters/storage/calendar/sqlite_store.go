@@ -24,7 +24,9 @@ func NewSQLiteStore(db storage.SQLDB) *SQLiteStore {
 // PRE: e is a valid Event (Validate() returns nil)
 // POST: event is persisted
 func (s *SQLiteStore) Save(ctx context.Context, e domain.Event) error {
-	endDate := ""
+	// Store end_date as start_date for single-day events so range queries can use
+	// a simple overlap predicate: start_date <= to AND end_date >= from.
+	endDate := e.StartDate.Format("2006-01-02")
 	if !e.EndDate.IsZero() {
 		endDate = e.EndDate.Format("2006-01-02")
 	}
@@ -57,7 +59,10 @@ func (s *SQLiteStore) GetByID(ctx context.Context, id string) (domain.Event, err
 		return e, err
 	}
 	e.StartDate = parseDate(startStr)
-	e.EndDate = parseDate(endStr)
+	// Preserve domain semantic: EndDate zero => single-day.
+	if endStr != "" && endStr != startStr {
+		e.EndDate = parseDate(endStr)
+	}
 	return e, nil
 }
 
@@ -68,8 +73,8 @@ func (s *SQLiteStore) ListByDateRange(ctx context.Context, from, to string) ([]d
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT id, title, type, description, location, start_date, end_date, registration_url, created_by, created_at
 		 FROM calendar_event
-		 WHERE start_date <= ? AND (end_date >= ? OR (end_date = '' AND start_date >= ?))
-		 ORDER BY start_date ASC`, to, from, from,
+		 WHERE start_date <= ? AND end_date >= ?
+		 ORDER BY start_date ASC`, to, from,
 	)
 	if err != nil {
 		return nil, err
@@ -85,7 +90,10 @@ func (s *SQLiteStore) ListByDateRange(ctx context.Context, from, to string) ([]d
 			return nil, err
 		}
 		e.StartDate = parseDate(startStr)
-		e.EndDate = parseDate(endStr)
+		// Preserve domain semantic: EndDate zero => single-day.
+		if endStr != "" && endStr != startStr {
+			e.EndDate = parseDate(endStr)
+		}
 		events = append(events, e)
 	}
 	return events, rows.Err()

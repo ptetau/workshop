@@ -31,6 +31,7 @@ var migrations = []migration{
 	{version: 11, description: "self-estimate review fields", apply: migrate11},
 	{version: 12, description: "hidden surprise themes", apply: migrate12},
 	{version: 13, description: "calendar events", apply: migrate13},
+	{version: 14, description: "calendar event indexes", apply: migrate14},
 }
 
 // SchemaVersion returns the current schema version of the database.
@@ -586,6 +587,21 @@ func migrate13(tx *sql.Tx) error {
 		created_by TEXT NOT NULL DEFAULT '',
 		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 	)`)
+	return err
+}
+
+// --- Migration 14: Calendar event indexes ---
+// Backfills end_date for existing single-day events and adds an index to speed up
+// overlap queries (start_date <= to AND end_date >= from).
+func migrate14(tx *sql.Tx) error {
+	_, err := tx.Exec(`
+	UPDATE calendar_event
+	SET end_date = start_date
+	WHERE end_date = '';
+
+	CREATE INDEX IF NOT EXISTS idx_calendar_event_date_range
+	ON calendar_event(start_date, end_date);
+	`)
 	return err
 }
 

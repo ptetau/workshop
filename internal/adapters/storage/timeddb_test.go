@@ -238,8 +238,8 @@ func TestTimedDB_ImplementsSQLDB(t *testing.T) {
 	db := openTimedTestDB(t)
 	defer db.Close()
 	var iface SQLDB = NewTimedDB(db, nil)
-	if iface == nil {
-		t.Fatal("TimedDB should satisfy SQLDB interface")
+	if _, ok := iface.(*TimedDB); !ok {
+		t.Fatalf("expected SQLDB to be *TimedDB, got %T", iface)
 	}
 }
 
