@@ -23,13 +23,31 @@ echo "=== pre-commit: vet ==="
 go vet ./...
 
 echo "=== pre-commit: gofmt check ==="
-unformatted=$(gofmt -l .)
-if [ -n "$unformatted" ]; then
+unformatted_tmp=$(mktemp)
+find . -name '*.go' -type f -print0 | while IFS= read -r -d '' f; do
+  orig=$(mktemp)
+  fmt=$(mktemp)
+
+  # Normalize CRLF -> LF so Windows checkouts don't fail gofmt check on line endings alone.
+  tr -d '\r' < "$f" > "$orig"
+  cp "$orig" "$fmt"
+  gofmt -w "$fmt"
+
+  if ! cmp -s "$orig" "$fmt"; then
+    echo "$f" >> "$unformatted_tmp"
+  fi
+
+  rm -f "$orig" "$fmt"
+done
+
+if [ -s "$unformatted_tmp" ]; then
   echo "FAIL: the following files are not formatted:"
-  echo "$unformatted"
+  cat "$unformatted_tmp"
   echo "Run: gofmt -w ."
+  rm -f "$unformatted_tmp"
   exit 1
 fi
+rm -f "$unformatted_tmp"
 
 echo "=== pre-commit: tests ==="
 go test -count=1 ./...

@@ -76,6 +76,7 @@
 </div>
 
 <script>
+var isAdmin = (document.body && (document.body.getAttribute('data-role') || '')) === 'admin';
 var currentYear, currentMonth;
 var calEvents = [];
 
@@ -203,9 +204,9 @@ function drawEventList() {
         html += '<span style="color:#6c757d;font-size:0.85rem;margin-left:auto;">' + startStr;
         if (endStr && endStr !== startStr) html += ' → ' + endStr;
         html += '</span>';
-        {{ if eq (currentRole) "admin" }}
-        html += '<button onclick="deleteEvent(\'' + ev.ID + '\')" style="background:#dc3545;padding:0.1rem 0.4rem;font-size:0.7rem;">×</button>';
-        {{ end }}
+        if (isAdmin) {
+            html += '<button onclick="deleteEvent(\'' + ev.ID + '\')" style="background:#dc3545;padding:0.1rem 0.4rem;font-size:0.7rem;">×</button>';
+        }
         html += '</div>';
         if (ev.Location) html += '<div style="font-size:0.85rem;color:#6c757d;margin-top:0.25rem;">📍 ' + escHtml(ev.Location) + '</div>';
         if (ev.Description) html += '<div style="font-size:0.85rem;margin-top:0.25rem;">' + escHtml(ev.Description) + '</div>';

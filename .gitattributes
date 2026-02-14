@@ -1,0 +1,2 @@
+# Enforce LF endings for Go source so gofmt checks behave consistently across OSes
+*.go text eol=lf

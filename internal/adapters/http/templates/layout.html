@@ -84,7 +84,7 @@
         footer { max-width: 960px; margin: 3rem auto 2rem; text-align: center; color: var(--text-muted); border-top: 1px solid var(--border); padding: 1.5rem; font-size: 0.8rem; letter-spacing: 0.5px; }
     </style>
 </head>
-<body>
+<body data-role="{{ currentRole }}">
     {{ if isRealAdmin }}
     <div id="devmode-bar" style="background:#2d1b4e;color:#fff;padding:0.4rem 2rem;font-size:0.75rem;display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;border-bottom:3px solid #9b59b6;font-family:'Montserrat',sans-serif;letter-spacing:0.5px;">
         <span style="font-weight:700;text-transform:uppercase;margin-right:0.5rem;">DevMode</span>
@@ -120,6 +120,7 @@
             {{ if eq (currentRole) "admin" }}
             <a href="/members">Members</a>
             <a href="/attendance">Attendance</a>
+            <a href="/calendar">Calendar</a>
             <a href="/admin/grading">Grading</a>
             <a href="/admin/emails">Emails</a>
             <details class="nav-more">
@@ -134,7 +135,6 @@
                     <div class="nav-more-group">
                         <span class="nav-more-label">Content</span>
                         <a href="/curriculum">Curriculum</a>
-                        <a href="/calendar">Calendar</a>
                         <a href="/themes">Themes</a>
                         <a href="/library">Library</a>
                         <a href="/admin/notices">Notices</a>
@@ -153,12 +153,12 @@
             <a href="/attendance">Attendance</a>
             <a href="/admin/grading">Grading</a>
             <a href="/curriculum">Curriculum</a>
+            <a href="/calendar">Calendar</a>
             <details class="nav-more">
                 <summary>More</summary>
                 <div class="nav-more-menu">
                     <a href="/admin/schedules">Schedules</a>
                     <a href="/admin/notices">Notices</a>
-                    <a href="/calendar">Calendar</a>
                     <a href="/themes">Themes</a>
                     <a href="/library">Library</a>
                     <a href="/kiosk">Kiosk</a>
