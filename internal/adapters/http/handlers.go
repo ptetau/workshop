@@ -30,6 +30,7 @@ import (
 	accountDomain "workshop/internal/domain/account"
 	"workshop/internal/domain/attendance"
 	calendarDomain "workshop/internal/domain/calendar"
+	classTypeDomain "workshop/internal/domain/classtype"
 	clipDomain "workshop/internal/domain/clip"
 	emailDomain "workshop/internal/domain/email"
 	estimatedHoursDomain "workshop/internal/domain/estimatedhours"
@@ -3539,21 +3540,147 @@ func handleMessageRead(w http.ResponseWriter, r *http.Request) {
 
 // handleClassTypes handles GET /api/class-types
 func handleClassTypes(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if r.Method == "GET" {
+		programID := r.URL.Query().Get("program_id")
+		var (
+			types []classTypeDomain.ClassType
+			err   error
+		)
+		if programID != "" {
+			types, err = stores.ClassTypeStore.ListByProgramID(ctx, programID)
+		} else {
+			types, err = stores.ClassTypeStore.List(ctx)
+		}
+		if err != nil {
+			internalError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if types == nil {
+			w.Write([]byte("[]"))
+			return
+		}
+		json.NewEncoder(w).Encode(types)
+		return
+	}
+
+	// Writes are admin-only.
+	if _, ok := requireAdmin(w, r); !ok {
+		return
+	}
+
+	if r.Method == "POST" {
+		var input struct {
+			ProgramID   string `json:"ProgramID"`
+			Name        string `json:"Name"`
+			Description string `json:"Description"`
+			Attire      string `json:"Attire"`
+			Level       string `json:"Level"`
+		}
+		if err := strictDecode(r, &input); err != nil {
+			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			return
+		}
+		ct := classTypeDomain.ClassType{
+			ID:          generateID(),
+			ProgramID:   input.ProgramID,
+			Name:        input.Name,
+			Description: input.Description,
+			Attire:      input.Attire,
+			Level:       input.Level,
+		}
+		if err := ct.Validate(); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := stores.ClassTypeStore.Save(ctx, ct); err != nil {
+			internalError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(ct)
+		return
+	}
+
+	if r.Method == "PUT" {
+		var input struct {
+			ID          string `json:"ID"`
+			ProgramID   string `json:"ProgramID"`
+			Name        string `json:"Name"`
+			Description string `json:"Description"`
+			Attire      string `json:"Attire"`
+			Level       string `json:"Level"`
+		}
+		if err := strictDecode(r, &input); err != nil {
+			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			return
+		}
+		if input.ID == "" {
+			http.Error(w, "ID is required", http.StatusBadRequest)
+			return
+		}
+		ct := classTypeDomain.ClassType{
+			ID:          input.ID,
+			ProgramID:   input.ProgramID,
+			Name:        input.Name,
+			Description: input.Description,
+			Attire:      input.Attire,
+			Level:       input.Level,
+		}
+		if err := ct.Validate(); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := stores.ClassTypeStore.Save(ctx, ct); err != nil {
+			internalError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(ct)
+		return
+	}
+
+	if r.Method == "DELETE" {
+		id := r.URL.Query().Get("id")
+		if id == "" {
+			http.Error(w, "id is required", http.StatusBadRequest)
+			return
+		}
+		if err := stores.ClassTypeStore.Delete(ctx, id); err != nil {
+			internalError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+}
+
+// handlePrograms handles GET /api/programs (admin-only).
+func handlePrograms(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	if r.Method != "GET" {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	types, err := stores.ClassTypeStore.List(r.Context())
+	if _, ok := requireAdmin(w, r); !ok {
+		return
+	}
+	items, err := stores.ProgramStore.List(ctx)
 	if err != nil {
 		internalError(w, err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if types == nil {
+	if items == nil {
 		w.Write([]byte("[]"))
 		return
 	}
-	json.NewEncoder(w).Encode(types)
+	json.NewEncoder(w).Encode(items)
 }
 
 // handleAdminSchedulesPage handles GET /admin/schedules
@@ -3566,6 +3693,18 @@ func handleAdminSchedulesPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	renderTemplate(w, r, "admin_schedules.html", nil)
+}
+
+// handleAdminClassTypesPage handles GET /admin/class-types
+func handleAdminClassTypesPage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if _, ok := requireAdmin(w, r); !ok {
+		return
+	}
+	renderTemplate(w, r, "admin_class_types.html", nil)
 }
 
 // handleAdminHolidaysPage handles GET /admin/holidays

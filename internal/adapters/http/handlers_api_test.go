@@ -57,6 +57,119 @@ type mockAccountStore struct {
 	accounts map[string]accountDomain.Account
 }
 
+// TestHandleClassTypes_POST_Admin_CreatesClassType verifies admins can create class types with metadata.
+// PRE: valid admin session
+// POST: class type is persisted and returned
+func TestHandleClassTypes_POST_Admin_CreatesClassType(t *testing.T) {
+	stores = newFullStores()
+	ctx := context.Background()
+	stores.ProgramStore.Save(ctx, programDomain.Program{ID: "p1", Name: "Adults", Type: "adults"})
+
+	body := `{"ProgramID":"p1","Name":"Gi Express","Description":"All-levels skills development and sparring","Attire":"gi","Level":"All-levels"}`
+	req := authRequest("POST", "/api/class-types", body, adminSession)
+	rec := httptest.NewRecorder()
+
+	handleClassTypes(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status=%d, want %d body=%s", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+	var got classTypeDomain.ClassType
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if got.ID == "" {
+		t.Fatalf("expected ID to be set")
+	}
+	if got.ProgramID != "p1" || got.Name != "Gi Express" || got.Attire != "gi" || got.Level != "All-levels" {
+		t.Fatalf("unexpected class type: %+v", got)
+	}
+}
+
+// TestHandleClassTypes_POST_NonAdmin_Forbidden verifies non-admin users cannot create class types.
+// PRE: valid non-admin session
+// POST: request is rejected with Forbidden
+func TestHandleClassTypes_POST_NonAdmin_Forbidden(t *testing.T) {
+	stores = newFullStores()
+	body := `{"ProgramID":"p1","Name":"Gi Express"}`
+	req := authRequest("POST", "/api/class-types", body, coachSession)
+	rec := httptest.NewRecorder()
+
+	handleClassTypes(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status=%d, want %d body=%s", rec.Code, http.StatusForbidden, rec.Body.String())
+	}
+}
+
+// TestHandleClassTypes_PUT_Admin_UpdatesClassType verifies admins can update class type metadata.
+// PRE: valid admin session and existing class type
+// POST: class type is updated and returned
+func TestHandleClassTypes_PUT_Admin_UpdatesClassType(t *testing.T) {
+	stores = newFullStores()
+	ctx := context.Background()
+	stores.ClassTypeStore.Save(ctx, classTypeDomain.ClassType{ID: "ct1", ProgramID: "p1", Name: "Old", Attire: "gi"})
+
+	body := `{"ID":"ct1","ProgramID":"p1","Name":"Nuts & Bolts","Description":"Beginner skills","Attire":"both","Level":"Beginner"}`
+	req := authRequest("PUT", "/api/class-types", body, adminSession)
+	rec := httptest.NewRecorder()
+
+	handleClassTypes(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var got classTypeDomain.ClassType
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if got.ID != "ct1" || got.Name != "Nuts & Bolts" || got.Attire != "both" || got.Level != "Beginner" {
+		t.Fatalf("unexpected class type: %+v", got)
+	}
+}
+
+// TestHandleClassTypes_DELETE_Admin_DeletesClassType verifies admins can delete a class type.
+// PRE: valid admin session and existing class type
+// POST: class type is removed
+func TestHandleClassTypes_DELETE_Admin_DeletesClassType(t *testing.T) {
+	stores = newFullStores()
+	ctx := context.Background()
+	stores.ClassTypeStore.Save(ctx, classTypeDomain.ClassType{ID: "ct1", ProgramID: "p1", Name: "Delete Me"})
+
+	req := authRequest("DELETE", "/api/class-types?id=ct1", "", adminSession)
+	rec := httptest.NewRecorder()
+
+	handleClassTypes(rec, req)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status=%d, want %d body=%s", rec.Code, http.StatusNoContent, rec.Body.String())
+	}
+}
+
+// TestHandlePrograms_GET_AdminOnly verifies /api/programs is admin-only.
+// PRE: request made as admin and non-admin
+// POST: admin sees list; non-admin forbidden
+func TestHandlePrograms_GET_AdminOnly(t *testing.T) {
+	stores = newFullStores()
+	ctx := context.Background()
+	stores.ProgramStore.Save(ctx, programDomain.Program{ID: "p1", Name: "Adults", Type: "adults"})
+
+	// Admin ok
+	{
+		req := authRequest("GET", "/api/programs", "", adminSession)
+		rec := httptest.NewRecorder()
+		handlePrograms(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("admin status=%d, want %d body=%s", rec.Code, http.StatusOK, rec.Body.String())
+		}
+	}
+	// Non-admin forbidden
+	{
+		req := authRequest("GET", "/api/programs", "", coachSession)
+		rec := httptest.NewRecorder()
+		handlePrograms(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("non-admin status=%d, want %d body=%s", rec.Code, http.StatusForbidden, rec.Body.String())
+		}
+	}
+}
+
 type mockFeatureFlagStore struct {
 	flags map[string]featureflagDomain.FeatureFlag
 }

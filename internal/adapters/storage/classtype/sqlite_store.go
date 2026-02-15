@@ -23,9 +23,9 @@ func NewSQLiteStore(db storage.SQLDB) *SQLiteStore {
 // PRE: id is non-empty
 // POST: Returns the entity or an error if not found
 func (s *SQLiteStore) GetByID(ctx context.Context, id string) (domain.ClassType, error) {
-	row := s.db.QueryRowContext(ctx, "SELECT id, program_id, name FROM class_type WHERE id = ?", id)
+	row := s.db.QueryRowContext(ctx, "SELECT id, program_id, name, description, attire, level FROM class_type WHERE id = ?", id)
 	var entity domain.ClassType
-	err := row.Scan(&entity.ID, &entity.ProgramID, &entity.Name)
+	err := row.Scan(&entity.ID, &entity.ProgramID, &entity.Name, &entity.Description, &entity.Attire, &entity.Level)
 	if err == sql.ErrNoRows {
 		return domain.ClassType{}, fmt.Errorf("class type not found: %w", err)
 	}
@@ -37,8 +37,8 @@ func (s *SQLiteStore) GetByID(ctx context.Context, id string) (domain.ClassType,
 // POST: Entity is persisted (insert or update)
 func (s *SQLiteStore) Save(ctx context.Context, entity domain.ClassType) error {
 	_, err := s.db.ExecContext(ctx,
-		"INSERT INTO class_type (id, program_id, name) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET program_id=excluded.program_id, name=excluded.name",
-		entity.ID, entity.ProgramID, entity.Name,
+		"INSERT INTO class_type (id, program_id, name, description, attire, level) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET program_id=excluded.program_id, name=excluded.name, description=excluded.description, attire=excluded.attire, level=excluded.level",
+		entity.ID, entity.ProgramID, entity.Name, entity.Description, entity.Attire, entity.Level,
 	)
 	return err
 }
@@ -55,7 +55,7 @@ func (s *SQLiteStore) Delete(ctx context.Context, id string) error {
 // PRE: filter has valid parameters
 // POST: Returns matching entities
 func (s *SQLiteStore) List(ctx context.Context) ([]domain.ClassType, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT id, program_id, name FROM class_type ORDER BY name")
+	rows, err := s.db.QueryContext(ctx, "SELECT id, program_id, name, description, attire, level FROM class_type ORDER BY name")
 	if err != nil {
 		return nil, err
 	}
@@ -64,7 +64,7 @@ func (s *SQLiteStore) List(ctx context.Context) ([]domain.ClassType, error) {
 	var results []domain.ClassType
 	for rows.Next() {
 		var entity domain.ClassType
-		if err := rows.Scan(&entity.ID, &entity.ProgramID, &entity.Name); err != nil {
+		if err := rows.Scan(&entity.ID, &entity.ProgramID, &entity.Name, &entity.Description, &entity.Attire, &entity.Level); err != nil {
 			return nil, err
 		}
 		results = append(results, entity)
@@ -76,7 +76,7 @@ func (s *SQLiteStore) List(ctx context.Context) ([]domain.ClassType, error) {
 // PRE: programID is non-empty
 // POST: Returns class types for the given program
 func (s *SQLiteStore) ListByProgramID(ctx context.Context, programID string) ([]domain.ClassType, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT id, program_id, name FROM class_type WHERE program_id = ? ORDER BY name", programID)
+	rows, err := s.db.QueryContext(ctx, "SELECT id, program_id, name, description, attire, level FROM class_type WHERE program_id = ? ORDER BY name", programID)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +85,7 @@ func (s *SQLiteStore) ListByProgramID(ctx context.Context, programID string) ([]
 	var results []domain.ClassType
 	for rows.Next() {
 		var entity domain.ClassType
-		if err := rows.Scan(&entity.ID, &entity.ProgramID, &entity.Name); err != nil {
+		if err := rows.Scan(&entity.ID, &entity.ProgramID, &entity.Name, &entity.Description, &entity.Attire, &entity.Level); err != nil {
 			return nil, err
 		}
 		results = append(results, entity)
