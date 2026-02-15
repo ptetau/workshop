@@ -104,10 +104,22 @@ func renderTemplate(w http.ResponseWriter, r *http.Request, templateName string,
 		isRealAdmin = sess.Role == "admin"
 	}
 
+	flagsByKey := mergedFeatureFlagsByKey(r.Context())
+
 	funcMap := template.FuncMap{
-		"currentRole":     func() string { return role },
-		"currentEmail":    func() string { return email },
-		"isLoggedIn":      func() bool { return role != "" },
+		"currentRole":  func() string { return role },
+		"currentEmail": func() string { return email },
+		"isLoggedIn":   func() bool { return role != "" },
+		"featureEnabled": func(key string) bool {
+			if !ok {
+				return false
+			}
+			ff, exists := flagsByKey[key]
+			if !exists {
+				return true
+			}
+			return ff.EnabledForRole(sess.Role, sess.BetaTester)
+		},
 		"csrfToken":       func() string { return csrf.Token(r) },
 		"isImpersonating": func() bool { return impersonating },
 		"realRole":        func() string { return realRole },
@@ -185,10 +197,75 @@ func renderTemplate(w http.ResponseWriter, r *http.Request, templateName string,
 	}
 }
 
+func mergedFeatureFlagsByKey(ctx context.Context) map[string]featureflagDomain.FeatureFlag {
+	m := make(map[string]featureflagDomain.FeatureFlag)
+	for _, d := range featureflagDomain.DefaultFlags() {
+		m[d.Key] = d
+	}
+	if stores == nil || stores.FeatureFlagStore == nil {
+		return m
+	}
+	persisted, err := stores.FeatureFlagStore.List(ctx)
+	if err != nil {
+		return m
+	}
+	for _, p := range persisted {
+		if d, ok := m[p.Key]; ok {
+			if p.Description != "" {
+				d.Description = p.Description
+			}
+			d.EnabledAdmin = p.EnabledAdmin
+			d.EnabledCoach = p.EnabledCoach
+			d.EnabledMember = p.EnabledMember
+			d.EnabledTrial = p.EnabledTrial
+			d.BetaOverride = p.BetaOverride
+			m[p.Key] = d
+		} else {
+			m[p.Key] = p
+		}
+	}
+	return m
+}
+
+func featureEnabledForSession(ctx context.Context, sess middleware.Session, featureKey string) bool {
+	ff, ok := mergedFeatureFlagsByKey(ctx)[featureKey]
+	if !ok {
+		return true
+	}
+	return ff.EnabledForRole(sess.Role, sess.BetaTester)
+}
+
+func requireFeaturePage(w http.ResponseWriter, r *http.Request, sess middleware.Session, featureKey string) bool {
+	if featureEnabledForSession(r.Context(), sess, featureKey) {
+		return true
+	}
+	http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
+	return false
+}
+
+func requireFeatureAPI(w http.ResponseWriter, r *http.Request, sess middleware.Session, featureKey string) bool {
+	if featureEnabledForSession(r.Context(), sess, featureKey) {
+		return true
+	}
+	http.Error(w, "Forbidden", http.StatusForbidden)
+	return false
+}
+
 // handleMembers handles both GET (list) and POST (register) for /members
 func handleMembers(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	isHTML := isHTMLRequest(r)
+	if sess, ok := middleware.GetSessionFromContext(ctx); ok {
+		if isHTML {
+			if !requireFeaturePage(w, r, sess, "member_mgmt") {
+				return
+			}
+		} else {
+			if !requireFeatureAPI(w, r, sess, "member_mgmt") {
+				return
+			}
+		}
+	}
 
 	if r.Method == "GET" {
 		// GET: List members with pagination, sorting, search, and filtering
@@ -286,6 +363,18 @@ func handlePostCheckinCheckInMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if sess, ok := middleware.GetSessionFromContext(ctx); ok {
+		if isHTML {
+			if !requireFeaturePage(w, r, sess, "attendance") {
+				return
+			}
+		} else {
+			if !requireFeatureAPI(w, r, sess, "attendance") {
+				return
+			}
+		}
+	}
+
 	input := orchestrators.CheckInMemberInput{}
 
 	if strings.HasPrefix(r.Header.Get("Content-Type"), "application/x-www-form-urlencoded") {
@@ -338,6 +427,17 @@ func handleGetAttendanceGetAttendanceToday(w http.ResponseWriter, r *http.Reques
 	if r.Method != "GET" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
+	}
+	if sess, ok := middleware.GetSessionFromContext(ctx); ok {
+		if isHTML {
+			if !requireFeaturePage(w, r, sess, "attendance") {
+				return
+			}
+		} else {
+			if !requireFeatureAPI(w, r, sess, "attendance") {
+				return
+			}
+		}
 	}
 
 	dateParam := r.URL.Query().Get("date")
@@ -395,6 +495,11 @@ func handleMemberAttendanceToday(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
+	if sess, ok := middleware.GetSessionFromContext(r.Context()); ok {
+		if !requireFeatureAPI(w, r, sess, "attendance") {
+			return
+		}
+	}
 
 	memberID := r.URL.Query().Get("member_id")
 	if memberID == "" {
@@ -422,6 +527,11 @@ func handleUndoCheckIn(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "DELETE" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
+	}
+	if sess, ok := middleware.GetSessionFromContext(r.Context()); ok {
+		if !requireFeatureAPI(w, r, sess, "attendance") {
+			return
+		}
 	}
 
 	var input struct {
@@ -456,6 +566,11 @@ func handleCheckOut(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
+	}
+	if sess, ok := middleware.GetSessionFromContext(r.Context()); ok {
+		if !requireFeatureAPI(w, r, sess, "attendance") {
+			return
+		}
 	}
 
 	var input struct {
@@ -946,6 +1061,33 @@ func handleGetMemberProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	sess, ok := middleware.GetSessionFromContext(r.Context())
+	if !ok {
+		if isHTMLRequest(r) {
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			return
+		}
+		http.Error(w, "not authenticated", http.StatusUnauthorized)
+		return
+	}
+	if sess.Role != "admin" && sess.Role != "coach" {
+		if isHTMLRequest(r) {
+			http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
+			return
+		}
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	if isHTMLRequest(r) {
+		if !requireFeaturePage(w, r, sess, "member_mgmt") {
+			return
+		}
+	} else {
+		if !requireFeatureAPI(w, r, sess, "member_mgmt") {
+			return
+		}
+	}
+
 	memberID := r.URL.Query().Get("id")
 	if memberID == "" {
 		http.Error(w, "missing id", http.StatusBadRequest)
@@ -1014,7 +1156,11 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Create session
-		token, err := sessions.Create(result.AccountID, result.Email, result.Role, result.PasswordChangeRequired)
+		betaTester := false
+		if acct, err := stores.AccountStore.GetByID(r.Context(), result.AccountID); err == nil {
+			betaTester = acct.BetaTester
+		}
+		token, err := sessions.Create(result.AccountID, result.Email, result.Role, result.PasswordChangeRequired, betaTester)
 		if err != nil {
 			http.Error(w, "Session error", http.StatusInternalServerError)
 			return
@@ -1121,6 +1267,12 @@ func handleMemberSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if sess, ok := middleware.GetSessionFromContext(r.Context()); ok {
+		if !requireFeatureAPI(w, r, sess, "member_mgmt") {
+			return
+		}
+	}
+
 	query := r.URL.Query().Get("q")
 	if query == "" {
 		w.Header().Set("Content-Type", "application/json")
@@ -1145,6 +1297,12 @@ func handleArchiveMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if sess, ok := middleware.GetSessionFromContext(r.Context()); ok {
+		if !requireFeatureAPI(w, r, sess, "member_mgmt") {
+			return
+		}
+	}
+
 	var input orchestrators.ArchiveMemberInput
 	if strings.HasPrefix(r.Header.Get("Content-Type"), "application/x-www-form-urlencoded") {
 		r.ParseForm()
@@ -1167,6 +1325,12 @@ func handleRestoreMember(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
+	}
+
+	if sess, ok := middleware.GetSessionFromContext(r.Context()); ok {
+		if !requireFeatureAPI(w, r, sess, "member_mgmt") {
+			return
+		}
 	}
 
 	var input orchestrators.RestoreMemberInput
@@ -1310,8 +1474,12 @@ func handleGetTrainingLog(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	if _, ok := middleware.GetSessionFromContext(r.Context()); !ok {
+	sess, ok := middleware.GetSessionFromContext(r.Context())
+	if !ok {
 		http.Error(w, "not authenticated", http.StatusUnauthorized)
+		return
+	}
+	if !requireFeatureAPI(w, r, sess, "training_log") {
 		return
 	}
 	memberID := r.URL.Query().Get("member_id")
@@ -1641,8 +1809,12 @@ func handleMessages(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	if r.Method == "GET" {
-		if _, ok := middleware.GetSessionFromContext(ctx); !ok {
+		sess, ok := middleware.GetSessionFromContext(ctx)
+		if !ok {
 			http.Error(w, "not authenticated", http.StatusUnauthorized)
+			return
+		}
+		if !requireFeatureAPI(w, r, sess, "messages") {
 			return
 		}
 		memberID := r.URL.Query().Get("member_id")
@@ -3734,6 +3906,9 @@ func handleThemes(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
+		if !requireFeatureAPI(w, r, sess, "library") {
+			return
+		}
 		program := r.URL.Query().Get("program")
 		var themes []themeDomain.Theme
 		var err error
@@ -3763,6 +3938,9 @@ func handleThemes(w http.ResponseWriter, r *http.Request) {
 		}
 		if sess.Role != "admin" && sess.Role != "coach" {
 			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		if !requireFeatureAPI(w, r, sess, "library") {
 			return
 		}
 		var input struct {
@@ -3827,6 +4005,9 @@ func handleClips(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
+		if !requireFeatureAPI(w, r, sess, "library") {
+			return
+		}
 		themeID := r.URL.Query().Get("theme_id")
 		promoted := r.URL.Query().Get("promoted")
 		var clips []clipDomain.Clip
@@ -3860,6 +4041,9 @@ func handleClips(w http.ResponseWriter, r *http.Request) {
 		}
 		if sess.Role != "admin" && sess.Role != "coach" && sess.Role != "member" {
 			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		if !requireFeatureAPI(w, r, sess, "library") {
 			return
 		}
 		var input struct {
@@ -3921,6 +4105,9 @@ func handleClipPromote(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
+	if !requireFeatureAPI(w, r, sess, "library") {
+		return
+	}
 	var input struct {
 		ClipID string `json:"ClipID"`
 	}
@@ -3964,6 +4151,9 @@ func handleThemesPage(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
 		return
 	}
+	if !requireFeaturePage(w, r, sess, "library") {
+		return
+	}
 	renderTemplate(w, r, "themes.html", map[string]any{
 		"Email": sess.Email,
 		"Role":  sess.Role,
@@ -3983,6 +4173,9 @@ func handleLibraryPage(w http.ResponseWriter, r *http.Request) {
 	}
 	if sess.Role != "admin" && sess.Role != "coach" && sess.Role != "member" {
 		http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
+		return
+	}
+	if !requireFeaturePage(w, r, sess, "library") {
 		return
 	}
 	renderTemplate(w, r, "library.html", map[string]any{
@@ -5053,8 +5246,16 @@ func handleCurriculumPage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if !middleware.IsRole(r.Context(), "admin", "coach", "member") {
+	sess, ok := middleware.GetSessionFromContext(r.Context())
+	if !ok {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	if sess.Role != "admin" && sess.Role != "coach" && sess.Role != "member" {
 		http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
+		return
+	}
+	if !requireFeaturePage(w, r, sess, "curriculum") {
 		return
 	}
 	renderTemplate(w, r, "curriculum.html", map[string]interface{}{
@@ -5065,8 +5266,20 @@ func handleCurriculumPage(w http.ResponseWriter, r *http.Request) {
 // handleRotors handles GET/POST for /api/rotors
 func handleRotors(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	sess, ok := middleware.GetSessionFromContext(ctx)
+	if !ok {
+		http.Error(w, "not authenticated", http.StatusUnauthorized)
+		return
+	}
+	if !requireFeatureAPI(w, r, sess, "curriculum") {
+		return
+	}
 
 	if r.Method == "GET" {
+		if sess.Role != "admin" && sess.Role != "coach" && sess.Role != "member" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
 		classTypeID := r.URL.Query().Get("class_type_id")
 		if classTypeID == "" {
 			http.Error(w, "class_type_id is required", http.StatusBadRequest)
@@ -5086,9 +5299,8 @@ func handleRotors(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == "POST" {
-		session, ok := middleware.GetSessionFromContext(ctx)
-		if !ok {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		if sess.Role != "admin" && sess.Role != "coach" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
 
@@ -5116,7 +5328,7 @@ func handleRotors(w http.ResponseWriter, r *http.Request) {
 			Name:        input.Name,
 			Version:     nextVersion,
 			Status:      rotorDomain.StatusDraft,
-			CreatedBy:   session.AccountID,
+			CreatedBy:   sess.AccountID,
 			CreatedAt:   timeNow(),
 		}
 		if err := rotor.Validate(); err != nil {
@@ -5139,6 +5351,14 @@ func handleRotors(w http.ResponseWriter, r *http.Request) {
 // handleRotorByID handles GET/DELETE for /api/rotors/by-id?id=<id>
 func handleRotorByID(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	sess, ok := middleware.GetSessionFromContext(ctx)
+	if !ok {
+		http.Error(w, "not authenticated", http.StatusUnauthorized)
+		return
+	}
+	if !requireFeatureAPI(w, r, sess, "curriculum") {
+		return
+	}
 	id := r.URL.Query().Get("id")
 	if id == "" {
 		http.Error(w, "id is required", http.StatusBadRequest)
@@ -5146,6 +5366,10 @@ func handleRotorByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == "GET" {
+		if sess.Role != "admin" && sess.Role != "coach" && sess.Role != "member" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
 		rotor, err := stores.RotorStore.GetRotor(ctx, id)
 		if err != nil {
 			http.Error(w, "Rotor not found", http.StatusNotFound)
@@ -5157,6 +5381,10 @@ func handleRotorByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == "PUT" {
+		if sess.Role != "admin" && sess.Role != "coach" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
 		var input struct {
 			Name string `json:"name"`
 		}
@@ -5183,6 +5411,10 @@ func handleRotorByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == "DELETE" {
+		if sess.Role != "admin" && sess.Role != "coach" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
 		rotor, err := stores.RotorStore.GetRotor(ctx, id)
 		if err != nil {
 			http.Error(w, "Rotor not found", http.StatusNotFound)
@@ -5210,6 +5442,18 @@ func handleRotorActivate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
+	sess, ok := middleware.GetSessionFromContext(ctx)
+	if !ok {
+		http.Error(w, "not authenticated", http.StatusUnauthorized)
+		return
+	}
+	if sess.Role != "admin" && sess.Role != "coach" {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	if !requireFeatureAPI(w, r, sess, "curriculum") {
+		return
+	}
 
 	var input struct {
 		ID string `json:"id"`
@@ -5252,7 +5496,18 @@ func handleRotorPreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-
+	sess, ok := middleware.GetSessionFromContext(ctx)
+	if !ok {
+		http.Error(w, "not authenticated", http.StatusUnauthorized)
+		return
+	}
+	if sess.Role != "admin" && sess.Role != "coach" {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	if !requireFeatureAPI(w, r, sess, "curriculum") {
+		return
+	}
 	var input struct {
 		ID        string `json:"id"`
 		PreviewOn bool   `json:"preview_on"`
@@ -5281,8 +5536,20 @@ func handleRotorPreview(w http.ResponseWriter, r *http.Request) {
 // handleRotorThemes handles GET/POST/DELETE for /api/rotors/themes
 func handleRotorThemes(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	sess, ok := middleware.GetSessionFromContext(ctx)
+	if !ok {
+		http.Error(w, "not authenticated", http.StatusUnauthorized)
+		return
+	}
+	if !requireFeatureAPI(w, r, sess, "curriculum") {
+		return
+	}
 
 	if r.Method == "GET" {
+		if sess.Role != "admin" && sess.Role != "coach" && sess.Role != "member" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
 		rotorID := r.URL.Query().Get("rotor_id")
 		if rotorID == "" {
 			http.Error(w, "rotor_id is required", http.StatusBadRequest)
@@ -5365,8 +5632,20 @@ func handleRotorThemes(w http.ResponseWriter, r *http.Request) {
 // handleTopics handles GET/POST/DELETE for /api/rotors/topics
 func handleTopics(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	sess, ok := middleware.GetSessionFromContext(ctx)
+	if !ok {
+		http.Error(w, "not authenticated", http.StatusUnauthorized)
+		return
+	}
+	if !requireFeatureAPI(w, r, sess, "curriculum") {
+		return
+	}
 
 	if r.Method == "GET" {
+		if sess.Role != "admin" && sess.Role != "coach" && sess.Role != "member" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
 		themeID := r.URL.Query().Get("theme_id")
 		if themeID == "" {
 			http.Error(w, "theme_id is required", http.StatusBadRequest)
@@ -5488,6 +5767,19 @@ func handleTopicReorder(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
+	ctx := r.Context()
+	sess, ok := middleware.GetSessionFromContext(ctx)
+	if !ok {
+		http.Error(w, "not authenticated", http.StatusUnauthorized)
+		return
+	}
+	if sess.Role != "admin" && sess.Role != "coach" {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	if !requireFeatureAPI(w, r, sess, "curriculum") {
+		return
+	}
 
 	var input struct {
 		RotorThemeID string   `json:"rotor_theme_id"`
@@ -5517,7 +5809,18 @@ func handleTopicScheduleAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-
+	sess, ok := middleware.GetSessionFromContext(ctx)
+	if !ok {
+		http.Error(w, "not authenticated", http.StatusUnauthorized)
+		return
+	}
+	if sess.Role != "admin" && sess.Role != "coach" {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	if !requireFeatureAPI(w, r, sess, "curriculum") {
+		return
+	}
 	var input struct {
 		Action       string `json:"action"` // activate, complete, skip, extend
 		TopicID      string `json:"topic_id"`
@@ -5655,6 +5958,14 @@ func handleTopicScheduleAction(w http.ResponseWriter, r *http.Request) {
 // handleVotes handles POST /api/votes (cast a vote) and GET /api/votes?topic_id=<id> (get vote count)
 func handleVotes(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	sess, ok := middleware.GetSessionFromContext(ctx)
+	if !ok {
+		http.Error(w, "not authenticated", http.StatusUnauthorized)
+		return
+	}
+	if !requireFeatureAPI(w, r, sess, "curriculum") {
+		return
+	}
 
 	if r.Method == "GET" {
 		topicID := r.URL.Query().Get("topic_id")
@@ -5776,12 +6087,19 @@ func handleCurriculumOverview(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	sess, ok := middleware.GetSessionFromContext(r.Context())
+	ctx := r.Context()
+	sess, ok := middleware.GetSessionFromContext(ctx)
 	if !ok {
 		http.Error(w, "not authenticated", http.StatusUnauthorized)
 		return
 	}
-
+	if sess.Role != "admin" && sess.Role != "coach" && sess.Role != "member" {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	if !requireFeatureAPI(w, r, sess, "curriculum") {
+		return
+	}
 	query := projections.GetCurriculumOverviewQuery{
 		Role: sess.Role,
 	}
@@ -5807,7 +6125,18 @@ func handleCurriculumView(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-
+	sess, ok := middleware.GetSessionFromContext(ctx)
+	if !ok {
+		http.Error(w, "not authenticated", http.StatusUnauthorized)
+		return
+	}
+	if sess.Role != "admin" && sess.Role != "coach" && sess.Role != "member" {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	if !requireFeatureAPI(w, r, sess, "curriculum") {
+		return
+	}
 	classTypeID := r.URL.Query().Get("class_type_id")
 	if classTypeID == "" {
 		http.Error(w, "class_type_id is required", http.StatusBadRequest)
@@ -5875,8 +6204,16 @@ func handleCalendarPage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if !middleware.IsRole(r.Context(), "admin", "coach", "member", "trial") {
+	sess, ok := middleware.GetSessionFromContext(r.Context())
+	if !ok {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	if sess.Role != "admin" && sess.Role != "coach" && sess.Role != "member" && sess.Role != "trial" {
 		http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
+		return
+	}
+	if !requireFeaturePage(w, r, sess, "calendar") {
 		return
 	}
 	renderTemplate(w, r, "calendar.html", map[string]interface{}{
@@ -5887,8 +6224,20 @@ func handleCalendarPage(w http.ResponseWriter, r *http.Request) {
 // handleCalendarEvents handles GET/POST/PUT/DELETE for /api/calendar/events
 func handleCalendarEvents(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	sess, ok := middleware.GetSessionFromContext(ctx)
+	if !ok {
+		http.Error(w, "not authenticated", http.StatusUnauthorized)
+		return
+	}
+	if !requireFeatureAPI(w, r, sess, "calendar") {
+		return
+	}
 
 	if r.Method == "GET" {
+		if sess.Role != "admin" && sess.Role != "coach" && sess.Role != "member" && sess.Role != "trial" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
 		from := r.URL.Query().Get("from")
 		to := r.URL.Query().Get("to")
 		if from == "" || to == "" {

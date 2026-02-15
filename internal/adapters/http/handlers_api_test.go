@@ -32,6 +32,7 @@ import (
 	accountDomain "workshop/internal/domain/account"
 	attendanceDomain "workshop/internal/domain/attendance"
 	classTypeDomain "workshop/internal/domain/classtype"
+	clipDomain "workshop/internal/domain/clip"
 	gradingDomain "workshop/internal/domain/grading"
 	holidayDomain "workshop/internal/domain/holiday"
 	injuryDomain "workshop/internal/domain/injury"
@@ -43,14 +44,60 @@ import (
 	programDomain "workshop/internal/domain/program"
 	scheduleDomain "workshop/internal/domain/schedule"
 	termDomain "workshop/internal/domain/term"
+	themeDomain "workshop/internal/domain/theme"
 	trainingGoalDomain "workshop/internal/domain/traininggoal"
 	waiverDomain "workshop/internal/domain/waiver"
+
+	featureflagDomain "workshop/internal/domain/featureflag"
 )
 
 // --- Mock stores for Layer 1b+ ---
 
 type mockAccountStore struct {
 	accounts map[string]accountDomain.Account
+}
+
+type mockFeatureFlagStore struct {
+	flags map[string]featureflagDomain.FeatureFlag
+}
+
+// GetByKey implements the mock FeatureFlagStore for testing.
+// PRE: valid parameters
+// POST: returns expected result
+func (m *mockFeatureFlagStore) GetByKey(ctx context.Context, key string) (featureflagDomain.FeatureFlag, error) {
+	if m.flags == nil {
+		return featureflagDomain.FeatureFlag{}, sql.ErrNoRows
+	}
+	ff, ok := m.flags[key]
+	if !ok {
+		return featureflagDomain.FeatureFlag{}, sql.ErrNoRows
+	}
+	return ff, nil
+}
+
+// List implements the mock FeatureFlagStore for testing.
+// PRE: valid parameters
+// POST: returns expected result
+func (m *mockFeatureFlagStore) List(ctx context.Context) ([]featureflagDomain.FeatureFlag, error) {
+	if m.flags == nil {
+		return []featureflagDomain.FeatureFlag{}, nil
+	}
+	out := make([]featureflagDomain.FeatureFlag, 0, len(m.flags))
+	for _, v := range m.flags {
+		out = append(out, v)
+	}
+	return out, nil
+}
+
+// Save implements the mock FeatureFlagStore for testing.
+// PRE: valid parameters
+// POST: returns expected result
+func (m *mockFeatureFlagStore) Save(ctx context.Context, value featureflagDomain.FeatureFlag) error {
+	if m.flags == nil {
+		m.flags = make(map[string]featureflagDomain.FeatureFlag)
+	}
+	m.flags[value.Key] = value
+	return nil
 }
 
 // GetByID implements the mock AccountStore for testing.
@@ -871,6 +918,128 @@ type mockProgramStore struct {
 	programs map[string]programDomain.Program
 }
 
+type mockThemeStore struct {
+	themes map[string]themeDomain.Theme
+}
+
+// GetByID implements the mock ThemeStore for testing.
+// PRE: valid parameters
+// POST: returns expected result
+func (m *mockThemeStore) GetByID(ctx context.Context, id string) (themeDomain.Theme, error) {
+	t, ok := m.themes[id]
+	if !ok {
+		return themeDomain.Theme{}, sql.ErrNoRows
+	}
+	return t, nil
+}
+
+// Save implements the mock ThemeStore for testing.
+// PRE: valid parameters
+// POST: returns expected result
+func (m *mockThemeStore) Save(ctx context.Context, value themeDomain.Theme) error {
+	if m.themes == nil {
+		m.themes = make(map[string]themeDomain.Theme)
+	}
+	m.themes[value.ID] = value
+	return nil
+}
+
+// Delete implements the mock ThemeStore for testing.
+// PRE: valid parameters
+// POST: returns expected result
+func (m *mockThemeStore) Delete(ctx context.Context, id string) error {
+	delete(m.themes, id)
+	return nil
+}
+
+// List implements the mock ThemeStore for testing.
+// PRE: valid parameters
+// POST: returns expected result
+func (m *mockThemeStore) List(ctx context.Context) ([]themeDomain.Theme, error) {
+	var out []themeDomain.Theme
+	for _, v := range m.themes {
+		out = append(out, v)
+	}
+	if out == nil {
+		out = []themeDomain.Theme{}
+	}
+	return out, nil
+}
+
+// ListByProgram implements the mock ThemeStore for testing.
+// PRE: valid parameters
+// POST: returns expected result
+func (m *mockThemeStore) ListByProgram(ctx context.Context, program string) ([]themeDomain.Theme, error) {
+	var out []themeDomain.Theme
+	for _, v := range m.themes {
+		if v.Program == program {
+			out = append(out, v)
+		}
+	}
+	if out == nil {
+		out = []themeDomain.Theme{}
+	}
+	return out, nil
+}
+
+type mockClipStore struct {
+	clips map[string]clipDomain.Clip
+}
+
+// GetByID implements the mock ClipStore for testing.
+// PRE: valid parameters
+// POST: returns expected result
+func (m *mockClipStore) GetByID(ctx context.Context, id string) (clipDomain.Clip, error) {
+	c, ok := m.clips[id]
+	if !ok {
+		return clipDomain.Clip{}, sql.ErrNoRows
+	}
+	return c, nil
+}
+
+// Save implements the mock ClipStore for testing.
+// PRE: valid parameters
+// POST: returns expected result
+func (m *mockClipStore) Save(ctx context.Context, value clipDomain.Clip) error {
+	if m.clips == nil {
+		m.clips = make(map[string]clipDomain.Clip)
+	}
+	m.clips[value.ID] = value
+	return nil
+}
+
+// Delete implements the mock ClipStore for testing.
+// PRE: valid parameters
+// POST: returns expected result
+func (m *mockClipStore) Delete(ctx context.Context, id string) error {
+	delete(m.clips, id)
+	return nil
+}
+
+// ListByThemeID implements the mock ClipStore for testing.
+// PRE: valid parameters
+// POST: returns expected result
+func (m *mockClipStore) ListByThemeID(ctx context.Context, themeID string) ([]clipDomain.Clip, error) {
+	var out []clipDomain.Clip
+	for _, v := range m.clips {
+		if v.ThemeID == themeID {
+			out = append(out, v)
+		}
+	}
+	if out == nil {
+		out = []clipDomain.Clip{}
+	}
+	return out, nil
+}
+
+// ListPromoted implements the mock ClipStore for testing.
+// PRE: valid parameters
+// POST: returns expected result
+func (m *mockClipStore) ListPromoted(ctx context.Context) ([]clipDomain.Clip, error) {
+	// For these tests we don't model promotion state, return empty.
+	return []clipDomain.Clip{}, nil
+}
+
 // GetByID implements the mock ProgramStore for testing.
 // PRE: valid parameters
 // POST: returns expected result
@@ -917,6 +1086,7 @@ func (m *mockProgramStore) List(ctx context.Context) ([]programDomain.Program, e
 func newFullStores() *Stores {
 	return &Stores{
 		AccountStore:             &mockAccountStore{accounts: make(map[string]accountDomain.Account)},
+		FeatureFlagStore:         &mockFeatureFlagStore{flags: make(map[string]featureflagDomain.FeatureFlag)},
 		MemberStore:              &mockMemberStore{members: make(map[string]memberDomain.Member)},
 		WaiverStore:              &mockWaiverStore{waivers: make(map[string]waiverDomain.Waiver)},
 		InjuryStore:              &mockInjuryStore{injuries: make(map[string]injuryDomain.Injury)},
@@ -937,6 +1107,8 @@ func newFullStores() *Stores {
 		MilestoneStore:           &mockMilestoneStore{milestones: make(map[string]milestoneDomain.Milestone)},
 		MemberMilestoneStore:     &mockMemberMilestoneStore{items: make(map[string]milestoneDomain.MemberMilestone)},
 		TrainingGoalStore:        &mockTrainingGoalStore{goals: make(map[string]trainingGoalDomain.TrainingGoal)},
+		ThemeStore:               &mockThemeStore{themes: make(map[string]themeDomain.Theme)},
+		ClipStore:                &mockClipStore{clips: make(map[string]clipDomain.Clip)},
 	}
 }
 
@@ -972,6 +1144,231 @@ var memberSession = middleware.Session{
 	Email:     "marcus@test.com",
 	Role:      "member",
 	CreatedAt: time.Now(),
+}
+
+// TestFeatureFlags_Library_Disabled_BlocksThemesAndClipsAPI verifies library gating returns 403 for member API calls.
+func TestFeatureFlags_Library_Disabled_BlocksThemesAndClipsAPI(t *testing.T) {
+	stores = newFullStores()
+	stores.FeatureFlagStore.Save(context.Background(), featureflagDomain.FeatureFlag{
+		Key:           "library",
+		Description:   "Library",
+		EnabledAdmin:  true,
+		EnabledCoach:  true,
+		EnabledMember: false,
+		EnabledTrial:  false,
+		BetaOverride:  false,
+	})
+
+	// /api/themes
+	{
+		req := authRequest("GET", "/api/themes", "", memberSession)
+		rec := httptest.NewRecorder()
+		handleThemes(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("/api/themes status=%d, want %d body=%s", rec.Code, http.StatusForbidden, rec.Body.String())
+		}
+	}
+
+	// /api/clips
+	{
+		req := authRequest("GET", "/api/clips?promoted=true", "", memberSession)
+		rec := httptest.NewRecorder()
+		handleClips(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("/api/clips status=%d, want %d body=%s", rec.Code, http.StatusForbidden, rec.Body.String())
+		}
+	}
+}
+
+// TestFeatureFlags_Library_Enabled_AllowsThemesAPIForMember verifies /api/themes works when library is enabled.
+func TestFeatureFlags_Library_Enabled_AllowsThemesAPIForMember(t *testing.T) {
+	stores = newFullStores()
+	stores.FeatureFlagStore.Save(context.Background(), featureflagDomain.FeatureFlag{
+		Key:           "library",
+		Description:   "Library",
+		EnabledAdmin:  true,
+		EnabledCoach:  true,
+		EnabledMember: true,
+		EnabledTrial:  false,
+		BetaOverride:  false,
+	})
+
+	req := authRequest("GET", "/api/themes", "", memberSession)
+	rec := httptest.NewRecorder()
+	handleThemes(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if strings.TrimSpace(rec.Body.String()) != "[]" {
+		t.Fatalf("body=%q, want []", rec.Body.String())
+	}
+}
+
+// TestRequireFeaturePage_Disabled_RedirectsToDashboard verifies page gating redirects to /dashboard when disabled.
+func TestRequireFeaturePage_Disabled_RedirectsToDashboard(t *testing.T) {
+	stores = newFullStores()
+	// Disable messages for members.
+	stores.FeatureFlagStore.Save(context.Background(), featureflagDomain.FeatureFlag{
+		Key:           "messages",
+		Description:   "Messages",
+		EnabledAdmin:  true,
+		EnabledCoach:  true,
+		EnabledMember: false,
+		EnabledTrial:  false,
+		BetaOverride:  false,
+	})
+
+	sess := middleware.Session{AccountID: "m1", Email: "m@test.com", Role: "member"}
+	req := httptest.NewRequest("GET", "/messages", nil)
+	rec := httptest.NewRecorder()
+
+	if ok := requireFeaturePage(rec, req, sess, "messages"); ok {
+		t.Fatalf("expected requireFeaturePage to block")
+	}
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status=%d, want %d", rec.Code, http.StatusSeeOther)
+	}
+	if got := rec.Header().Get("Location"); got != "/dashboard" {
+		t.Fatalf("Location=%q, want /dashboard", got)
+	}
+}
+
+// TestHandleAdminFeatureFlags_GET_MergesDefaultsAndPersisted verifies defaults are merged with persisted overrides.
+func TestHandleAdminFeatureFlags_GET_MergesDefaultsAndPersisted(t *testing.T) {
+	stores = newFullStores()
+
+	// Persisted values override defaults.
+	stores.FeatureFlagStore.Save(context.Background(), featureflagDomain.FeatureFlag{
+		Key:           "library",
+		Description:   "Override desc",
+		EnabledAdmin:  true,
+		EnabledCoach:  false,
+		EnabledMember: false,
+		EnabledTrial:  false,
+		BetaOverride:  true,
+	})
+
+	req := authRequest("GET", "/api/admin/feature-flags", "", adminSession)
+	rec := httptest.NewRecorder()
+	handleAdminFeatureFlags(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	type flagDTO struct {
+		Key           string `json:"Key"`
+		Description   string `json:"Description"`
+		EnabledAdmin  bool   `json:"EnabledAdmin"`
+		EnabledCoach  bool   `json:"EnabledCoach"`
+		EnabledMember bool   `json:"EnabledMember"`
+		EnabledTrial  bool   `json:"EnabledTrial"`
+		BetaOverride  bool   `json:"BetaOverride"`
+	}
+	var out []flagDTO
+	if err := json.NewDecoder(rec.Body).Decode(&out); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(out) == 0 {
+		t.Fatalf("expected flags list")
+	}
+
+	var lib *flagDTO
+	for i := range out {
+		if out[i].Key == "library" {
+			lib = &out[i]
+			break
+		}
+	}
+	if lib == nil {
+		t.Fatalf("expected library flag present")
+	}
+	if lib.Description != "Override desc" {
+		t.Fatalf("description=%q, want %q", lib.Description, "Override desc")
+	}
+	if lib.EnabledCoach != false || lib.EnabledMember != false || lib.BetaOverride != true {
+		t.Fatalf("unexpected merged values: %+v", *lib)
+	}
+}
+
+// TestHandleAdminFeatureFlags_POST_SavesFlags verifies admin API persists submitted feature flags.
+func TestHandleAdminFeatureFlags_POST_SavesFlags(t *testing.T) {
+	stores = newFullStores()
+
+	body := `{"Flags":[{"Key":"library","Description":"Saved","EnabledAdmin":true,"EnabledCoach":true,"EnabledMember":false,"EnabledTrial":false,"BetaOverride":true}]}`
+	req := authRequest("POST", "/api/admin/feature-flags", body, adminSession)
+	rec := httptest.NewRecorder()
+	handleAdminFeatureFlags(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	ff, err := stores.FeatureFlagStore.GetByKey(context.Background(), "library")
+	if err != nil {
+		t.Fatalf("expected persisted flag: %v", err)
+	}
+	if ff.Description != "Saved" || ff.EnabledMember != false || ff.BetaOverride != true {
+		t.Fatalf("unexpected saved flag: %+v", ff)
+	}
+}
+
+// TestHandleAdminBetaTesters_GET_ListsOnlyBetaTesters verifies only beta testers are returned.
+func TestHandleAdminBetaTesters_GET_ListsOnlyBetaTesters(t *testing.T) {
+	stores = newFullStores()
+	ctx := context.Background()
+
+	stores.AccountStore.Save(ctx, accountDomain.Account{ID: "a1", Email: "alpha@test.com", Role: "member", BetaTester: true})
+	stores.AccountStore.Save(ctx, accountDomain.Account{ID: "a2", Email: "bravo@test.com", Role: "member", BetaTester: false})
+
+	req := authRequest("GET", "/api/admin/beta-testers", "", adminSession)
+	rec := httptest.NewRecorder()
+	handleAdminBetaTesters(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	type safeAccount struct {
+		ID    string `json:"ID"`
+		Email string `json:"Email"`
+		Role  string `json:"Role"`
+	}
+	var out []safeAccount
+	if err := json.NewDecoder(rec.Body).Decode(&out); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(out) != 1 {
+		t.Fatalf("len=%d, want 1 out=%v", len(out), out)
+	}
+	if out[0].Email != "alpha@test.com" {
+		t.Fatalf("email=%q, want alpha@test.com", out[0].Email)
+	}
+}
+
+// TestHandleAdminBetaTesters_POST_SetBetaByEmail verifies setting BetaTester=true by email.
+func TestHandleAdminBetaTesters_POST_SetBetaByEmail(t *testing.T) {
+	stores = newFullStores()
+	ctx := context.Background()
+
+	stores.AccountStore.Save(ctx, accountDomain.Account{ID: "a1", Email: "alpha@test.com", Role: "member", BetaTester: false})
+
+	body := `{"Email":"alpha@test.com","Beta":true}`
+	req := authRequest("POST", "/api/admin/beta-testers", body, adminSession)
+	rec := httptest.NewRecorder()
+	handleAdminBetaTesters(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	acct, err := stores.AccountStore.GetByEmail(ctx, "alpha@test.com")
+	if err != nil {
+		t.Fatalf("get by email: %v", err)
+	}
+	if !acct.BetaTester {
+		t.Fatalf("expected beta tester true")
+	}
 }
 
 // --- Tests: /api/notices ---
