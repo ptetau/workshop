@@ -21,6 +21,7 @@
         <div id="playerInfo" style="background:#1a1a1a;padding:1rem;color:#fff;">
             <strong id="playerTitle"></strong>
             <span id="playerTime" style="color:#aaa;margin-left:1rem;"></span>
+            <button id="muteToggle" onclick="toggleMute()" style="float:right;background:#1A1B1F;border:1px solid rgba(255,255,255,0.15);padding:0.4rem 0.8rem;font-size:0.8rem;margin-left:0.5rem;">Unmute</button>
             <button onclick="closePlayer()" style="float:right;background:#F9B232;padding:0.4rem 0.8rem;font-size:0.8rem;">Close</button>
         </div>
     </div>
@@ -180,16 +181,57 @@ function loadClips() {
 function playClip(ytID, start, end, title) {
     var player = document.getElementById('clipPlayer');
     var iframe = document.getElementById('ytPlayer');
-    iframe.src = 'https://www.youtube.com/embed/'+ytID+'?autoplay=1&mute=1&start='+start+'&end='+end+'&loop=1&playlist='+ytID;
+
+    // NOTE: enablejsapi=1 allows toggling mute/unmute via postMessage commands.
+    // Keep clips muted by default for gym-friendly playback.
+    iframe.src = 'https://www.youtube.com/embed/'+ytID
+        + '?autoplay=1&mute=1'
+        + '&start='+start+'&end='+end
+        + '&loop=1&playlist='+ytID
+        + '&enablejsapi=1&origin=' + encodeURIComponent(window.location.origin);
     document.getElementById('playerTitle').textContent = title;
     document.getElementById('playerTime').textContent = start+'s – '+end+'s ('+( end-start)+'s loop)';
     player.style.display = 'block';
     player.scrollIntoView({behavior:'smooth'});
+
+    setMuteUI(true);
+}
+
+function setMuteUI(isMuted) {
+    var btn = document.getElementById('muteToggle');
+    if (!btn) return;
+    btn.dataset.muted = isMuted ? 'true' : 'false';
+    btn.textContent = isMuted ? 'Unmute' : 'Mute';
+}
+
+function sendYTCommand(func) {
+    var iframe = document.getElementById('ytPlayer');
+    if (!iframe || !iframe.contentWindow) return;
+    // YouTube iframe API command format.
+    iframe.contentWindow.postMessage(JSON.stringify({
+        event: 'command',
+        func: func,
+        args: []
+    }), 'https://www.youtube.com');
+}
+
+function toggleMute() {
+    var btn = document.getElementById('muteToggle');
+    if (!btn) return;
+    var muted = btn.dataset.muted !== 'false';
+    if (muted) {
+        sendYTCommand('unMute');
+        setMuteUI(false);
+        return;
+    }
+    sendYTCommand('mute');
+    setMuteUI(true);
 }
 
 function closePlayer() {
     document.getElementById('clipPlayer').style.display = 'none';
     document.getElementById('ytPlayer').src = '';
+    setMuteUI(true);
 }
 
 function promoteClip(ev, clipID) {
