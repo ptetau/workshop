@@ -118,11 +118,11 @@
             <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Toggle navigation">&#9776;</button>
             <div class="nav-links">
             {{ if eq (currentRole) "admin" }}
-            <a href="/members">Members</a>
-            <a href="/attendance">Attendance</a>
-            <a href="/calendar">Calendar</a>
-            <a href="/admin/grading">Grading</a>
-            <a href="/admin/emails">Emails</a>
+            {{ if featureEnabled "member_mgmt" }}<a href="/members">Members</a>{{ end }}
+            {{ if featureEnabled "attendance" }}<a href="/attendance">Attendance</a>{{ end }}
+            {{ if featureEnabled "calendar" }}<a href="/calendar">Calendar</a>{{ end }}
+            {{ if featureEnabled "grading" }}<a href="/admin/grading">Grading</a>{{ end }}
+            {{ if featureEnabled "emails" }}<a href="/admin/emails">Emails</a>{{ end }}
             <details class="nav-more">
                 <summary>More</summary>
                 <div class="nav-more-menu">
@@ -134,9 +134,11 @@
                     </div>
                     <div class="nav-more-group">
                         <span class="nav-more-label">Content</span>
-                        <a href="/curriculum">Curriculum</a>
+                        {{ if featureEnabled "curriculum" }}<a href="/curriculum">Curriculum</a>{{ end }}
+                        {{ if featureEnabled "library" }}
                         <a href="/themes">Themes</a>
                         <a href="/library">Library</a>
+                        {{ end }}
                         <a href="/admin/notices">Notices</a>
                     </div>
                     <div class="nav-more-group">
@@ -150,30 +152,34 @@
                 </div>
             </details>
             {{ else if eq (currentRole) "coach" }}
-            <a href="/members">Members</a>
-            <a href="/attendance">Attendance</a>
-            <a href="/admin/grading">Grading</a>
-            <a href="/curriculum">Curriculum</a>
-            <a href="/calendar">Calendar</a>
+            {{ if featureEnabled "member_mgmt" }}<a href="/members">Members</a>{{ end }}
+            {{ if featureEnabled "attendance" }}<a href="/attendance">Attendance</a>{{ end }}
+            {{ if featureEnabled "grading" }}<a href="/admin/grading">Grading</a>{{ end }}
+            {{ if featureEnabled "curriculum" }}<a href="/curriculum">Curriculum</a>{{ end }}
+            {{ if featureEnabled "calendar" }}<a href="/calendar">Calendar</a>{{ end }}
             <details class="nav-more">
                 <summary>More</summary>
                 <div class="nav-more-menu">
                     <a href="/admin/schedules">Schedules</a>
                     <a href="/admin/notices">Notices</a>
+                    {{ if featureEnabled "library" }}
                     <a href="/themes">Themes</a>
                     <a href="/library">Library</a>
-                    <a href="/kiosk">Kiosk</a>
+                    {{ end }}
+                    {{ if featureEnabled "kiosk" }}<a href="/kiosk">Kiosk</a>{{ end }}
                 </div>
             </details>
             {{ else if eq (currentRole) "member" }}
-            <a href="/training-log">Training Log</a>
-            <a href="/messages">Messages</a>
-            <a href="/curriculum">Curriculum</a>
-            <a href="/calendar">Calendar</a>
+            {{ if featureEnabled "training_log" }}<a href="/training-log">Training Log</a>{{ end }}
+            {{ if featureEnabled "messages" }}<a href="/messages">Messages</a>{{ end }}
+            {{ if featureEnabled "curriculum" }}<a href="/curriculum">Curriculum</a>{{ end }}
+            {{ if featureEnabled "calendar" }}<a href="/calendar">Calendar</a>{{ end }}
+            {{ if featureEnabled "library" }}
             <a href="/library">Library</a>
+            {{ end }}
             {{ else }}
-            <a href="/training-log">Training Log</a>
-            <a href="/messages">Messages</a>
+            {{ if featureEnabled "training_log" }}<a href="/training-log">Training Log</a>{{ end }}
+            {{ if featureEnabled "messages" }}<a href="/messages">Messages</a>{{ end }}
             {{ end }}
             <form method="POST" action="/logout" style="display:inline;margin-left:auto;">
                 <input type="hidden" name="gorilla.csrf.Token" value="{{ csrfToken }}">

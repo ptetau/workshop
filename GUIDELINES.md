@@ -239,6 +239,37 @@ Routes enforce the read/write split.
 | GET | `projections.Query*()` | `GET /orders/{id}` → `QueryOrderSummary` |
 | POST, PUT, DELETE | `orchestrators.Execute*()` | `POST /orders/{id}/cancel` → `ExecuteCancelOrder` |
 
+---
+
+## Feature Integration Checklist (Harmony)
+
+When introducing a **new product area** (or gating an existing one), make the integration consistent across the app shell.
+
+**1) Choose / define the feature flag key**
+- Add/confirm the key in `internal/domain/featureflag/defaults.go`.
+- Pick defaults that match current roles (admin/coach/member/trial) and whether a beta override makes sense.
+
+**2) Enforce on server routes**
+- Pages: use `requireFeaturePage(...)` and redirect to `/dashboard` when disabled.
+- APIs: use `requireFeatureAPI(...)` and return `403 Forbidden` when disabled.
+- Apply to *all* entrypoints: list/detail/create/update/delete routes, not just the main page.
+
+**3) Nav / templates**
+- Wrap nav links in `{{ if featureEnabled "<key>" }}` so users don’t see links they can’t access.
+- If a page has cross-links/buttons into the feature area, gate those too.
+
+**4) Tests**
+- Add at least one unit test proving the feature gate blocks access (page redirect or API 403).
+- Add at least one happy-path test proving access is allowed when enabled.
+
+**5) Storage / migrations**
+- If the feature requires new persistence, add a migration and update `storage/db_test.go` expectations.
+- Consider backfills for existing rows (idempotent migrations).
+
+**6) Operational / rollout**
+- Verify the admin UI for feature flags can toggle the key and that toggles take effect immediately.
+- If production scripts/calls exist, ensure they use the same endpoints and are still permitted.
+
 | Don't | Do |
 |-------|------|
 | Mutate state in GET handlers | Reads only; mutations via POST/PUT/DELETE |

@@ -21,6 +21,7 @@ type Session struct {
 	AccountID              string
 	Email                  string
 	Role                   string
+	BetaTester             bool
 	CreatedAt              time.Time
 	PasswordChangeRequired bool
 
@@ -52,7 +53,7 @@ func NewSessionStore() *SessionStore {
 // Create stores a new session and returns the token.
 // PRE: accountID, email, role are non-empty
 // POST: Session is stored, token is returned
-func (ss *SessionStore) Create(accountID, email, role string, passwordChangeRequired bool) (string, error) {
+func (ss *SessionStore) Create(accountID, email, role string, passwordChangeRequired bool, betaTester bool) (string, error) {
 	token, err := generateToken()
 	if err != nil {
 		return "", err
@@ -63,6 +64,7 @@ func (ss *SessionStore) Create(accountID, email, role string, passwordChangeRequ
 		AccountID:              accountID,
 		Email:                  email,
 		Role:                   role,
+		BetaTester:             betaTester,
 		CreatedAt:              time.Now(),
 		PasswordChangeRequired: passwordChangeRequired,
 	}
