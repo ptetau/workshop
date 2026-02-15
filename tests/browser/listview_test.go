@@ -526,9 +526,14 @@ func TestListView_SearchAndFilter(t *testing.T) {
 	if _, err := programFilter.SelectOption(playwright.SelectOptionValues{Values: &[]string{"Adults"}}); err != nil {
 		t.Fatalf("failed to select Adults: %v", err)
 	}
-	page.WaitForLoadState(playwright.PageWaitForLoadStateOptions{
-		State: playwright.LoadStateDomcontentloaded,
-	})
+	// Selecting a filter submits the form and navigates. Waiting on load state alone can be flaky
+	// (it may already be satisfied from the current page), so wait for the URL to change.
+	if err := page.WaitForURL("**/members?*program=Adults*", playwright.PageWaitForURLOptions{
+		Timeout: playwright.Float(5000),
+	}); err != nil {
+		t.Fatalf("failed to wait for Adults filter navigation: %v", err)
+	}
+	page.WaitForLoadState(playwright.PageWaitForLoadStateOptions{State: playwright.LoadStateDomcontentloaded})
 
 	text, _ = summary.TextContent()
 	if !strings.Contains(text, "of 2") {
@@ -545,9 +550,12 @@ func TestListView_SearchAndFilter(t *testing.T) {
 	if _, err := statusFilter.SelectOption(playwright.SelectOptionValues{Values: &[]string{"active"}}); err != nil {
 		t.Fatalf("failed to select active: %v", err)
 	}
-	page.WaitForLoadState(playwright.PageWaitForLoadStateOptions{
-		State: playwright.LoadStateDomcontentloaded,
-	})
+	if err := page.WaitForURL("**/members?*status=active*", playwright.PageWaitForURLOptions{
+		Timeout: playwright.Float(5000),
+	}); err != nil {
+		t.Fatalf("failed to wait for status filter navigation: %v", err)
+	}
+	page.WaitForLoadState(playwright.PageWaitForLoadStateOptions{State: playwright.LoadStateDomcontentloaded})
 
 	text, _ = summary.TextContent()
 	if !strings.Contains(text, "of 2") {

@@ -3510,8 +3510,13 @@ func handleThemes(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	if r.Method == "GET" {
-		if _, ok := middleware.GetSessionFromContext(ctx); !ok {
+		sess, ok := middleware.GetSessionFromContext(ctx)
+		if !ok {
 			http.Error(w, "not authenticated", http.StatusUnauthorized)
+			return
+		}
+		if sess.Role != "admin" && sess.Role != "coach" && sess.Role != "member" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
 		program := r.URL.Query().Get("program")
@@ -3598,8 +3603,13 @@ func handleClips(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	if r.Method == "GET" {
-		if _, ok := middleware.GetSessionFromContext(ctx); !ok {
+		sess, ok := middleware.GetSessionFromContext(ctx)
+		if !ok {
 			http.Error(w, "not authenticated", http.StatusUnauthorized)
+			return
+		}
+		if sess.Role != "admin" && sess.Role != "coach" && sess.Role != "member" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
 		themeID := r.URL.Query().Get("theme_id")
@@ -3631,6 +3641,10 @@ func handleClips(w http.ResponseWriter, r *http.Request) {
 		sess, ok := middleware.GetSessionFromContext(ctx)
 		if !ok {
 			http.Error(w, "not authenticated", http.StatusUnauthorized)
+			return
+		}
+		if sess.Role != "admin" && sess.Role != "coach" && sess.Role != "member" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
 		var input struct {
@@ -3731,6 +3745,10 @@ func handleThemesPage(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
+	if sess.Role != "admin" && sess.Role != "coach" && sess.Role != "member" {
+		http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
+		return
+	}
 	renderTemplate(w, r, "themes.html", map[string]any{
 		"Email": sess.Email,
 		"Role":  sess.Role,
@@ -3746,6 +3764,10 @@ func handleLibraryPage(w http.ResponseWriter, r *http.Request) {
 	sess, ok := middleware.GetSessionFromContext(r.Context())
 	if !ok {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	if sess.Role != "admin" && sess.Role != "coach" && sess.Role != "member" {
+		http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
 		return
 	}
 	renderTemplate(w, r, "library.html", map[string]any{

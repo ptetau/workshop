@@ -43,12 +43,12 @@
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
                 <div class="form-group">
-                    <label for="clipStart">Start (seconds)</label>
-                    <input type="number" id="clipStart" min="0" value="0" required>
+                    <label for="clipStart">Start (mm:ss)</label>
+                    <input type="text" id="clipStart" placeholder="12:34" inputmode="numeric" required>
                 </div>
                 <div class="form-group">
-                    <label for="clipEnd">End (seconds)</label>
-                    <input type="number" id="clipEnd" min="1" required>
+                    <label for="clipEnd">End (mm:ss)</label>
+                    <input type="text" id="clipEnd" placeholder="12:44" inputmode="numeric" required>
                 </div>
             </div>
             <div class="form-group">
@@ -93,8 +93,40 @@ function loadThemeOptions() {
         if (tid) {
             sel.value = tid;
             document.getElementById('filterPromoted').checked = false;
+            if (clipSel) {
+                clipSel.value = tid;
+            }
         }
     });
+}
+
+function parseTimestampToSeconds(raw) {
+    var s = (raw || '').trim();
+    if (!s) throw new Error('timestamp is required');
+    if (/^\d+$/.test(s)) {
+        var sec = parseInt(s, 10);
+        if (isNaN(sec) || sec < 0) throw new Error('timestamp must be >= 0');
+        return sec;
+    }
+    var parts = s.split(':');
+    if (parts.length !== 2 && parts.length !== 3) throw new Error('timestamp must be seconds (e.g. 754) or mm:ss (e.g. 12:34)');
+    for (var i = 0; i < parts.length; i++) {
+        if (!/^\d+$/.test(parts[i])) throw new Error('timestamp must contain only numbers and :');
+    }
+    var nums = parts.map(p => parseInt(p, 10));
+    var hh = 0, mm = 0, ss = 0;
+    if (nums.length === 2) {
+        mm = nums[0];
+        ss = nums[1];
+    } else {
+        hh = nums[0];
+        mm = nums[1];
+        ss = nums[2];
+    }
+    if (ss < 0 || ss > 59) throw new Error('seconds must be 0-59');
+    if (mm < 0 || mm > 59 && nums.length === 3) throw new Error('minutes must be 0-59 for hh:mm:ss');
+    if (hh < 0) throw new Error('hours must be >= 0');
+    return (hh * 3600) + (mm * 60) + ss;
 }
 
 function getThemeName(id) {
@@ -126,7 +158,7 @@ function loadClips() {
             var promoteBadge = c.Promoted ? '<span style="background:#F9B232;color:#fff;padding:0.15rem 0.5rem;font-size:0.7rem;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Promoted</span>' : '';
             var promoteBtn = '';
             if (!c.Promoted && (userRole === 'admin' || userRole === 'coach')) {
-                promoteBtn = '<button onclick="promoteClip(\''+esc(c.ID)+'\')" style="background:#1A1B1F;padding:0.3rem 0.6rem;font-size:0.75rem;margin-top:0.5rem;letter-spacing:0.5px;">Promote</button>';
+                promoteBtn = '<button onclick="promoteClip(event,\''+esc(c.ID)+'\')" style="background:#1A1B1F;padding:0.3rem 0.6rem;font-size:0.75rem;margin-top:0.5rem;letter-spacing:0.5px;">Promote</button>';
             }
             html += '<div style="background:#fff;border:1px solid #e0e0e0;overflow:hidden;cursor:pointer;" onclick="playClip(\''+esc(c.YouTubeID)+'\','+c.StartSeconds+','+c.EndSeconds+',\''+esc(c.Title)+'\')">'
                 + (thumb ? '<img src="'+thumb+'" style="width:100%;height:160px;object-fit:cover;" alt="">' : '<div style="height:160px;background:#333;"></div>')
@@ -160,8 +192,8 @@ function closePlayer() {
     document.getElementById('ytPlayer').src = '';
 }
 
-function promoteClip(clipID) {
-    event.stopPropagation();
+function promoteClip(ev, clipID) {
+    if (ev && ev.stopPropagation) ev.stopPropagation();
     fetch('/api/clips/promote', {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
@@ -183,15 +215,24 @@ var clipForm = document.getElementById('createClipForm');
 if (clipForm) {
     clipForm.addEventListener('submit', function(e) {
         e.preventDefault();
+        var themeID = document.getElementById('clipTheme').value;
+        var startSeconds, endSeconds;
+        try {
+            startSeconds = parseTimestampToSeconds(document.getElementById('clipStart').value);
+            endSeconds = parseTimestampToSeconds(document.getElementById('clipEnd').value);
+        } catch (err) {
+            alert('Error: ' + err.message);
+            return;
+        }
         fetch('/api/clips', {
             method: 'POST',
             headers: {'Content-Type':'application/json'},
             body: JSON.stringify({
-                ThemeID: document.getElementById('clipTheme').value,
+                ThemeID: themeID,
                 Title: document.getElementById('clipTitle').value,
                 YouTubeURL: document.getElementById('clipURL').value,
-                StartSeconds: parseInt(document.getElementById('clipStart').value),
-                EndSeconds: parseInt(document.getElementById('clipEnd').value),
+                StartSeconds: startSeconds,
+                EndSeconds: endSeconds,
                 Notes: document.getElementById('clipNotes').value
             })
         }).then(r => {
@@ -199,6 +240,13 @@ if (clipForm) {
             return r.json();
         }).then(() => {
             clipForm.reset();
+            // Make the new member-created clip visible immediately.
+            document.getElementById('filterTheme').value = themeID;
+            document.getElementById('filterPromoted').checked = false;
+            var clipTheme = document.getElementById('clipTheme');
+            if (clipTheme) {
+                clipTheme.value = themeID;
+            }
             loadClips();
         }).catch(err => alert('Error: ' + err.message));
     });
