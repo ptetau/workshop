@@ -55,14 +55,23 @@
 </div>
 
 <script>
+var programs = [];
 var classTypes = [];
+function programName(id) {
+    var p = programs.find(x => x.ID === id);
+    return p ? p.Name : id;
+}
 function loadClassTypes() {
     fetch('/api/class-types').then(r => r.json()).then(data => {
         classTypes = data || [];
         var sel = document.getElementById('classTypeID');
         sel.innerHTML = '<option value="">Select class type</option>';
         classTypes.forEach(ct => {
-            sel.innerHTML += '<option value="'+ct.ID+'">'+ct.Name+' ('+ct.ProgramID+')</option>';
+            var meta = '';
+            if (ct.Attire) meta += (meta ? ' · ' : '') + ct.Attire;
+            if (ct.Level) meta += (meta ? ' · ' : '') + ct.Level;
+            if (meta) meta = ' — ' + meta;
+            sel.innerHTML += '<option value="'+ct.ID+'">'+ct.Name+' ('+programName(ct.ProgramID)+')'+meta+'</option>';
         });
     });
 }
@@ -104,7 +113,12 @@ function deleteSchedule(id) {
     fetch('/api/schedules?id='+id, { method: 'DELETE', headers: {'Content-Type': 'application/json'} })
         .then(() => loadSchedules());
 }
-loadClassTypes();
+function loadPrograms() {
+    return fetch('/api/programs').then(r => r.json()).then(data => {
+        programs = data || [];
+    });
+}
+loadPrograms().then(loadClassTypes);
 setTimeout(loadSchedules, 300);
 </script>
 {{ end }}

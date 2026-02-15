@@ -67,6 +67,7 @@ func registerRoutes(mux *http.ServeMux) {
 
 	// Admin management pages
 	mux.HandleFunc("/admin/schedules", handleAdminSchedulesPage)
+	mux.HandleFunc("/admin/class-types", handleAdminClassTypesPage)
 	mux.HandleFunc("/admin/holidays", handleAdminHolidaysPage)
 	mux.HandleFunc("/admin/terms", handleAdminTermsPage)
 	mux.HandleFunc("/admin/accounts", handleAdminAccountsPage)
@@ -86,6 +87,7 @@ func registerRoutes(mux *http.ServeMux) {
 
 	// Class types API
 	mux.HandleFunc("/api/class-types", handleClassTypes)
+	mux.HandleFunc("/api/programs", handlePrograms)
 
 	// Layer 1b workflow routes
 	mux.HandleFunc("/api/notices/publish", handleNoticePublish)

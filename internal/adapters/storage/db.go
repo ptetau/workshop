@@ -33,6 +33,7 @@ var migrations = []migration{
 	{version: 13, description: "calendar events", apply: migrate13},
 	{version: 14, description: "calendar event indexes", apply: migrate14},
 	{version: 15, description: "feature flags and beta cohort", apply: migrate15},
+	{version: 16, description: "class type metadata", apply: migrate16},
 }
 
 // SchemaVersion returns the current schema version of the database.
@@ -532,6 +533,17 @@ func migrate9(tx *sql.Tx) error {
 		FOREIGN KEY (member_id) REFERENCES member(id)
 	);
 	CREATE INDEX IF NOT EXISTS idx_grading_note_member ON grading_note(member_id);
+	`)
+	return err
+}
+
+// --- Migration 16: Class type metadata ---
+// Adds optional fields to class_type for richer timetable rendering and filtering.
+func migrate16(tx *sql.Tx) error {
+	_, err := tx.Exec(`
+	ALTER TABLE class_type ADD COLUMN description TEXT NOT NULL DEFAULT '';
+	ALTER TABLE class_type ADD COLUMN attire TEXT NOT NULL DEFAULT '';
+	ALTER TABLE class_type ADD COLUMN level TEXT NOT NULL DEFAULT '';
 	`)
 	return err
 }
