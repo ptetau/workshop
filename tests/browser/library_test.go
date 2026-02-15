@@ -85,6 +85,31 @@ func TestLibrary_CreateClipAndPlayMuted(t *testing.T) {
 		t.Fatalf("player did not open: %v", err)
 	}
 
+	// Mute toggle should exist and start muted (button shows "Unmute").
+	muteBtn := page.Locator("#muteToggle")
+	if err := muteBtn.WaitFor(playwright.LocatorWaitForOptions{State: playwright.WaitForSelectorStateVisible, Timeout: playwright.Float(5000)}); err != nil {
+		t.Fatalf("mute toggle button not visible: %v", err)
+	}
+	label, err := muteBtn.InnerText()
+	if err != nil {
+		t.Fatalf("failed to read mute toggle label: %v", err)
+	}
+	if !strings.EqualFold(strings.TrimSpace(label), "unmute") {
+		t.Fatalf("expected mute toggle label to equal %q (case-insensitive), got %q", "unmute", label)
+	}
+
+	// Toggle the UI (postMessage-based YouTube mute/unmute control).
+	if err := muteBtn.Click(); err != nil {
+		t.Fatalf("failed to click mute toggle: %v", err)
+	}
+	label2, err := muteBtn.InnerText()
+	if err != nil {
+		t.Fatalf("failed to read mute toggle label after click: %v", err)
+	}
+	if !strings.EqualFold(strings.TrimSpace(label2), "mute") {
+		t.Fatalf("expected mute toggle label to equal %q after click (case-insensitive), got %q", "mute", label2)
+	}
+
 	src, err := page.Locator("#ytPlayer").GetAttribute("src")
 	if err != nil {
 		t.Fatalf("failed to get iframe src: %v", err)
