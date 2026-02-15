@@ -58,6 +58,8 @@ func registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/terms", handleTerms)
 	mux.HandleFunc("/api/accounts", handleAccounts)
 	mux.HandleFunc("/api/accounts/role", handleChangeRole)
+	mux.HandleFunc("/api/admin/feature-flags", handleAdminFeatureFlags)
+	mux.HandleFunc("/api/admin/beta-testers", handleAdminBetaTesters)
 
 	// Dashboard & Kiosk
 	mux.HandleFunc("/dashboard", handleDashboard)
@@ -68,6 +70,7 @@ func registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/admin/holidays", handleAdminHolidaysPage)
 	mux.HandleFunc("/admin/terms", handleAdminTermsPage)
 	mux.HandleFunc("/admin/accounts", handleAdminAccountsPage)
+	mux.HandleFunc("/admin/features", handleAdminFeaturesPage)
 	mux.HandleFunc("/admin/notices", handleAdminNoticesPage)
 	mux.HandleFunc("/admin/grading", handleAdminGradingPage)
 	mux.HandleFunc("/admin/inactive", handleAdminInactivePage)

@@ -33,6 +33,7 @@ import (
 	clipDomain "workshop/internal/domain/clip"
 	emailDomain "workshop/internal/domain/email"
 	estimatedHoursDomain "workshop/internal/domain/estimatedhours"
+	featureflagDomain "workshop/internal/domain/featureflag"
 	gradingDomain "workshop/internal/domain/grading"
 	holidayDomain "workshop/internal/domain/holiday"
 	memberDomain "workshop/internal/domain/member"
@@ -2213,6 +2214,208 @@ func handleChangeRole(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleAdminFeatureFlags handles GET/POST /api/admin/feature-flags
+func handleAdminFeatureFlags(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	if _, ok := requireAdmin(w, r); !ok {
+		return
+	}
+
+	type flagDTO struct {
+		Key           string `json:"Key"`
+		Description   string `json:"Description"`
+		EnabledAdmin  bool   `json:"EnabledAdmin"`
+		EnabledCoach  bool   `json:"EnabledCoach"`
+		EnabledMember bool   `json:"EnabledMember"`
+		EnabledTrial  bool   `json:"EnabledTrial"`
+		BetaOverride  bool   `json:"BetaOverride"`
+	}
+
+	if r.Method == "GET" {
+		persisted, err := stores.FeatureFlagStore.List(ctx)
+		if err != nil {
+			internalError(w, err)
+			return
+		}
+		defaults := featureflagDomain.DefaultFlags()
+
+		persistedByKey := make(map[string]featureflagDomain.FeatureFlag, len(persisted))
+		for _, p := range persisted {
+			persistedByKey[p.Key] = p
+		}
+
+		seen := make(map[string]bool, len(defaults))
+		merged := make([]featureflagDomain.FeatureFlag, 0, len(defaults)+len(persisted))
+		for _, d := range defaults {
+			if p, ok := persistedByKey[d.Key]; ok {
+				// Persisted values override defaults.
+				if p.Description != "" {
+					d.Description = p.Description
+				}
+				d.EnabledAdmin = p.EnabledAdmin
+				d.EnabledCoach = p.EnabledCoach
+				d.EnabledMember = p.EnabledMember
+				d.EnabledTrial = p.EnabledTrial
+				d.BetaOverride = p.BetaOverride
+			}
+			seen[d.Key] = true
+			merged = append(merged, d)
+		}
+		for _, p := range persisted {
+			if !seen[p.Key] {
+				merged = append(merged, p)
+			}
+		}
+		sort.Slice(merged, func(i, j int) bool { return merged[i].Key < merged[j].Key })
+
+		out := make([]flagDTO, 0, len(merged))
+		for _, ff := range merged {
+			out = append(out, flagDTO{
+				Key:           ff.Key,
+				Description:   ff.Description,
+				EnabledAdmin:  ff.EnabledAdmin,
+				EnabledCoach:  ff.EnabledCoach,
+				EnabledMember: ff.EnabledMember,
+				EnabledTrial:  ff.EnabledTrial,
+				BetaOverride:  ff.BetaOverride,
+			})
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(out)
+		return
+	}
+
+	if r.Method == "POST" {
+		var input struct {
+			Flags []flagDTO `json:"Flags"`
+		}
+		if err := strictDecode(r, &input); err != nil {
+			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			return
+		}
+		if input.Flags == nil {
+			input.Flags = []flagDTO{}
+		}
+		for _, dto := range input.Flags {
+			ff := featureflagDomain.FeatureFlag{
+				Key:           strings.TrimSpace(dto.Key),
+				Description:   strings.TrimSpace(dto.Description),
+				EnabledAdmin:  dto.EnabledAdmin,
+				EnabledCoach:  dto.EnabledCoach,
+				EnabledMember: dto.EnabledMember,
+				EnabledTrial:  dto.EnabledTrial,
+				BetaOverride:  dto.BetaOverride,
+			}
+			if err := ff.Validate(); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			if err := stores.FeatureFlagStore.Save(ctx, ff); err != nil {
+				internalError(w, err)
+				return
+			}
+		}
+
+		sess, _ := middleware.GetSessionFromContext(ctx)
+		slog.Info("audit_event",
+			"actor_id", sess.AccountID,
+			"actor_role", sess.Role,
+			"action", "admin.feature_flags.save",
+			"count", len(input.Flags),
+		)
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+		return
+	}
+
+	http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+}
+
+// handleAdminBetaTesters handles GET/POST /api/admin/beta-testers
+func handleAdminBetaTesters(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	if _, ok := requireAdmin(w, r); !ok {
+		return
+	}
+
+	type safeAccount struct {
+		ID    string `json:"ID"`
+		Email string `json:"Email"`
+		Role  string `json:"Role"`
+	}
+
+	if r.Method == "GET" {
+		accounts, err := stores.AccountStore.List(ctx, accountStore.ListFilter{Limit: 1000})
+		if err != nil {
+			internalError(w, err)
+			return
+		}
+		var out []safeAccount
+		for _, a := range accounts {
+			if a.BetaTester {
+				out = append(out, safeAccount{ID: a.ID, Email: a.Email, Role: a.Role})
+			}
+		}
+		sort.Slice(out, func(i, j int) bool { return strings.ToLower(out[i].Email) < strings.ToLower(out[j].Email) })
+		w.Header().Set("Content-Type", "application/json")
+		if out == nil {
+			w.Write([]byte("[]"))
+			return
+		}
+		json.NewEncoder(w).Encode(out)
+		return
+	}
+
+	if r.Method == "POST" {
+		var input struct {
+			Email     string `json:"Email"`
+			AccountID string `json:"AccountID"`
+			Beta      bool   `json:"Beta"`
+		}
+		if err := strictDecode(r, &input); err != nil {
+			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			return
+		}
+		if input.Email == "" && input.AccountID == "" {
+			http.Error(w, "Email or AccountID is required", http.StatusBadRequest)
+			return
+		}
+		var acct accountDomain.Account
+		var err error
+		if input.AccountID != "" {
+			acct, err = stores.AccountStore.GetByID(ctx, input.AccountID)
+		} else {
+			acct, err = stores.AccountStore.GetByEmail(ctx, input.Email)
+		}
+		if err != nil {
+			http.Error(w, "account not found", http.StatusNotFound)
+			return
+		}
+		acct.BetaTester = input.Beta
+		if err := stores.AccountStore.Save(ctx, acct); err != nil {
+			internalError(w, err)
+			return
+		}
+
+		sess, _ := middleware.GetSessionFromContext(ctx)
+		slog.Info("audit_event",
+			"actor_id", sess.AccountID,
+			"actor_role", sess.Role,
+			"action", "admin.beta_tester.set",
+			"target_account_id", acct.ID,
+			"beta", input.Beta,
+		)
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(safeAccount{ID: acct.ID, Email: acct.Email, Role: acct.Role})
+		return
+	}
+
+	http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+}
+
 // --- Phase 2: Engagement Workflow Handlers ---
 
 // handleNoticePublish handles POST /api/notices/publish
@@ -3227,6 +3430,18 @@ func handleAdminAccountsPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	renderTemplate(w, r, "admin_accounts.html", nil)
+}
+
+// handleAdminFeaturesPage handles GET /admin/features
+func handleAdminFeaturesPage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if _, ok := requireAdmin(w, r); !ok {
+		return
+	}
+	renderTemplate(w, r, "admin_features.html", nil)
 }
 
 // handleAdminNoticesPage handles GET /admin/notices
