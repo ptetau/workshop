@@ -32,6 +32,7 @@ var migrations = []migration{
 	{version: 12, description: "hidden surprise themes", apply: migrate12},
 	{version: 13, description: "calendar events", apply: migrate13},
 	{version: 14, description: "calendar event indexes", apply: migrate14},
+	{version: 15, description: "feature flags and beta cohort", apply: migrate15},
 }
 
 // SchemaVersion returns the current schema version of the database.
@@ -531,6 +532,27 @@ func migrate9(tx *sql.Tx) error {
 		FOREIGN KEY (member_id) REFERENCES member(id)
 	);
 	CREATE INDEX IF NOT EXISTS idx_grading_note_member ON grading_note(member_id);
+	`)
+	return err
+}
+
+// --- Migration 15: Feature flags and beta cohort ---
+// Adds:
+// - account.beta_tester: marks an account as part of a test cohort
+// - feature_flag: server-enforced feature availability by role, with beta override
+func migrate15(tx *sql.Tx) error {
+	_, err := tx.Exec(`
+	ALTER TABLE account ADD COLUMN beta_tester INTEGER NOT NULL DEFAULT 0;
+
+	CREATE TABLE IF NOT EXISTS feature_flag (
+		key TEXT PRIMARY KEY,
+		description TEXT NOT NULL,
+		enabled_admin INTEGER NOT NULL DEFAULT 1,
+		enabled_coach INTEGER NOT NULL DEFAULT 1,
+		enabled_member INTEGER NOT NULL DEFAULT 0,
+		enabled_trial INTEGER NOT NULL DEFAULT 0,
+		beta_override INTEGER NOT NULL DEFAULT 0
+	);
 	`)
 	return err
 }

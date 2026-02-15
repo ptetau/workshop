@@ -56,6 +56,7 @@ type Account struct {
 	FailedLogins           int
 	LockedUntil            time.Time
 	PasswordChangeRequired bool
+	BetaTester             bool
 }
 
 // ActivationToken represents a time-limited token for account activation.

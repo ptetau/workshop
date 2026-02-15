@@ -18,6 +18,7 @@ import (
 	clipStore "workshop/internal/adapters/storage/clip"
 	emailStore "workshop/internal/adapters/storage/email"
 	estimatedHoursStore "workshop/internal/adapters/storage/estimatedhours"
+	featureFlagStore "workshop/internal/adapters/storage/featureflag"
 	gradingStore "workshop/internal/adapters/storage/grading"
 	holidayStore "workshop/internal/adapters/storage/holiday"
 	injuryStore "workshop/internal/adapters/storage/injury"
@@ -38,6 +39,7 @@ import (
 // Stores holds all storage dependencies.
 type Stores struct {
 	AccountStore             accountStore.Store
+	FeatureFlagStore         featureFlagStore.Store
 	MemberStore              memberStore.Store
 	WaiverStore              waiverStore.Store
 	InjuryStore              injuryStore.Store

@@ -1,0 +1,222 @@
+{{ define "content" }}
+<div class="card">
+    <h1>Feature Flags</h1>
+    <p style="color:var(--text-muted);margin-bottom:1.5rem;">Enable/disable product areas by role, and allow beta testers to access features early.</p>
+
+    <div style="background:#f8f9fa;padding:1.25rem;border-radius:2px;margin-bottom:2rem;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
+            <h3 style="margin:0;">Features</h3>
+            <div>
+                <button onclick="saveFlags()">Save</button>
+                <span id="saveMsg" style="margin-left:0.75rem;color:var(--text-muted);"></span>
+            </div>
+        </div>
+        <div style="overflow:auto;margin-top:1rem;">
+            <table style="width:100%;border-collapse:collapse;min-width:700px;">
+                <thead>
+                    <tr style="background:#fff;border-bottom:2px solid #dee2e6;">
+                        <th style="padding:0.5rem;text-align:left;">Feature</th>
+                        <th style="padding:0.5rem;text-align:center;">Admin</th>
+                        <th style="padding:0.5rem;text-align:center;">Coach</th>
+                        <th style="padding:0.5rem;text-align:center;">Member</th>
+                        <th style="padding:0.5rem;text-align:center;">Trial</th>
+                        <th style="padding:0.5rem;text-align:center;">Beta Override</th>
+                    </tr>
+                </thead>
+                <tbody id="flagsBody">
+                    <tr><td colspan="6" style="padding:1rem;color:#6c757d;text-align:center;">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div style="background:#f8f9fa;padding:1.25rem;border-radius:2px;">
+        <h3 style="margin-top:0;">Beta cohort</h3>
+        <p style="color:var(--text-muted);margin-top:0;">Mark specific accounts as beta testers.</p>
+        <div style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:end;">
+            <div class="form-group" style="margin:0;flex:1;min-width:260px;">
+                <label for="betaEmail">Account email</label>
+                <input type="text" id="betaEmail" placeholder="member@example.com" maxlength="254">
+            </div>
+            <button onclick="addBetaTester()">Add</button>
+            <span id="betaMsg" style="color:var(--text-muted);"></span>
+        </div>
+
+        <div style="overflow:auto;margin-top:1rem;">
+            <table style="width:100%;border-collapse:collapse;min-width:520px;">
+                <thead>
+                    <tr style="background:#fff;border-bottom:2px solid #dee2e6;">
+                        <th style="padding:0.5rem;text-align:left;">Email</th>
+                        <th style="padding:0.5rem;text-align:left;">Role</th>
+                        <th style="padding:0.5rem;text-align:right;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="betaBody">
+                    <tr><td colspan="3" style="padding:1rem;color:#6c757d;text-align:center;">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <p style="margin-top:2rem;"><a href="/dashboard" style="color:#F9B232;text-decoration:none;font-weight:600;">← Back to Dashboard</a></p>
+</div>
+
+<script>
+var flags = [];
+
+function loadFlags() {
+    return fetch('/api/admin/feature-flags').then(r => {
+        if (!r.ok) throw new Error('failed to load feature flags');
+        return r.json();
+    }).then(data => {
+        flags = data || [];
+        renderFlags();
+    }).catch(err => {
+        document.getElementById('flagsBody').innerHTML = '<tr><td colspan="6" style="padding:1rem;color:#dc3545;text-align:center;">'+err.message+'</td></tr>';
+    });
+}
+
+function renderFlags() {
+    var b = document.getElementById('flagsBody');
+    if (!flags || flags.length === 0) {
+        b.innerHTML = '<tr><td colspan="6" style="padding:1rem;color:#6c757d;text-align:center;">No feature flags defined.</td></tr>';
+        return;
+    }
+    b.innerHTML = '';
+    flags.forEach(f => {
+        var row = document.createElement('tr');
+        row.style.borderBottom = '1px solid #dee2e6';
+        row.innerHTML =
+            '<td style="padding:0.5rem;">'
+            + '<div style="font-weight:600;">' + escapeHtml(f.Key) + '</div>'
+            + '<div style="color:#6c757d;font-size:0.85rem;">' + escapeHtml(f.Description || '') + '</div>'
+            + '</td>'
+            + checkboxCell('admin', f.Key, !!f.EnabledAdmin)
+            + checkboxCell('coach', f.Key, !!f.EnabledCoach)
+            + checkboxCell('member', f.Key, !!f.EnabledMember)
+            + checkboxCell('trial', f.Key, !!f.EnabledTrial)
+            + checkboxCell('beta', f.Key, !!f.BetaOverride);
+        b.appendChild(row);
+    });
+}
+
+function checkboxCell(role, key, checked) {
+    var id = 'ff_' + role + '_' + key;
+    return '<td style="padding:0.5rem;text-align:center;">'
+        + '<input type="checkbox" id="'+id+'" ' + (checked ? 'checked' : '') + '>'
+        + '</td>';
+}
+
+function saveFlags() {
+    var msg = document.getElementById('saveMsg');
+    msg.textContent = 'Saving...';
+
+    var payload = flags.map(f => {
+        return {
+            Key: f.Key,
+            Description: f.Description,
+            EnabledAdmin: document.getElementById('ff_admin_' + f.Key).checked,
+            EnabledCoach: document.getElementById('ff_coach_' + f.Key).checked,
+            EnabledMember: document.getElementById('ff_member_' + f.Key).checked,
+            EnabledTrial: document.getElementById('ff_trial_' + f.Key).checked,
+            BetaOverride: document.getElementById('ff_beta_' + f.Key).checked,
+        };
+    });
+
+    fetch('/api/admin/feature-flags', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({Flags: payload}),
+    }).then(r => {
+        if (!r.ok) return r.text().then(t => { throw new Error(t || 'save failed'); });
+        return r.json();
+    }).then(() => {
+        msg.textContent = 'Saved.';
+        setTimeout(() => { msg.textContent = ''; }, 1500);
+        loadFlags();
+    }).catch(err => {
+        msg.textContent = 'Error: ' + err.message;
+    });
+}
+
+function loadBetaTesters() {
+    return fetch('/api/admin/beta-testers').then(r => {
+        if (!r.ok) throw new Error('failed to load beta testers');
+        return r.json();
+    }).then(data => {
+        renderBetaTesters(data || []);
+    }).catch(err => {
+        document.getElementById('betaBody').innerHTML = '<tr><td colspan="3" style="padding:1rem;color:#dc3545;text-align:center;">'+err.message+'</td></tr>';
+    });
+}
+
+function renderBetaTesters(list) {
+    var b = document.getElementById('betaBody');
+    if (!list || list.length === 0) {
+        b.innerHTML = '<tr><td colspan="3" style="padding:1rem;color:#6c757d;text-align:center;">No beta testers.</td></tr>';
+        return;
+    }
+    b.innerHTML = '';
+    list.forEach(a => {
+        b.innerHTML += '<tr style="border-bottom:1px solid #dee2e6;">'
+            + '<td style="padding:0.5rem;">'+escapeHtml(a.Email)+'</td>'
+            + '<td style="padding:0.5rem;">'+escapeHtml(a.Role)+'</td>'
+            + '<td style="padding:0.5rem;text-align:right;">'
+            + '<button onclick="removeBetaTester(\''+escapeHtml(a.ID)+'\')" style="background:#1A1B1F;">Remove</button>'
+            + '</td></tr>';
+    });
+}
+
+function addBetaTester() {
+    var email = (document.getElementById('betaEmail').value || '').trim();
+    var msg = document.getElementById('betaMsg');
+    if (!email) { msg.textContent = 'Email required'; return; }
+    msg.textContent = 'Adding...';
+    fetch('/api/admin/beta-testers', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({Email: email, Beta: true}),
+    }).then(r => {
+        if (!r.ok) return r.text().then(t => { throw new Error(t || 'failed'); });
+        return r.json();
+    }).then(() => {
+        document.getElementById('betaEmail').value = '';
+        msg.textContent = 'Added.';
+        setTimeout(() => { msg.textContent = ''; }, 1500);
+        loadBetaTesters();
+    }).catch(err => {
+        msg.textContent = 'Error: ' + err.message;
+    });
+}
+
+function removeBetaTester(accountID) {
+    var msg = document.getElementById('betaMsg');
+    msg.textContent = 'Removing...';
+    fetch('/api/admin/beta-testers', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({AccountID: accountID, Beta: false}),
+    }).then(r => {
+        if (!r.ok) return r.text().then(t => { throw new Error(t || 'failed'); });
+        return r.json();
+    }).then(() => {
+        msg.textContent = 'Removed.';
+        setTimeout(() => { msg.textContent = ''; }, 1500);
+        loadBetaTesters();
+    }).catch(err => {
+        msg.textContent = 'Error: ' + err.message;
+    });
+}
+
+function escapeHtml(s) {
+    var d = document.createElement('div');
+    d.textContent = s || '';
+    return d.innerHTML;
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadFlags();
+    loadBetaTesters();
+});
+</script>
+{{ end }}

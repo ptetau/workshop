@@ -20,6 +20,7 @@ import (
 	clipStorePkg "workshop/internal/adapters/storage/clip"
 	emailStorePkg "workshop/internal/adapters/storage/email"
 	estimatedHoursStorePkg "workshop/internal/adapters/storage/estimatedhours"
+	featureFlagStorePkg "workshop/internal/adapters/storage/featureflag"
 	gradingStore "workshop/internal/adapters/storage/grading"
 	holidayStore "workshop/internal/adapters/storage/holiday"
 	injuryStore "workshop/internal/adapters/storage/injury"
@@ -77,6 +78,7 @@ func main() {
 	ctStore := classTypeStore.NewSQLiteStore(timedDB)
 	stores := &web.Stores{
 		AccountStore:             acctStore,
+		FeatureFlagStore:         featureFlagStorePkg.NewSQLiteStore(timedDB),
 		MemberStore:              memberStore.NewSQLiteStore(timedDB),
 		WaiverStore:              waiverStore.NewSQLiteStore(timedDB),
 		InjuryStore:              injuryStore.NewSQLiteStore(timedDB),

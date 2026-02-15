@@ -25,7 +25,7 @@ func NewSQLiteStore(db storage.SQLDB) *SQLiteStore {
 // PRE: id is non-empty
 // POST: Returns the entity or an error if not found
 func (s *SQLiteStore) GetByID(ctx context.Context, id string) (domain.Account, error) {
-	query := "SELECT id, email, password_hash, role, status, created_at, failed_logins, locked_until, password_change_required FROM account WHERE id = ?"
+	query := "SELECT id, email, password_hash, role, status, created_at, failed_logins, locked_until, password_change_required, beta_tester FROM account WHERE id = ?"
 	row := s.db.QueryRowContext(ctx, query, id)
 
 	entity, err := scanAccount(row.Scan)
@@ -39,7 +39,7 @@ func (s *SQLiteStore) GetByID(ctx context.Context, id string) (domain.Account, e
 // PRE: email is non-empty
 // POST: Returns the entity or an error if not found
 func (s *SQLiteStore) GetByEmail(ctx context.Context, email string) (domain.Account, error) {
-	query := "SELECT id, email, password_hash, role, status, created_at, failed_logins, locked_until, password_change_required FROM account WHERE email = ?"
+	query := "SELECT id, email, password_hash, role, status, created_at, failed_logins, locked_until, password_change_required, beta_tester FROM account WHERE email = ?"
 	row := s.db.QueryRowContext(ctx, query, email)
 
 	entity, err := scanAccount(row.Scan)
@@ -59,8 +59,8 @@ func (s *SQLiteStore) Save(ctx context.Context, entity domain.Account) error {
 	}
 	defer tx.Rollback()
 
-	fields := []string{"id", "email", "password_hash", "role", "status", "created_at", "failed_logins", "locked_until", "password_change_required"}
-	placeholders := []string{"?", "?", "?", "?", "?", "?", "?", "?", "?"}
+	fields := []string{"id", "email", "password_hash", "role", "status", "created_at", "failed_logins", "locked_until", "password_change_required", "beta_tester"}
+	placeholders := []string{"?", "?", "?", "?", "?", "?", "?", "?", "?", "?"}
 	updates := []string{
 		"email=excluded.email",
 		"password_hash=excluded.password_hash",
@@ -69,6 +69,7 @@ func (s *SQLiteStore) Save(ctx context.Context, entity domain.Account) error {
 		"failed_logins=excluded.failed_logins",
 		"locked_until=excluded.locked_until",
 		"password_change_required=excluded.password_change_required",
+		"beta_tester=excluded.beta_tester",
 	}
 
 	query := fmt.Sprintf(
@@ -88,6 +89,11 @@ func (s *SQLiteStore) Save(ctx context.Context, entity domain.Account) error {
 		passwordChangeRequired = 1
 	}
 
+	betaTester := 0
+	if entity.BetaTester {
+		betaTester = 1
+	}
+
 	status := entity.Status
 	if status == "" {
 		status = domain.StatusActive
@@ -103,6 +109,7 @@ func (s *SQLiteStore) Save(ctx context.Context, entity domain.Account) error {
 		entity.FailedLogins,
 		lockedUntil,
 		passwordChangeRequired,
+		betaTester,
 	)
 	if err != nil {
 		return err
@@ -136,7 +143,7 @@ func (s *SQLiteStore) List(ctx context.Context, filter ListFilter) ([]domain.Acc
 	var queryBuilder strings.Builder
 	var args []interface{}
 
-	queryBuilder.WriteString("SELECT id, email, password_hash, role, status, created_at, failed_logins, locked_until, password_change_required FROM account")
+	queryBuilder.WriteString("SELECT id, email, password_hash, role, status, created_at, failed_logins, locked_until, password_change_required, beta_tester FROM account")
 
 	if filter.Role != "" {
 		queryBuilder.WriteString(" WHERE role = ?")
@@ -179,6 +186,7 @@ func scanAccount(scan func(dest ...interface{}) error) (domain.Account, error) {
 	var lockedUntil sql.NullString
 	var passwordChangeRequired int
 	var status sql.NullString
+	var betaTester int
 	err := scan(
 		&entity.ID,
 		&entity.Email,
@@ -189,6 +197,7 @@ func scanAccount(scan func(dest ...interface{}) error) (domain.Account, error) {
 		&entity.FailedLogins,
 		&lockedUntil,
 		&passwordChangeRequired,
+		&betaTester,
 	)
 	if err != nil {
 		return domain.Account{}, err
@@ -198,6 +207,7 @@ func scanAccount(scan func(dest ...interface{}) error) (domain.Account, error) {
 		entity.LockedUntil, _ = parseTime(lockedUntil.String)
 	}
 	entity.PasswordChangeRequired = passwordChangeRequired != 0
+	entity.BetaTester = betaTester != 0
 	if status.Valid && status.String != "" {
 		entity.Status = status.String
 	} else {
