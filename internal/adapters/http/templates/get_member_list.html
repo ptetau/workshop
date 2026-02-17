@@ -2,7 +2,12 @@
 <div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem;">
         <h1>📋 Member List</h1>
-        <a href="/members/register" style="background:var(--orange);color:white;padding:0.5rem 1.25rem;text-decoration:none;font-weight:600;font-size:0.85rem;text-transform:uppercase;letter-spacing:0.5px;border-radius:2px;">+ Register Member</a>
+        <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;justify-content:flex-end;">
+            {{ if or (eq (currentRole) "admin") (eq (currentRole) "coach") }}
+            <a id="export-members-csv" href="/api/members/export?{{ exportMembersQuery .Sort .Dir .Search .Program .Status }}" style="background:#1f2937;color:white;padding:0.5rem 1.1rem;text-decoration:none;font-weight:600;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.5px;border-radius:2px;">Export CSV</a>
+            {{ end }}
+            <a href="/members/register" style="background:var(--orange);color:white;padding:0.5rem 1.25rem;text-decoration:none;font-weight:600;font-size:0.85rem;text-transform:uppercase;letter-spacing:0.5px;border-radius:2px;">+ Register Member</a>
+        </div>
     </div>
 
     <!-- Search and Filter Controls -->

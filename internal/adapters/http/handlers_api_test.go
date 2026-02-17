@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"database/sql"
+	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -56,6 +57,140 @@ import (
 
 type mockAccountStore struct {
 	accounts map[string]accountDomain.Account
+}
+
+// TestHandleMembersExportCSV_AdminAndCoachAllowed_ReturnsCSV verifies admins and coaches can export members CSV.
+// PRE: authenticated session with role admin/coach and member_mgmt enabled.
+// POST: response is 200 with CSV content and attachment headers.
+func TestHandleMembersExportCSV_AdminAndCoachAllowed_ReturnsCSV(t *testing.T) {
+	stores = newFullStores()
+	ctx := context.Background()
+
+	// Ensure member_mgmt enabled for admin/coach.
+	stores.FeatureFlagStore.Save(ctx, featureflagDomain.FeatureFlag{
+		Key:           "member_mgmt",
+		Description:   "Member management",
+		EnabledAdmin:  true,
+		EnabledCoach:  true,
+		EnabledMember: false,
+		EnabledTrial:  false,
+		BetaOverride:  false,
+	})
+
+	// Seed 1 member.
+	if err := stores.MemberStore.Save(ctx, memberDomain.Member{
+		ID:            "m1",
+		AccountID:     "a1",
+		Name:          "Alice Example",
+		Email:         "alice@test.com",
+		Program:       "Adults",
+		Status:        "active",
+		Fee:           120,
+		Frequency:     "monthly",
+		GradingMetric: "stripe",
+	}); err != nil {
+		t.Fatalf("seed member: %v", err)
+	}
+
+	assertCSV := func(t *testing.T, sess middleware.Session) {
+		t.Helper()
+		req := authRequest("GET", "/api/members/export?program=Adults&sort=name&dir=asc", "", sess)
+		rec := httptest.NewRecorder()
+		handleMembersExportCSV(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d want %d body=%s", rec.Code, http.StatusOK, rec.Body.String())
+		}
+		if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/csv") {
+			t.Fatalf("Content-Type=%q, want text/csv", ct)
+		}
+		if disp := rec.Header().Get("Content-Disposition"); !strings.Contains(strings.ToLower(disp), "attachment") {
+			t.Fatalf("Content-Disposition=%q, want attachment", disp)
+		}
+
+		r := csv.NewReader(strings.NewReader(rec.Body.String()))
+		records, err := r.ReadAll()
+		if err != nil {
+			t.Fatalf("parse csv: %v", err)
+		}
+		if len(records) < 2 {
+			t.Fatalf("expected >=2 records (header+row), got %d", len(records))
+		}
+		wantHeader := []string{"ID", "AccountID", "Name", "Email", "Program", "Status", "Fee", "Frequency", "GradingMetric"}
+		if strings.Join(records[0], ",") != strings.Join(wantHeader, ",") {
+			t.Fatalf("header=%v, want %v", records[0], wantHeader)
+		}
+
+		// Find the seeded row (mock store does not guarantee order).
+		found := false
+		for _, row := range records[1:] {
+			if len(row) >= 4 && row[3] == "alice@test.com" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("expected seeded member row present; records=%v", records)
+		}
+	}
+
+	// Admin allowed
+	assertCSV(t, adminSession)
+	// Coach allowed
+	assertCSV(t, coachSession)
+}
+
+// TestHandleMembersExportCSV_UnauthAndMemberBlocked verifies unauthenticated and member-role requests are rejected.
+// PRE: no session or member session.
+// POST: unauthenticated is 401; member is 403.
+func TestHandleMembersExportCSV_UnauthAndMemberBlocked(t *testing.T) {
+	stores = newFullStores()
+	ctx := context.Background()
+	stores.FeatureFlagStore.Save(ctx, featureflagDomain.FeatureFlag{Key: "member_mgmt", EnabledAdmin: true, EnabledCoach: true})
+
+	// Unauthenticated
+	{
+		req := httptest.NewRequest("GET", "/api/members/export", nil)
+		rec := httptest.NewRecorder()
+		handleMembersExportCSV(rec, req)
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("unauth status=%d, want %d body=%s", rec.Code, http.StatusUnauthorized, rec.Body.String())
+		}
+	}
+
+	// Member forbidden
+	{
+		req := authRequest("GET", "/api/members/export", "", memberSession)
+		rec := httptest.NewRecorder()
+		handleMembersExportCSV(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("member status=%d, want %d body=%s", rec.Code, http.StatusForbidden, rec.Body.String())
+		}
+	}
+}
+
+// TestHandleMembersExportCSV_FeatureFlagDisabled_Blocks verifies feature gating blocks coaches when member_mgmt is disabled.
+// PRE: authenticated coach session and member_mgmt disabled for coach.
+// POST: response is 403.
+func TestHandleMembersExportCSV_FeatureFlagDisabled_Blocks(t *testing.T) {
+	stores = newFullStores()
+	ctx := context.Background()
+	stores.FeatureFlagStore.Save(ctx, featureflagDomain.FeatureFlag{
+		Key:           "member_mgmt",
+		Description:   "Member management",
+		EnabledAdmin:  true,
+		EnabledCoach:  false,
+		EnabledMember: false,
+		EnabledTrial:  false,
+		BetaOverride:  false,
+	})
+
+	req := authRequest("GET", "/api/members/export", "", coachSession)
+	rec := httptest.NewRecorder()
+	handleMembersExportCSV(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status=%d, want %d body=%s", rec.Code, http.StatusForbidden, rec.Body.String())
+	}
 }
 
 // TestHandleClassTypes_POST_Admin_CreatesClassType verifies admins can create class types with metadata.
