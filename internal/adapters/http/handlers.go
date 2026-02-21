@@ -163,6 +163,215 @@ func handleMembersExportCSV(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// importCSVResult holds the result of a CSV import (dry-run or confirmed).
+type importCSVResult struct {
+	Total   int              `json:"total"`
+	Created int              `json:"created"`
+	Updated int              `json:"updated"`
+	Skipped int              `json:"skipped"`
+	Errors  []importCSVError `json:"errors"`
+	DryRun  bool             `json:"dry_run"`
+	Unknown []string         `json:"unknown_columns,omitempty"`
+}
+
+// importCSVError describes a per-row validation or processing error.
+type importCSVError struct {
+	Row     int    `json:"row"`
+	Message string `json:"message"`
+}
+
+const importCSVMaxBytes = 5 << 20 // 5 MB
+
+// handleMembersImportCSV handles POST /api/members/import
+// Parses a CSV upload and either previews (dry_run=true) or writes (dry_run=false) member records.
+// Supports update_mode=true to upsert by email instead of skipping duplicates.
+func handleMembersImportCSV(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	sess, ok := middleware.GetSessionFromContext(r.Context())
+	if !ok {
+		http.Error(w, "not authenticated", http.StatusUnauthorized)
+		return
+	}
+	if !middleware.IsAdmin(r.Context()) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	if !requireFeatureAPI(w, r, sess, "member_mgmt") {
+		return
+	}
+
+	dryRun := r.URL.Query().Get("dry_run") == "true"
+	updateMode := r.URL.Query().Get("update_mode") == "true"
+
+	r.Body = http.MaxBytesReader(w, r.Body, importCSVMaxBytes)
+	if err := r.ParseMultipartForm(importCSVMaxBytes); err != nil {
+		http.Error(w, "file too large or invalid form", http.StatusBadRequest)
+		return
+	}
+
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		http.Error(w, "missing file field", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	cr := csv.NewReader(file)
+	cr.TrimLeadingSpace = true
+
+	// Read header row.
+	header, err := cr.Read()
+	if err != nil {
+		http.Error(w, "could not read CSV header", http.StatusBadRequest)
+		return
+	}
+
+	// Build case-insensitive column index map.
+	colIdx := make(map[string]int, len(header))
+	for i, h := range header {
+		colIdx[strings.ToUpper(strings.TrimSpace(h))] = i
+	}
+
+	// Required columns.
+	if _, ok := colIdx["NAME"]; !ok {
+		http.Error(w, "CSV missing required column: NAME", http.StatusBadRequest)
+		return
+	}
+	if _, ok := colIdx["EMAIL"]; !ok {
+		http.Error(w, "CSV missing required column: EMAIL", http.StatusBadRequest)
+		return
+	}
+
+	// Detect unknown columns (informational only).
+	known := map[string]bool{
+		"ID": true, "ACCOUNTID": true, "NAME": true, "EMAIL": true,
+		"PROGRAM": true, "STATUS": true, "FEE": true, "FREQUENCY": true, "GRADINGMETRIC": true,
+	}
+	var unknownCols []string
+	for _, h := range header {
+		if !known[strings.ToUpper(strings.TrimSpace(h))] {
+			unknownCols = append(unknownCols, h)
+		}
+	}
+
+	getCol := func(row []string, col string) string {
+		i, ok := colIdx[col]
+		if !ok || i >= len(row) {
+			return ""
+		}
+		return strings.TrimSpace(row[i])
+	}
+
+	ctx := r.Context()
+	result := importCSVResult{DryRun: dryRun, Unknown: unknownCols}
+	rowNum := 1 // 1-indexed, header is row 0
+
+	for {
+		row, err := cr.Read()
+		if err != nil {
+			break // EOF or unrecoverable parse error — stop processing
+		}
+		rowNum++
+		result.Total++
+
+		name := getCol(row, "NAME")
+		email := strings.ToLower(getCol(row, "EMAIL"))
+
+		if strings.TrimSpace(name) == "" {
+			result.Errors = append(result.Errors, importCSVError{Row: rowNum, Message: "name is required"})
+			continue
+		}
+		if !strings.Contains(email, "@") {
+			result.Errors = append(result.Errors, importCSVError{Row: rowNum, Message: "invalid email: " + getCol(row, "EMAIL")})
+			continue
+		}
+
+		// Resolve optional fields with safe defaults.
+		program := strings.ToLower(getCol(row, "PROGRAM"))
+		if program != memberDomain.ProgramAdults && program != memberDomain.ProgramKids {
+			program = memberDomain.ProgramAdults
+		}
+		status := strings.ToLower(getCol(row, "STATUS"))
+		if status != memberDomain.StatusActive && status != memberDomain.StatusInactive && status != memberDomain.StatusArchived {
+			status = memberDomain.StatusActive
+		}
+		feeStr := getCol(row, "FEE")
+		fee, _ := strconv.Atoi(feeStr)
+		frequency := getCol(row, "FREQUENCY")
+		gradingMetric := getCol(row, "GRADINGMETRIC")
+		if gradingMetric != memberDomain.MetricSessions && gradingMetric != memberDomain.MetricHours {
+			gradingMetric = memberDomain.MetricSessions
+		}
+
+		// Check for existing member by email (case-insensitive).
+		existing, lookupErr := stores.MemberStore.GetByEmail(ctx, email)
+		exists := lookupErr == nil
+
+		if exists && !updateMode {
+			result.Skipped++
+			continue
+		}
+
+		if dryRun {
+			if exists {
+				result.Updated++
+			} else {
+				result.Created++
+			}
+			continue
+		}
+
+		// Write path.
+		if exists {
+			// Update mode: preserve ID and AccountID, update other fields.
+			existing.Name = name
+			existing.Program = program
+			existing.Status = status
+			if fee > 0 {
+				existing.Fee = fee
+			}
+			if frequency != "" {
+				existing.Frequency = frequency
+			}
+			if gradingMetric != "" {
+				existing.GradingMetric = gradingMetric
+			}
+			if err := stores.MemberStore.Save(ctx, existing); err != nil {
+				result.Errors = append(result.Errors, importCSVError{Row: rowNum, Message: "save failed: " + err.Error()})
+				continue
+			}
+			result.Updated++
+		} else {
+			m := memberDomain.Member{
+				ID:            generateID(),
+				Name:          name,
+				Email:         email,
+				Program:       program,
+				Status:        status,
+				Fee:           fee,
+				Frequency:     frequency,
+				GradingMetric: gradingMetric,
+			}
+			if err := stores.MemberStore.Save(ctx, m); err != nil {
+				result.Errors = append(result.Errors, importCSVError{Row: rowNum, Message: "save failed: " + err.Error()})
+				continue
+			}
+			result.Created++
+		}
+	}
+
+	slog.Info("members_import", "admin", sess.AccountID, "dry_run", dryRun, "update_mode", updateMode,
+		"total", result.Total, "created", result.Created, "updated", result.Updated,
+		"skipped", result.Skipped, "errors", len(result.Errors))
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
 // internalError logs the real error and returns a generic message to the client.
 // This prevents leaking internal details per OWASP A05.
 func internalError(w http.ResponseWriter, err error) {

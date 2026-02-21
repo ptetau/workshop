@@ -1,11 +1,14 @@
 package web
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/csv"
 	"encoding/json"
 	"errors"
+	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -190,6 +193,234 @@ func TestHandleMembersExportCSV_FeatureFlagDisabled_Blocks(t *testing.T) {
 	handleMembersExportCSV(rec, req)
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("status=%d, want %d body=%s", rec.Code, http.StatusForbidden, rec.Body.String())
+	}
+}
+
+// --- Tests: /api/members/import ---
+
+// buildImportCSV creates a multipart form request with a CSV file for import testing.
+func buildImportCSV(t *testing.T, csvContent string, dryRun bool, updateMode bool, sess middleware.Session) *http.Request {
+	t.Helper()
+	body := &bytes.Buffer{}
+	w := multipart.NewWriter(body)
+	fw, err := w.CreateFormFile("file", "members.csv")
+	if err != nil {
+		t.Fatalf("create form file: %v", err)
+	}
+	if _, err := fw.Write([]byte(csvContent)); err != nil {
+		t.Fatalf("write csv: %v", err)
+	}
+	w.Close()
+
+	url := "/api/members/import?dry_run="
+	if dryRun {
+		url += "true"
+	} else {
+		url += "false"
+	}
+	if updateMode {
+		url += "&update_mode=true"
+	}
+
+	req := authRequest("POST", url, "", sess)
+	req.Body = io.NopCloser(body)
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	req.ContentLength = int64(body.Len())
+	return req
+}
+
+// TestHandleMembersImportCSV_AdminCreatesMembers verifies admin can import new members from CSV.
+// PRE: authenticated admin session, member_mgmt enabled, valid CSV with NAME+EMAIL.
+// POST: response is 200 JSON with created=2, skipped=0, errors=0.
+func TestHandleMembersImportCSV_AdminCreatesMembers(t *testing.T) {
+	stores = newFullStores()
+	ctx := context.Background()
+	stores.FeatureFlagStore.Save(ctx, featureflagDomain.FeatureFlag{Key: "member_mgmt", EnabledAdmin: true, EnabledCoach: true})
+
+	csv := "NAME,EMAIL,PROGRAM,STATUS\nAlice Smith,alice@test.com,adults,active\nBob Jones,bob@test.com,kids,active\n"
+	req := buildImportCSV(t, csv, false, false, adminSession)
+	rec := httptest.NewRecorder()
+	handleMembersImportCSV(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d want 200 body=%s", rec.Code, rec.Body.String())
+	}
+	var result importCSVResult
+	if err := json.NewDecoder(rec.Body).Decode(&result); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if result.Total != 2 {
+		t.Errorf("total=%d want 2", result.Total)
+	}
+	if result.Created != 2 {
+		t.Errorf("created=%d want 2", result.Created)
+	}
+	if result.Skipped != 0 {
+		t.Errorf("skipped=%d want 0", result.Skipped)
+	}
+	if len(result.Errors) != 0 {
+		t.Errorf("errors=%v want none", result.Errors)
+	}
+}
+
+// TestHandleMembersImportCSV_SkipsDuplicatesByDefault verifies duplicate emails are skipped in default mode.
+// PRE: member with email already exists, CSV contains same email.
+// POST: skipped=1, created=0.
+func TestHandleMembersImportCSV_SkipsDuplicatesByDefault(t *testing.T) {
+	stores = newFullStores()
+	ctx := context.Background()
+	stores.FeatureFlagStore.Save(ctx, featureflagDomain.FeatureFlag{Key: "member_mgmt", EnabledAdmin: true})
+	stores.MemberStore.Save(ctx, memberDomain.Member{ID: "existing-1", Name: "Alice", Email: "alice@test.com", Program: "adults", Status: "active"})
+
+	csv := "NAME,EMAIL\nAlice Updated,alice@test.com\n"
+	req := buildImportCSV(t, csv, false, false, adminSession)
+	rec := httptest.NewRecorder()
+	handleMembersImportCSV(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var result importCSVResult
+	json.NewDecoder(rec.Body).Decode(&result)
+	if result.Skipped != 1 {
+		t.Errorf("skipped=%d want 1", result.Skipped)
+	}
+	if result.Created != 0 {
+		t.Errorf("created=%d want 0", result.Created)
+	}
+	// Verify original member name unchanged (ID preserved).
+	m, err := stores.MemberStore.GetByEmail(ctx, "alice@test.com")
+	if err != nil {
+		t.Fatalf("get member: %v", err)
+	}
+	if m.ID != "existing-1" {
+		t.Errorf("ID=%q want existing-1", m.ID)
+	}
+}
+
+// TestHandleMembersImportCSV_UpdateModeUpserts verifies update_mode=true updates existing members preserving ID.
+// PRE: member with email exists, CSV contains same email with updated name.
+// POST: updated=1, ID preserved.
+func TestHandleMembersImportCSV_UpdateModeUpserts(t *testing.T) {
+	stores = newFullStores()
+	ctx := context.Background()
+	stores.FeatureFlagStore.Save(ctx, featureflagDomain.FeatureFlag{Key: "member_mgmt", EnabledAdmin: true})
+	stores.MemberStore.Save(ctx, memberDomain.Member{ID: "existing-1", Name: "Alice Old", Email: "alice@test.com", Program: "adults", Status: "active"})
+
+	csv := "NAME,EMAIL\nAlice New,alice@test.com\n"
+	req := buildImportCSV(t, csv, false, true, adminSession)
+	rec := httptest.NewRecorder()
+	handleMembersImportCSV(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var result importCSVResult
+	json.NewDecoder(rec.Body).Decode(&result)
+	if result.Updated != 1 {
+		t.Errorf("updated=%d want 1", result.Updated)
+	}
+	// Verify ID preserved and name updated.
+	m, err := stores.MemberStore.GetByEmail(ctx, "alice@test.com")
+	if err != nil {
+		t.Fatalf("get member: %v", err)
+	}
+	if m.ID != "existing-1" {
+		t.Errorf("ID=%q want existing-1 (must be preserved)", m.ID)
+	}
+	if m.Name != "Alice New" {
+		t.Errorf("Name=%q want Alice New", m.Name)
+	}
+}
+
+// TestHandleMembersImportCSV_DryRunDoesNotWrite verifies dry_run=true returns preview without writing.
+// PRE: empty store, valid CSV.
+// POST: created=1 in response, but no member persisted.
+func TestHandleMembersImportCSV_DryRunDoesNotWrite(t *testing.T) {
+	stores = newFullStores()
+	ctx := context.Background()
+	stores.FeatureFlagStore.Save(ctx, featureflagDomain.FeatureFlag{Key: "member_mgmt", EnabledAdmin: true})
+
+	csv := "NAME,EMAIL\nDry Run Person,dry@test.com\n"
+	req := buildImportCSV(t, csv, true, false, adminSession)
+	rec := httptest.NewRecorder()
+	handleMembersImportCSV(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var result importCSVResult
+	json.NewDecoder(rec.Body).Decode(&result)
+	if !result.DryRun {
+		t.Error("dry_run should be true in response")
+	}
+	if result.Created != 1 {
+		t.Errorf("created=%d want 1", result.Created)
+	}
+	// Verify nothing was written.
+	_, err := stores.MemberStore.GetByEmail(ctx, "dry@test.com")
+	if err == nil {
+		t.Error("member should not exist after dry run")
+	}
+}
+
+// TestHandleMembersImportCSV_InvalidRowsReported verifies rows with bad email/empty name produce per-row errors.
+// PRE: CSV with one valid and two invalid rows.
+// POST: created=1, errors=2.
+func TestHandleMembersImportCSV_InvalidRowsReported(t *testing.T) {
+	stores = newFullStores()
+	ctx := context.Background()
+	stores.FeatureFlagStore.Save(ctx, featureflagDomain.FeatureFlag{Key: "member_mgmt", EnabledAdmin: true})
+
+	csv := "NAME,EMAIL\nValid Person,valid@test.com\n,bademail\nNo Email,notanemail\n"
+	req := buildImportCSV(t, csv, false, false, adminSession)
+	rec := httptest.NewRecorder()
+	handleMembersImportCSV(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var result importCSVResult
+	json.NewDecoder(rec.Body).Decode(&result)
+	if result.Created != 1 {
+		t.Errorf("created=%d want 1", result.Created)
+	}
+	if len(result.Errors) != 2 {
+		t.Errorf("errors=%d want 2", len(result.Errors))
+	}
+	_ = ctx
+}
+
+// TestHandleMembersImportCSV_NonAdminBlocked verifies coaches and members cannot import.
+// PRE: coach/member session.
+// POST: 403 Forbidden.
+func TestHandleMembersImportCSV_NonAdminBlocked(t *testing.T) {
+	stores = newFullStores()
+	ctx := context.Background()
+	stores.FeatureFlagStore.Save(ctx, featureflagDomain.FeatureFlag{Key: "member_mgmt", EnabledAdmin: true, EnabledCoach: true})
+
+	for _, sess := range []middleware.Session{coachSession, memberSession} {
+		csv := "NAME,EMAIL\nTest,test@test.com\n"
+		req := buildImportCSV(t, csv, false, false, sess)
+		rec := httptest.NewRecorder()
+		handleMembersImportCSV(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Errorf("role=%s status=%d want 403", sess.Role, rec.Code)
+		}
+	}
+	_ = ctx
+}
+
+// TestHandleMembersImportCSV_UnauthBlocked verifies unauthenticated requests are rejected.
+// PRE: no session.
+// POST: 401 Unauthorized.
+func TestHandleMembersImportCSV_UnauthBlocked(t *testing.T) {
+	stores = newFullStores()
+	req := httptest.NewRequest("POST", "/api/members/import?dry_run=false", nil)
+	rec := httptest.NewRecorder()
+	handleMembersImportCSV(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status=%d want 401", rec.Code)
 	}
 }
 
