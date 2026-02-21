@@ -242,5 +242,144 @@
         });
     });
     </script>
+
+    {{ if or (eq (currentRole) "admin") (eq (currentRole) "coach") }}
+    <!-- Bug Box: floating report button + modal -->
+    <style>
+    #bugbox-btn{position:fixed;bottom:1.5rem;right:1.5rem;z-index:9000;background:#d73a4a;color:#fff;border:none;border-radius:50%;width:3rem;height:3rem;font-size:1.3rem;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.25);display:flex;align-items:center;justify-content:center;transition:background 0.2s;}
+    #bugbox-btn:hover{background:#b52d3a;}
+    #bugbox-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9001;align-items:center;justify-content:center;}
+    #bugbox-overlay.open{display:flex;}
+    #bugbox-modal{background:#fff;border-radius:4px;padding:2rem;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,0.2);position:relative;}
+    #bugbox-modal h2{margin:0 0 1.25rem;font-size:1.1rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#d73a4a;}
+    #bugbox-modal .form-group{margin-bottom:0.9rem;}
+    #bugbox-modal label{display:block;font-size:0.8rem;font-weight:600;margin-bottom:0.3rem;text-transform:uppercase;letter-spacing:0.4px;color:#555;}
+    #bugbox-modal input[type=text],#bugbox-modal textarea,#bugbox-modal input[type=file]{width:100%;padding:0.5rem 0.65rem;border:1px solid #ddd;border-radius:2px;font-family:inherit;font-size:0.9rem;box-sizing:border-box;}
+    #bugbox-modal textarea{resize:vertical;min-height:80px;}
+    #bugbox-close{position:absolute;top:0.75rem;right:1rem;background:none;border:none;font-size:1.4rem;cursor:pointer;color:#999;padding:0;}
+    #bugbox-close:hover{color:#333;}
+    #bugbox-success{display:none;text-align:center;padding:1rem 0;}
+    #bugbox-success a{color:#d73a4a;font-weight:600;}
+    #bugbox-context{font-size:0.72rem;color:#888;margin-top:0.5rem;line-height:1.5;}
+    </style>
+
+    <button id="bugbox-btn" title="Report a bug" aria-label="Report a bug">&#x1F41B;</button>
+
+    <div id="bugbox-overlay" role="dialog" aria-modal="true" aria-labelledby="bugbox-title">
+      <div id="bugbox-modal">
+        <button id="bugbox-close" aria-label="Close">&times;</button>
+        <h2 id="bugbox-title">&#x1F41B; Report a Bug</h2>
+
+        <div id="bugbox-form-wrap">
+          <form id="bugbox-form" enctype="multipart/form-data">
+            <input type="hidden" name="gorilla.csrf.Token" value="{{ csrfToken }}">
+            <input type="hidden" name="route" id="bugbox-route">
+            <input type="hidden" name="userAgent" id="bugbox-ua">
+            <input type="hidden" name="viewport" id="bugbox-viewport">
+
+            <div class="form-group">
+              <label for="bugbox-summary">Summary <span style="color:#d73a4a">*</span></label>
+              <input type="text" id="bugbox-summary" name="summary" maxlength="200" placeholder="One-line description of the bug" required>
+            </div>
+            <div class="form-group">
+              <label for="bugbox-description">Description <span style="color:#d73a4a">*</span></label>
+              <textarea id="bugbox-description" name="description" maxlength="2000" placeholder="What happened?" required></textarea>
+            </div>
+            <div class="form-group">
+              <label for="bugbox-steps">Steps to Reproduce</label>
+              <textarea id="bugbox-steps" name="steps" maxlength="1000" placeholder="1. Go to... 2. Click... 3. See error"></textarea>
+            </div>
+            <div class="form-group">
+              <label for="bugbox-expected">Expected Behaviour</label>
+              <input type="text" id="bugbox-expected" name="expected" maxlength="300" placeholder="What should have happened?">
+            </div>
+            <div class="form-group">
+              <label for="bugbox-actual">Actual Behaviour</label>
+              <input type="text" id="bugbox-actual" name="actual" maxlength="300" placeholder="What actually happened?">
+            </div>
+            <div class="form-group">
+              <label for="bugbox-screenshot">Screenshot (optional, max 5 MB)</label>
+              <input type="file" id="bugbox-screenshot" name="screenshot" accept="image/png,image/jpeg,image/webp,image/gif">
+            </div>
+            <div id="bugbox-context" aria-live="polite"></div>
+            <div id="bugbox-error" style="color:#d73a4a;font-size:0.85rem;margin-bottom:0.5rem;display:none;"></div>
+            <button type="submit" id="bugbox-submit" style="width:100%;margin-top:0.5rem;">Submit Bug Report</button>
+          </form>
+        </div>
+
+        <div id="bugbox-success">
+          <p style="font-size:1.5rem;margin:0 0 0.5rem;">&#x2713;</p>
+          <p style="font-weight:600;margin:0 0 0.5rem;">Bug reported!</p>
+          <p id="bugbox-issue-link" style="margin:0;font-size:0.9rem;"></p>
+          <button onclick="document.getElementById('bugbox-overlay').classList.remove('open')" style="margin-top:1rem;width:100%;">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+    (function(){
+      var btn = document.getElementById('bugbox-btn');
+      var overlay = document.getElementById('bugbox-overlay');
+      var closeBtn = document.getElementById('bugbox-close');
+      var form = document.getElementById('bugbox-form');
+      var errDiv = document.getElementById('bugbox-error');
+      var submitBtn = document.getElementById('bugbox-submit');
+      var formWrap = document.getElementById('bugbox-form-wrap');
+      var successDiv = document.getElementById('bugbox-success');
+      var contextDiv = document.getElementById('bugbox-context');
+
+      function openModal() {
+        // Capture browser context (no cookies, no secrets)
+        document.getElementById('bugbox-route').value = window.location.pathname + window.location.search;
+        document.getElementById('bugbox-ua').value = navigator.userAgent;
+        document.getElementById('bugbox-viewport').value = window.innerWidth + 'x' + window.innerHeight;
+        contextDiv.textContent = 'Route: ' + (window.location.pathname + window.location.search) + ' · Viewport: ' + window.innerWidth + 'x' + window.innerHeight;
+        formWrap.style.display = '';
+        successDiv.style.display = 'none';
+        errDiv.style.display = 'none';
+        form.reset();
+        overlay.classList.add('open');
+        document.getElementById('bugbox-summary').focus();
+      }
+
+      btn.addEventListener('click', openModal);
+      closeBtn.addEventListener('click', function(){ overlay.classList.remove('open'); });
+      overlay.addEventListener('click', function(e){ if(e.target === overlay) overlay.classList.remove('open'); });
+      document.addEventListener('keydown', function(e){ if(e.key === 'Escape') overlay.classList.remove('open'); });
+
+      form.addEventListener('submit', function(e){
+        e.preventDefault();
+        errDiv.style.display = 'none';
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Submitting…';
+
+        var fd = new FormData(form);
+        fetch('/api/admin/bugbox', { method: 'POST', body: fd, credentials: 'same-origin' })
+          .then(function(resp){
+            if(!resp.ok) return resp.text().then(function(t){ throw new Error(t||resp.statusText); });
+            return resp.json();
+          })
+          .then(function(data){
+            formWrap.style.display = 'none';
+            successDiv.style.display = 'block';
+            var link = document.getElementById('bugbox-issue-link');
+            if(data.githubIssueURL) {
+              link.innerHTML = 'GitHub issue: <a href="' + data.githubIssueURL + '" target="_blank" rel="noopener">#' + data.githubIssueNumber + '</a>';
+            } else {
+              link.textContent = 'Submission ID: ' + data.submissionID;
+            }
+          })
+          .catch(function(err){
+            errDiv.textContent = err.message || 'Submission failed. Please try again.';
+            errDiv.style.display = 'block';
+          })
+          .finally(function(){
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Submit Bug Report';
+          });
+      });
+    })();
+    </script>
+    {{ end }}
 </body>
 </html>

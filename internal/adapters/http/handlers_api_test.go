@@ -48,6 +48,7 @@ import (
 	trainingGoalDomain "workshop/internal/domain/traininggoal"
 	waiverDomain "workshop/internal/domain/waiver"
 
+	bugboxDomain "workshop/internal/domain/bugbox"
 	featureflagDomain "workshop/internal/domain/featureflag"
 )
 
@@ -1222,6 +1223,7 @@ func newFullStores() *Stores {
 		TrainingGoalStore:        &mockTrainingGoalStore{goals: make(map[string]trainingGoalDomain.TrainingGoal)},
 		ThemeStore:               &mockThemeStore{themes: make(map[string]themeDomain.Theme)},
 		ClipStore:                &mockClipStore{clips: make(map[string]clipDomain.Clip)},
+		BugBoxStore:              &mockBugBoxStore{submissions: make(map[string]bugboxDomain.Submission)},
 	}
 }
 

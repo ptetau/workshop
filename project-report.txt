@@ -1,0 +1,106 @@
+
+# Project Status Report
+Generated: 2026-02-15 18:40
+
+## Milestone Progress
+  ?? Phase 0: Foundation: 23/26 done (88%) ███████████░
+  ? Phase 1: Core Data: 0/0 done (0%) ░░░░░░░░░░░░
+  ? Phase 2: Kiosk MVP: 17/17 done (100%) ████████████
+  ? Phase 3: Attendance & Training: 25/25 done (100%) ████████████
+  ? Phase 4: Grading: 24/24 done (100%) ████████████
+  ?? Phase 5: Member Operations: 23/26 done (88%) ███████████░
+  ? Phase 6: Curriculum & Voting: 37/37 done (100%) ████████████
+  ? Phase 7: Communication: 38/38 done (100%) ████████████
+  ?? Phase 8: Library & Clips: 2/8 done (25%) ███░░░░░░░░░
+  ?? Phase 9: Calendar & Goals: 1/12 done (8%) █░░░░░░░░░░░
+  ? Phase 10: Business, Study & Compliance: 0/22 done (0%) ░░░░░░░░░░░░
+  ? Phase 11: Quality Assurance: 0/4 done (0%) ░░░░░░░░░░░░
+
+## Epic Progress
+  ? #7 Epic: S1 Foundation [area:foundation] (Phase 0: Foundation)
+  ? #8 Epic: S2 Kiosk and Check-In [area:kiosk] (Phase 2: Kiosk MVP)
+  ? #9 Epic: S3 Attendance and Training Log [area:attendance] (Phase 3: Attendance & Training)
+  ? #10 Epic: S4 Grading and Belt Progression [area:grading] (Phase 4: Grading)
+  ? #11 Epic: S5 Curriculum Rotor System [area:curriculum] (Phase 6: Curriculum & Voting)
+  ? #12 Epic: S6 Topic Voting [area:voting] (Phase 6: Curriculum & Voting)
+  ? #13 Epic: S7 Technical Library and Clips [area:library] (Phase 8: Library & Clips)
+  ? #14 Epic: S8 Communication [area:communication] (Phase 7: Communication)
+  ? #15 Epic: S9 Member Management [area:member-mgmt] (Phase 5: Member Operations)
+  ? #16 Epic: S10 Calendar and Goals [area:calendar] (Phase 9: Calendar & Goals)
+  ? #17 Epic: S11 Advanced Study (Laboratory) [area:study] (Phase 10: Business, Study & Compliance)
+  ? #18 Epic: S12 Competition and Performance [area:competition] (Phase 10: Business, Study & Compliance)
+  ? #19 Epic: S13 Business Operations [area:business] (Phase 10: Business, Study & Compliance)
+  ? #20 Epic: S14 Data Privacy and Compliance [area:privacy] (Phase 10: Business, Study & Compliance)
+  ? #232 Epic: S1.8 Observability & Performance Instrumentation [area:foundation] (Phase 0: Foundation)
+  ? #281 Epic: S15 Quality Assurance (UI Regression + UX Audit) [area:foundation] (Phase 11: Quality Assurance)
+  ? #285 Epic: S16 Feature Flags & Controlled Rollouts [area:foundation] (Phase 0: Foundation)
+  ? #289 Epic: S9 Member Management [area:member-mgmt] (Phase 5: Member Operations)
+
+## Open Issues (all milestones)
+  #285 Epic: S16 Feature Flags & Controlled Rollouts [type:epic, cross-cutting, security-impact, needs-ui, needs-storage, area:foundation] (Phase 0: Foundation)
+  #287 US-16.1.2: Enforce feature flags consistently (routes, templates, nav, tests) [type:story, cross-cutting, security-impact, needs-ui, area:foundation] (Phase 0: Foundation)
+  #288 US-16.2.1: Update guidelines for harmonious feature integration (nav/app shell) [documentation, type:story, cross-cutting, needs-ui, area:foundation] (Phase 0: Foundation)
+  #15 Epic: S9 Member Management [area:member-mgmt, type:epic] (Phase 5: Member Operations)
+  #283 US-9.3.4: Export member list to CSV [area:member-mgmt, type:story, privacy-impact, security-impact, needs-ui] (Phase 5: Member Operations)
+  #284 US-9.3.3: Import members from CSV [area:member-mgmt, type:story, privacy-impact, security-impact, needs-ui, needs-storage] (Phase 5: Member Operations)
+  #13 Epic: S7 Technical Library and Clips [area:library, type:epic] (Phase 8: Library & Clips)
+  #269 US-7.1.2: Clip loops automatically [area:library, type:story, needs-ui] (Phase 8: Library & Clips)
+  #270 US-7.2.1: Browse library by theme [area:library, type:story, needs-ui] (Phase 8: Library & Clips)
+  #271 US-7.2.2: Search library [area:library, type:story, needs-ui] (Phase 8: Library & Clips)
+  #272 US-7.3.1: Promote a member's clip [area:library, type:story, needs-ui] (Phase 8: Library & Clips)
+  #273 US-7.4.1: Videos start muted [area:library, type:story, needs-ui] (Phase 8: Library & Clips)
+  #16 Epic: S10 Calendar and Goals [area:calendar, type:epic] (Phase 9: Calendar & Goals)
+  #146 US-10.1.2: Add club event [area:calendar, type:story, needs-ui, needs-storage] (Phase 9: Calendar & Goals)
+  #147 US-10.1.3: Add competition [area:calendar, type:story, needs-ui, needs-storage] (Phase 9: Calendar & Goals)
+  #148 US-10.1.4: See who's going to a competition [area:calendar, type:story, needs-ui] (Phase 9: Calendar & Goals)
+  #149 US-10.2.1: Toggle program rotor on calendar [area:calendar, type:story, needs-ui] (Phase 9: Calendar & Goals)
+  #150 US-10.2.2: Compare program rotors [area:calendar, type:story, needs-ui] (Phase 9: Calendar & Goals)
+  #151 US-10.2.3: Coach views full curriculum [area:calendar, type:story, needs-ui] (Phase 9: Calendar & Goals)
+  #152 US-10.3.1: Create a personal goal [area:calendar, type:story, needs-ui, needs-storage] (Phase 9: Calendar & Goals)
+  #153 US-10.3.2: Log progress manually [area:calendar, type:story, needs-ui] (Phase 9: Calendar & Goals)
+  #154 US-10.3.3: Auto-tracked goal [area:calendar, type:story, needs-ui] (Phase 9: Calendar & Goals)
+  #275 US-10.1.5: Seed NZ grappling competitions into calendar [area:calendar, type:story, needs-storage] (Phase 9: Calendar & Goals)
+  #17 Epic: S11 Advanced Study (Laboratory) [area:study, type:epic] (Phase 10: Business, Study & Compliance)
+  #18 Epic: S12 Competition and Performance [area:competition, type:epic] (Phase 10: Business, Study & Compliance)
+  #19 Epic: S13 Business Operations [area:business, type:epic] (Phase 10: Business, Study & Compliance)
+  #20 Epic: S14 Data Privacy and Compliance [area:privacy, type:epic, privacy-impact] (Phase 10: Business, Study & Compliance)
+  #155 US-11.1.1: Tag a clip [area:study, type:story, needs-ui, needs-storage] (Phase 10: Business, Study & Compliance)
+  #156 US-11.2.1: Compare four clips (4-Up Mode) [area:study, type:story, needs-ui] (Phase 10: Business, Study & Compliance)
+  #157 US-11.3.1: Predictive clip search [area:study, type:story, needs-ui] (Phase 10: Business, Study & Compliance)
+  #158 US-11.4.1: Write research notes [area:study, type:story, needs-ui, needs-storage] (Phase 10: Business, Study & Compliance)
+  #159 US-12.1.1: Read competition advice [area:competition, type:story, needs-ui] (Phase 10: Business, Study & Compliance)
+  #160 US-12.3.1: Submit scouting clip [area:competition, type:story, needs-ui, needs-storage] (Phase 10: Business, Study & Compliance)
+  #161 US-13.1.1: Auto-reconcile payments [area:business, type:story, needs-storage] (Phase 10: Business, Study & Compliance)
+  #162 US-13.2.1: Break-even progress [area:business, type:story, needs-ui] (Phase 10: Business, Study & Compliance)
+  #163 US-13.3.1: Download receipts [area:business, type:story, needs-ui] (Phase 10: Business, Study & Compliance)
+  #164 US-14.1.1: View audit trail [area:privacy, type:story, privacy-impact, needs-ui, needs-storage] (Phase 10: Business, Study & Compliance)
+  #165 US-14.1.2: Audit DevMode impersonation [area:privacy, type:story, privacy-impact, security-impact, needs-storage] (Phase 10: Business, Study & Compliance)
+  #166 US-14.2.1: Granular consent at registration [area:privacy, type:story, privacy-impact, needs-ui, needs-storage] (Phase 10: Business, Study & Compliance)
+  #167 US-14.2.2: Revoke marketing consent [area:privacy, type:story, privacy-impact, needs-ui] (Phase 10: Business, Study & Compliance)
+  #168 US-14.2.3: Re-consent on waiver update [area:privacy, type:story, privacy-impact, needs-ui] (Phase 10: Business, Study & Compliance)
+  #169 US-14.3.1: Request data deletion [area:privacy, type:story, privacy-impact, needs-ui, needs-storage] (Phase 10: Business, Study & Compliance)
+  #170 US-14.3.2: Process deletion request [area:privacy, type:story, privacy-impact, needs-storage] (Phase 10: Business, Study & Compliance)
+  #171 US-14.3.3: Grace period for deletion [area:privacy, type:story, privacy-impact, needs-storage] (Phase 10: Business, Study & Compliance)
+  #172 US-14.4.1: Export my data [area:privacy, type:story, privacy-impact, needs-ui] (Phase 10: Business, Study & Compliance)
+  #278 US-15.1.1: Author comprehensive UI regression test plan (Markdown) [type:story, cross-cutting, needs-ui, area:foundation] (Phase 11: Quality Assurance)
+  #279 US-15.1.2: Run full manual QA pass + UX audit and compile fixes/improvements [type:story, cross-cutting, needs-ui, area:foundation] (Phase 11: Quality Assurance)
+  #280 US-15.2.1: Add Playwright UI smoke regression suite (nav crawl + page health) [type:story, cross-cutting, needs-ui, area:foundation] (Phase 11: Quality Assurance)
+  #281 Epic: S15 Quality Assurance (UI Regression + UX Audit) [type:epic, cross-cutting, needs-ui, area:foundation] (Phase 11: Quality Assurance)
+  Total open: 49
+
+## In-Progress Work
+  Branch: * issue-287-enforce-feature-flags
+  No open PRs
+
+## Recently Closed (last 10)
+  #286 US-16.1.1: Admin manages feature flags (roles + beta cohort) - closed 2026-02-15
+  #289 Epic: S9 Member Management - closed 2026-02-15
+  #268 US-7.1.1: Create a clip - closed 2026-02-15
+  #261 US-5.1.4: Streamline rotor editor for rapid bulk entry - closed 2026-02-13
+  #260 Bug: Curriculum page loses all state on refresh - closed 2026-02-12
+  #259 Bug: Topic form buttons jammed together, duration field has no visible label - closed 2026-02-12
+  #258 Bug: Inline form buttons pushed underneath input field in curriculum page - closed 2026-02-12
+  #257 Bug: Cannot rename a rotor ΓÇö no handler or UI exists - closed 2026-02-12
+  #256 Bug: All DELETE operations fail silently ΓÇö CSRF rejects bare DELETE fetch calls - closed 2026-02-12
+  #242 US-1.9.1: Role-based navigation ΓÇö Core Nav + Rich Dashboard + Grouped Overflow - closed 2026-02-11
+

@@ -3,11 +3,13 @@ package web
 import (
 	"bytes"
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"html/template"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -62,6 +64,103 @@ var mdRenderer = goldmark.New(
 // generateID creates a new UUID string.
 func generateID() string {
 	return uuid.New().String()
+}
+
+func csvSafeCell(s string) string {
+	// Mitigate CSV formula injection when opening exports in Excel/Sheets.
+	// Any cell starting with these characters may be treated as a formula.
+	// Prefix with a single quote to force literal interpretation.
+	if s == "" {
+		return s
+	}
+	switch s[0] {
+	case '=', '+', '-', '@':
+		return "'" + s
+	default:
+		return s
+	}
+}
+
+// handleMembersExportCSV handles GET /api/members/export
+// Exports the members list as CSV, respecting the same search/filter/sort params as /members.
+func handleMembersExportCSV(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	sess, ok := middleware.GetSessionFromContext(r.Context())
+	if !ok {
+		http.Error(w, "not authenticated", http.StatusUnauthorized)
+		return
+	}
+	if !middleware.IsCoachOrAdmin(r.Context()) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	if !requireFeatureAPI(w, r, sess, "member_mgmt") {
+		return
+	}
+
+	// Same query params as the /members list.
+	lp := listutil.ParseListParams(r.URL.Query(),
+		[]string{"name", "email", "program", "status"},
+		[]string{"program", "status"},
+	)
+
+	filter := memberStore.ListFilter{
+		Program: lp.Filters["program"],
+		Status:  lp.Filters["status"],
+		Search:  lp.Search,
+		Sort:    lp.Sort,
+		Dir:     lp.Dir,
+		Limit:   100000,
+		Offset:  0,
+	}
+
+	members, err := stores.MemberStore.List(r.Context(), filter)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+
+	filename := fmt.Sprintf("members-%s.csv", timeNow().Format("2006-01-02"))
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+	w.Header().Set("Cache-Control", "no-store")
+
+	cw := csv.NewWriter(w)
+	cw.UseCRLF = true
+
+	// Note: we call Flush explicitly and check cw.Error() so write failures don't get swallowed.
+
+	if err := cw.Write([]string{"ID", "AccountID", "Name", "Email", "Program", "Status", "Fee", "Frequency", "GradingMetric"}); err != nil {
+		internalError(w, err)
+		return
+	}
+	for _, m := range members {
+		rec := []string{
+			csvSafeCell(m.ID),
+			csvSafeCell(m.AccountID),
+			csvSafeCell(m.Name),
+			csvSafeCell(m.Email),
+			csvSafeCell(m.Program),
+			csvSafeCell(m.Status),
+			csvSafeCell(strconv.Itoa(m.Fee)),
+			csvSafeCell(m.Frequency),
+			csvSafeCell(m.GradingMetric),
+		}
+		if err := cw.Write(rec); err != nil {
+			internalError(w, err)
+			return
+		}
+	}
+
+	cw.Flush()
+	if err := cw.Error(); err != nil {
+		// Response may be partially written; log only.
+		slog.Error("csv_export_flush_error", "error", err.Error())
+	}
 }
 
 // internalError logs the real error and returns a generic message to the client.
@@ -177,10 +276,29 @@ func renderTemplate(w http.ResponseWriter, r *http.Request, templateName string,
 			if status != "" {
 				q += "&status=" + status
 			}
-			if perPage > 0 {
+			if perPage != 0 {
 				q += fmt.Sprintf("&per_page=%d", perPage)
 			}
 			return template.URL(q)
+		},
+		"exportMembersQuery": func(sort, dir, search, program, status string) template.URL {
+			v := url.Values{}
+			if sort != "" {
+				v.Set("sort", sort)
+			}
+			if dir != "" {
+				v.Set("dir", dir)
+			}
+			if search != "" {
+				v.Set("q", search)
+			}
+			if program != "" {
+				v.Set("program", program)
+			}
+			if status != "" {
+				v.Set("status", status)
+			}
+			return template.URL(v.Encode())
 		},
 	}
 
@@ -754,7 +872,7 @@ func handleEstimatedHoursCheckOverlap(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(result)
 }
 
-// handleSelfEstimates handles POST /api/self-estimates — member submits a self-estimate.
+// handleSelfEstimates handles POST /api/self-estimates ΓÇö member submits a self-estimate.
 func handleSelfEstimates(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -803,7 +921,7 @@ func handleSelfEstimates(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(entry)
 }
 
-// handleSelfEstimatesPending handles GET /api/self-estimates/pending — admin/coach review queue.
+// handleSelfEstimatesPending handles GET /api/self-estimates/pending ΓÇö admin/coach review queue.
 func handleSelfEstimatesPending(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -861,7 +979,7 @@ func handleSelfEstimatesPending(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(result)
 }
 
-// handleSelfEstimatesReview handles POST /api/self-estimates/review — admin/coach approves or rejects.
+// handleSelfEstimatesReview handles POST /api/self-estimates/review ΓÇö admin/coach approves or rejects.
 func handleSelfEstimatesReview(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -910,7 +1028,7 @@ func handleSelfEstimatesReview(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(entry)
 }
 
-// handleSelfEstimatesPage handles GET /admin/self-estimates — admin review queue page.
+// handleSelfEstimatesPage handles GET /admin/self-estimates ΓÇö admin review queue page.
 func handleSelfEstimatesPage(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -1602,7 +1720,7 @@ func handleNotices(w http.ResponseWriter, r *http.Request) {
 			json.NewEncoder(w).Encode(results)
 			return
 		}
-		// No type filter — return all notices
+		// No type filter ΓÇö return all notices
 		results, err := stores.NoticeStore.List(ctx, noticeStore.ListFilter{Limit: 100})
 		if err != nil {
 			internalError(w, err)
@@ -2910,7 +3028,7 @@ func handleGradingReadiness(w http.ResponseWriter, r *http.Request) {
 		if m.Status != "active" {
 			continue
 		}
-		// Skip kids in sessions mode — they appear in kids term attendance section
+		// Skip kids in sessions mode ΓÇö they appear in kids term attendance section
 		if m.Program == "kids" && m.GradingMetric != memberDomain.MetricHours {
 			continue
 		}
@@ -3003,7 +3121,7 @@ func handleGradingReadiness(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Sort by proximity to eligibility (highest % first) — #63
+	// Sort by proximity to eligibility (highest % first) ΓÇö #63
 	sort.Slice(adults, func(i, j int) bool {
 		return adults[i].PercentReady > adults[j].PercentReady
 	})
@@ -3864,7 +3982,7 @@ func handleMessagesPage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleMemberInboxPage handles GET /inbox — shows emails sent to the current member.
+// handleMemberInboxPage handles GET /inbox ΓÇö shows emails sent to the current member.
 func handleMemberInboxPage(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
@@ -3934,7 +4052,7 @@ func handleMemberInboxAPI(w http.ResponseWriter, r *http.Request) {
 
 // --- Phase 3: Dashboard & Kiosk Handlers ---
 
-// handleDashboard handles GET /dashboard — renders role-appropriate dashboard.
+// handleDashboard handles GET /dashboard ΓÇö renders role-appropriate dashboard.
 func handleDashboard(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
@@ -4003,7 +4121,7 @@ func handleDashboard(w http.ResponseWriter, r *http.Request) {
 	renderTemplate(w, r, templateName, result)
 }
 
-// handleKioskPage handles GET /kiosk — renders the standalone kiosk UI.
+// handleKioskPage handles GET /kiosk ΓÇö renders the standalone kiosk UI.
 func handleKioskPage(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
@@ -4275,7 +4393,7 @@ func handleClipPromote(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(clip)
 }
 
-// handleThemesPage handles GET /themes — renders the theme carousel page.
+// handleThemesPage handles GET /themes ΓÇö renders the theme carousel page.
 func handleThemesPage(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
@@ -4299,7 +4417,7 @@ func handleThemesPage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleLibraryPage handles GET /library — renders the technical library page.
+// handleLibraryPage handles GET /library ΓÇö renders the technical library page.
 func handleLibraryPage(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
@@ -4893,7 +5011,7 @@ func handleEmailTemplateGet(w http.ResponseWriter, r *http.Request) {
 
 	t, err := stores.EmailStore.GetActiveTemplate(r.Context())
 	if err != nil {
-		// No template yet — return empty defaults
+		// No template yet ΓÇö return empty defaults
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"ID": "", "Header": "", "Footer": ""})
 		return
@@ -4940,7 +5058,7 @@ func handleEmailTemplateSave(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(t)
 }
 
-// handleEmailPreview handles POST /api/emails/preview — wraps body with active template
+// handleEmailPreview handles POST /api/emails/preview ΓÇö wraps body with active template
 func handleEmailPreview(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
@@ -4960,7 +5078,7 @@ func handleEmailPreview(w http.ResponseWriter, r *http.Request) {
 
 	t, err := stores.EmailStore.GetActiveTemplate(r.Context())
 	if err != nil {
-		// No template — return body as-is
+		// No template ΓÇö return body as-is
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"HTML": input.Body})
 		return
@@ -5167,7 +5285,7 @@ func handleRecipientsFilterByClassType(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(results)
 }
 
-// handleRecentSessions handles GET /api/schedules/recent-sessions — lists recent class sessions for the filter dropdown.
+// handleRecentSessions handles GET /api/schedules/recent-sessions ΓÇö lists recent class sessions for the filter dropdown.
 func handleRecentSessions(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
@@ -5229,7 +5347,7 @@ func handleRecentSessions(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(sessions)
 }
 
-// handleActivatePage handles GET /activate?token=... — shows the password-setting form.
+// handleActivatePage handles GET /activate?token=... ΓÇö shows the password-setting form.
 func handleActivatePage(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
@@ -5258,7 +5376,7 @@ func handleActivatePage(w http.ResponseWriter, r *http.Request) {
 	renderTemplate(w, r, "activate.html", map[string]any{"Token": token})
 }
 
-// handleActivateAccount handles POST /api/activate — sets password and activates account.
+// handleActivateAccount handles POST /api/activate ΓÇö sets password and activates account.
 func handleActivateAccount(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
@@ -5324,7 +5442,7 @@ func handleActivateAccount(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"status": "activated"})
 }
 
-// handleResendActivation handles POST /api/admin/resend-activation — admin resends activation email.
+// handleResendActivation handles POST /api/admin/resend-activation ΓÇö admin resends activation email.
 func handleResendActivation(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
@@ -5379,7 +5497,7 @@ func handleResendActivation(w http.ResponseWriter, r *http.Request) {
 
 // --- Phase 6: Curriculum Rotor Handlers ---
 
-// handleCurriculumPage handles GET /curriculum — renders the curriculum management page.
+// handleCurriculumPage handles GET /curriculum ΓÇö renders the curriculum management page.
 func handleCurriculumPage(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
@@ -6166,7 +6284,7 @@ func handleVotes(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusMethodNotAllowed)
 }
 
-// handleTopicBump handles POST /api/rotors/topics/bump — bumps a voted topic to current position
+// handleTopicBump handles POST /api/rotors/topics/bump ΓÇö bumps a voted topic to current position
 func handleTopicBump(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -6284,7 +6402,7 @@ func handleCurriculumView(w http.ResponseWriter, r *http.Request) {
 
 	rotor, err := stores.RotorStore.GetActiveRotor(ctx, classTypeID)
 	if err != nil {
-		// No active rotor — return empty state
+		// No active rotor ΓÇö return empty state
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"rotor":  nil,
@@ -6337,7 +6455,7 @@ func handleCurriculumView(w http.ResponseWriter, r *http.Request) {
 
 // --- Phase 9: Calendar Handlers ---
 
-// handleCalendarPage handles GET /calendar — renders the club calendar page.
+// handleCalendarPage handles GET /calendar ΓÇö renders the club calendar page.
 func handleCalendarPage(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
