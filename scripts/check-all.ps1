@@ -39,7 +39,14 @@ if ($unformatted) {
     Write-Host "PASS" -ForegroundColor Green
 }
 
-Invoke-Check "go test -race" "go test -race -count=1 ./..."
+Write-Host "`n=== go test ===" -ForegroundColor Cyan
+$cgoEnabled = (go env CGO_ENABLED).Trim()
+if ($cgoEnabled -eq "1") {
+    Invoke-Check "go test -race" "go test -race -count=1 ./..."
+} else {
+    Write-Host "SKIP: go test -race (CGO_ENABLED=$cgoEnabled). Running non-race tests instead." -ForegroundColor Yellow
+    Invoke-Check "go test" "go test -count=1 ./..."
+}
 Invoke-Check "lintguidelines" "go run ./tools/lintguidelines --root . --strict"
 Invoke-Check "govulncheck" "govulncheck ./..." -WarnOnly $true
 
