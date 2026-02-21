@@ -28,6 +28,7 @@ import (
 	milestoneStore "workshop/internal/adapters/storage/milestone"
 	noticeStore "workshop/internal/adapters/storage/notice"
 	observationStore "workshop/internal/adapters/storage/observation"
+	personalgoalStore "workshop/internal/adapters/storage/personalgoal"
 	programStore "workshop/internal/adapters/storage/program"
 	rotorStore "workshop/internal/adapters/storage/rotor"
 	scheduleStore "workshop/internal/adapters/storage/schedule"
@@ -67,7 +68,9 @@ type Stores struct {
 	EstimatedHoursStore      estimatedHoursStore.Store
 	RotorStore               rotorStore.Store
 	CalendarEventStore       calendarStore.Store
+	CompetitionInterestStore *calendarStore.SQLiteStore
 	BugBoxStore              bugboxStore.Store
+	PersonalGoalStore        personalgoalStore.Store
 }
 
 // loadCSRFKey reads the CSRF secret from WORKSHOP_CSRF_KEY (hex-encoded, 32 bytes).

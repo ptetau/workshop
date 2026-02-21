@@ -35,6 +35,8 @@ var migrations = []migration{
 	{version: 15, description: "feature flags and beta cohort", apply: migrate15},
 	{version: 16, description: "class type metadata", apply: migrate16},
 	{version: 17, description: "bugbox submissions", apply: migrate17},
+	{version: 18, description: "competition interest tracking", apply: migrate18},
+	{version: 19, description: "personal goals", apply: migrate19},
 }
 
 // SchemaVersion returns the current schema version of the database.
@@ -663,9 +665,55 @@ func migrate17(tx *sql.Tx) error {
 	return err
 }
 
+// --- Migration 18: Competition interest tracking ---
+// Tracks which members are interested in attending competitions.
+func migrate18(tx *sql.Tx) error {
+	_, err := tx.Exec(`
+	CREATE TABLE IF NOT EXISTS competition_interest (
+		id TEXT PRIMARY KEY,
+		event_id TEXT NOT NULL,
+		member_id TEXT NOT NULL,
+		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (event_id) REFERENCES calendar_event(id) ON DELETE CASCADE,
+		FOREIGN KEY (member_id) REFERENCES member(id) ON DELETE CASCADE,
+		UNIQUE(event_id, member_id)
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_competition_interest_event ON competition_interest(event_id);
+	CREATE INDEX IF NOT EXISTS idx_competition_interest_member ON competition_interest(member_id);
+	`)
+	return err
+}
+
 // --- Migration 8: Member grading metric ---
 // Adds grading_metric column so kids can be toggled between sessions and hours mode.
 func migrate8(tx *sql.Tx) error {
 	_, err := tx.Exec(`ALTER TABLE member ADD COLUMN grading_metric TEXT NOT NULL DEFAULT 'sessions'`)
+	return err
+}
+
+// --- Migration 19: Personal goals ---
+// Creates personal_goal table for member-defined training targets with calendar display.
+func migrate19(tx *sql.Tx) error {
+	_, err := tx.Exec(`
+	CREATE TABLE IF NOT EXISTS personal_goal (
+		id TEXT PRIMARY KEY,
+		member_id TEXT NOT NULL,
+		title TEXT NOT NULL,
+		description TEXT NOT NULL DEFAULT '',
+		target INTEGER NOT NULL,
+		unit TEXT NOT NULL DEFAULT 'sessions',
+		start_date TEXT NOT NULL,
+		end_date TEXT NOT NULL,
+		color TEXT NOT NULL DEFAULT '#F9B232',
+		progress INTEGER NOT NULL DEFAULT 0,
+		created_at TEXT NOT NULL,
+		updated_at TEXT NOT NULL,
+		FOREIGN KEY (member_id) REFERENCES member(id) ON DELETE CASCADE
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_personal_goal_member ON personal_goal(member_id);
+	CREATE INDEX IF NOT EXISTS idx_personal_goal_dates ON personal_goal(start_date, end_date);
+	`)
 	return err
 }

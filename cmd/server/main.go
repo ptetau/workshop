@@ -30,6 +30,7 @@ import (
 	milestoneStore "workshop/internal/adapters/storage/milestone"
 	noticeStore "workshop/internal/adapters/storage/notice"
 	observationStore "workshop/internal/adapters/storage/observation"
+	personalgoalStorePkg "workshop/internal/adapters/storage/personalgoal"
 	programStore "workshop/internal/adapters/storage/program"
 	rotorStorePkg "workshop/internal/adapters/storage/rotor"
 	scheduleStore "workshop/internal/adapters/storage/schedule"
@@ -106,7 +107,9 @@ func main() {
 		EstimatedHoursStore:      estimatedHoursStorePkg.NewSQLiteStore(timedDB),
 		RotorStore:               rotorStorePkg.NewSQLiteStore(timedDB),
 		CalendarEventStore:       calendarStorePkg.NewSQLiteStore(timedDB),
+		CompetitionInterestStore: calendarStorePkg.NewSQLiteStore(timedDB),
 		BugBoxStore:              bugboxStorePkg.NewSQLiteStore(timedDB),
+		PersonalGoalStore:        personalgoalStorePkg.NewSQLiteStore(timedDB),
 	}
 
 	// Seed default admin account if no accounts exist
@@ -121,6 +124,12 @@ func main() {
 	seedProgDeps := orchestrators.SeedProgramsDeps{ProgramStore: progStore, ClassTypeStore: ctStore}
 	if err := orchestrators.ExecuteSeedPrograms(context.Background(), seedProgDeps); err != nil {
 		log.Fatalf("failed to seed programs: %v", err)
+	}
+
+	// Seed NZ grappling competitions into calendar
+	seedCompDeps := orchestrators.SeedCompetitionsDeps{EventStore: stores.CalendarEventStore}
+	if err := orchestrators.ExecuteSeedCompetitions(context.Background(), seedCompDeps); err != nil {
+		log.Fatalf("failed to seed competitions: %v", err)
 	}
 
 	// Seed test accounts for each role (all environments, idempotent)

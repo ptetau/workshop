@@ -49,6 +49,18 @@ func (m *mockMemberStore) GetByEmail(ctx context.Context, email string) (memberD
 	return memberDomain.Member{}, sql.ErrNoRows
 }
 
+// GetByAccountID implements the member store interface for testing.
+// PRE: accountID is non-empty
+// POST: Returns the entity or an error if not found
+func (m *mockMemberStore) GetByAccountID(ctx context.Context, accountID string) (memberDomain.Member, error) {
+	for _, mem := range m.members {
+		if mem.AccountID == accountID {
+			return mem, nil
+		}
+	}
+	return memberDomain.Member{}, sql.ErrNoRows
+}
+
 // Save implements the member store interface for testing.
 // PRE: entity has been validated
 // POST: Entity is persisted

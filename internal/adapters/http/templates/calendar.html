@@ -7,9 +7,43 @@
         <h2 id="monthTitle" style="margin:0;min-width:180px;text-align:center;"></h2>
         <button onclick="nextMonth()" style="padding:0.3rem 0.6rem;font-size:1rem;">→</button>
         <button onclick="goToday()" style="padding:0.25rem 0.6rem;font-size:0.85rem;margin-left:0.5rem;">Today</button>
+        <button onclick="toggleRotors()" id="rotorToggleBtn" style="padding:0.25rem 0.6rem;font-size:0.85rem;">Show Rotors</button>
+        <button onclick="toggleGoals()" id="goalsToggleBtn" style="padding:0.25rem 0.6rem;font-size:0.85rem;">Goals</button>
         {{ if eq (currentRole) "admin" }}
         <button onclick="showAddEvent()" style="padding:0.25rem 0.6rem;font-size:0.85rem;margin-left:auto;">+ Event</button>
         {{ end }}
+    </div>
+
+    <div id="goalsPanel" style="display:none;background:#f8f9fa;padding:1rem;border-radius:4px;margin-bottom:1rem;border:1px solid #dee2e6;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
+            <h4 style="margin:0;">Personal Goals</h4>
+            <button onclick="showAddGoal()" style="padding:0.25rem 0.6rem;font-size:0.8rem;background:#28a745;color:#fff;border:none;border-radius:3px;cursor:pointer;">+ Add Goal</button>
+        </div>
+        <div id="addGoalForm" style="display:none;background:#fff;padding:0.75rem;border-radius:3px;border:1px solid #dee2e6;margin-bottom:0.75rem;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;">
+                <div style="grid-column:1/-1;">
+                    <input type="text" id="goalTitle" placeholder="Goal title (e.g., 50 rear naked strangles)" style="width:100%;padding:0.3rem;border:1px solid #ccc;border-radius:3px;font-size:0.85rem;">
+                </div>
+                <div>
+                    <input type="number" id="goalTarget" placeholder="Target (e.g., 50)" style="width:100%;padding:0.3rem;border:1px solid #ccc;border-radius:3px;font-size:0.85rem;">
+                </div>
+                <div>
+                    <input type="text" id="goalUnit" placeholder="Unit (e.g., submissions)" style="width:100%;padding:0.3rem;border:1px solid #ccc;border-radius:3px;font-size:0.85rem;">
+                </div>
+                <div>
+                    <input type="date" id="goalStart" style="width:100%;padding:0.3rem;border:1px solid #ccc;border-radius:3px;font-size:0.85rem;">
+                </div>
+                <div>
+                    <input type="date" id="goalEnd" style="width:100%;padding:0.3rem;border:1px solid #ccc;border-radius:3px;font-size:0.85rem;">
+                </div>
+                <div style="grid-column:1/-1;display:flex;gap:0.5rem;align-items:center;">
+                    <button onclick="saveGoal()" style="padding:0.2rem 0.6rem;font-size:0.8rem;">Save</button>
+                    <button onclick="hideAddGoal()" style="padding:0.2rem 0.6rem;font-size:0.8rem;background:#6c757d;">Cancel</button>
+                    <span id="goalErr" style="color:#dc3545;font-size:0.8rem;"></span>
+                </div>
+            </div>
+        </div>
+        <div id="goalsContent">Loading...</div>
     </div>
 
     <div id="addEventForm" style="display:none;background:#f8f9fa;padding:1rem;border-radius:4px;margin-bottom:1rem;border:1px solid #dee2e6;">
@@ -87,7 +121,13 @@ function init() {
     document.getElementById('eventType').addEventListener('change', function() {
         document.getElementById('regUrlRow').style.display = this.value === 'competition' ? 'block' : 'none';
     });
+    // Set default dates for goal form
+    var firstDay = new Date(currentYear, currentMonth, 1);
+    var lastDay = new Date(currentYear, currentMonth + 1, 0);
+    document.getElementById('goalStart').value = formatDate(firstDay);
+    document.getElementById('goalEnd').value = formatDate(lastDay);
     renderMonth();
+    loadGoals();
 }
 
 function prevMonth() {
@@ -167,6 +207,27 @@ function drawGrid(startDate, daysInMonth, startDow) {
                 html += '</div>';
             });
 
+            // Add rotor topics overlay
+            var rotorTopics = getRotorTopicsForDate(dateStr);
+            rotorTopics.forEach(function(topic) {
+                html += '<div style="font-size:0.65rem;padding:0.1rem 0.2rem;margin-top:0.1rem;background:' + topic.color + ';color:#fff;border-radius:2px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;cursor:pointer;opacity:0.9;" title="' + escHtml(topic.classType + ' - ' + topic.themeName) + '">';
+                html += escHtml(topic.name);
+                html += '</div>';
+            });
+
+            // Add personal goals overlay
+            var dayGoals = getGoalsForDate(dateStr);
+            dayGoals.forEach(function(goal) {
+                var pct = Math.round((goal.progress / goal.target) * 100);
+                if (pct > 100) pct = 100;
+                html += '<div style="font-size:0.6rem;padding:0.1rem 0.2rem;margin-top:0.1rem;background:' + (goal.color || '#F9B232') + ';color:#fff;border-radius:2px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;cursor:pointer;" title="' + escHtml(goal.title + ' (' + goal.progress + '/' + goal.target + ')') + '">';
+                html += '<div style="display:flex;align-items:center;gap:0.2rem;">';
+                html += '<span>' + escHtml(goal.title.substring(0, 15)) + '</span>';
+                html += '<span style="opacity:0.8;">(' + goal.progress + '/' + goal.target + ')</span>';
+                html += '</div>';
+                html += '</div>';
+            });
+
             html += '</td>';
             d.setDate(d.getDate() + 1);
         }
@@ -210,10 +271,26 @@ function drawEventList() {
         html += '</div>';
         if (ev.Location) html += '<div style="font-size:0.85rem;color:#6c757d;margin-top:0.25rem;">📍 ' + escHtml(ev.Location) + '</div>';
         if (ev.Description) html += '<div style="font-size:0.85rem;margin-top:0.25rem;">' + escHtml(ev.Description) + '</div>';
-        if (ev.RegistrationURL) html += '<div style="margin-top:0.25rem;"><a href="' + escHtml(ev.RegistrationURL) + '" target="_blank" style="color:#F9B232;font-size:0.85rem;">Register →</a></div>';
+        if (ev.Type === 'competition') {
+            html += '<div style="margin-top:0.5rem;display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">';
+            html += '<button onclick="toggleInterest(\'' + ev.ID + '\')" id="interest-btn-' + ev.ID + '" style="padding:0.2rem 0.6rem;font-size:0.8rem;background:#28a745;color:#fff;border:none;border-radius:3px;cursor:pointer;">Interested</button>';
+            html += '<span id="interest-count-' + ev.ID + '" style="font-size:0.8rem;color:#6c757d;"></span>';
+            if (ev.RegistrationURL) {
+                html += '<a href="' + escHtml(ev.RegistrationURL) + '" target="_blank" style="padding:0.2rem 0.6rem;font-size:0.8rem;background:#F9B232;color:#fff;border-radius:3px;text-decoration:none;">Register →</a>';
+            }
+            html += '</div>';
+        } else if (ev.RegistrationURL) {
+            html += '<div style="margin-top:0.25rem;"><a href="' + escHtml(ev.RegistrationURL) + '" target="_blank" style="color:#F9B232;font-size:0.85rem;">Register →</a></div>';
+        }
         html += '</div>';
     });
     el.innerHTML = html;
+    // Load interest counts for competitions
+    upcoming.forEach(function(ev) {
+        if (ev.Type === 'competition') {
+            loadInterestCount(ev.ID);
+        }
+    });
 }
 
 function showAddEvent() {
@@ -264,6 +341,53 @@ function deleteEvent(id) {
         .then(function() { renderMonth(); });
 }
 
+function toggleInterest(eventID) {
+    var btn = document.getElementById('interest-btn-' + eventID);
+    if (!btn) return;
+
+    var isInterested = btn.textContent === 'Not Going';
+    if (isInterested) {
+        // Unregister interest
+        fetch('/api/calendar/interest?event_id=' + eventID, {
+            method: 'DELETE',
+            headers: {'Content-Type': 'application/json'}
+        }).then(function(r) {
+            if (r.ok) {
+                btn.textContent = 'Interested';
+                btn.style.background = '#28a745';
+                loadInterestCount(eventID);
+            }
+        });
+    } else {
+        // Register interest
+        fetch('/api/calendar/interest', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({event_id: eventID})
+        }).then(function(r) {
+            if (r.ok) {
+                btn.textContent = 'Not Going';
+                btn.style.background = '#6c757d';
+                loadInterestCount(eventID);
+            }
+        });
+    }
+}
+
+function loadInterestCount(eventID) {
+    var span = document.getElementById('interest-count-' + eventID);
+    if (!span) return;
+    fetch('/api/calendar/interest?event_id=' + eventID)
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            var count = data ? data.length : 0;
+            span.textContent = count + ' going';
+        })
+        .catch(function() {
+            span.textContent = '';
+        });
+}
+
 function formatDate(d) {
     var y = d.getFullYear();
     var m = ('0' + (d.getMonth() + 1)).slice(-2);
@@ -274,6 +398,272 @@ function formatDate(d) {
 function escHtml(s) {
     if (!s) return '';
     return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+var rotorsVisible = false;
+var rotorData = [];
+var selectedRotors = new Set();
+var rotorColors = ['#F9B232', '#28a745', '#dc3545', '#6f42c1', '#17a2b8'];
+
+function toggleRotors() {
+    rotorsVisible = !rotorsVisible;
+    var panel = document.getElementById('rotorPanel');
+    var btn = document.getElementById('rotorToggleBtn');
+    panel.style.display = rotorsVisible ? 'block' : 'none';
+    btn.textContent = rotorsVisible ? 'Hide Rotors' : 'Show Rotors';
+    if (rotorsVisible && rotorData.length === 0) {
+        loadRotors();
+    }
+}
+
+function loadRotors() {
+    var content = document.getElementById('rotorContent');
+    content.textContent = 'Loading...';
+    fetch('/api/calendar/rotors')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            rotorData = data || [];
+            // Select all by default
+            rotorData.forEach(function(r, i) {
+                selectedRotors.add(r.rotor_id);
+            });
+            renderRotors();
+            renderMonth(); // Re-render calendar with rotor overlay
+        })
+        .catch(function() {
+            content.textContent = 'Failed to load rotors.';
+        });
+}
+
+function toggleRotorSelection(rotorId) {
+    if (selectedRotors.has(rotorId)) {
+        selectedRotors.delete(rotorId);
+    } else {
+        selectedRotors.add(rotorId);
+    }
+    renderRotors();
+    renderMonth(); // Re-render calendar with updated overlay
+}
+
+function renderRotors() {
+    var content = document.getElementById('rotorContent');
+    if (rotorData.length === 0) {
+        content.innerHTML = '<p style="color:#6c757d;margin:0;">No active rotors.</p>';
+        return;
+    }
+    var html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">';
+    html += '<span style="font-size:0.85rem;color:#6c757d;">Select rotors to overlay:</span>';
+    html += '<div style="display:flex;gap:0.5rem;">';
+    html += '<button onclick="selectAllRotors()" style="padding:0.2rem 0.5rem;font-size:0.75rem;background:#6c757d;color:#fff;border:none;border-radius:3px;cursor:pointer;">All</button>';
+    html += '<button onclick="clearAllRotors()" style="padding:0.2rem 0.5rem;font-size:0.75rem;background:#e9ecef;color:#495057;border:none;border-radius:3px;cursor:pointer;">None</button>';
+    html += '</div></div>';
+    rotorData.forEach(function(rotor, index) {
+        var color = rotorColors[index % rotorColors.length];
+        var isSelected = selectedRotors.has(rotor.rotor_id);
+        html += '<div style="margin-bottom:0.5rem;padding:0.5rem;background:#fff;border-radius:3px;border:1px solid ' + (isSelected ? color : '#e9ecef') + ';border-left:4px solid ' + color + ';">';
+        html += '<label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;">';
+        html += '<input type="checkbox" ' + (isSelected ? 'checked' : '') + ' onchange="toggleRotorSelection(\'' + rotor.rotor_id + '\')">';
+        html += '<span style="font-weight:600;">' + escHtml(rotor.class_type_name) + '</span>';
+        html += '</label>';
+        if (isSelected) {
+            rotor.themes.forEach(function(theme) {
+                html += '<div style="margin-top:0.4rem;padding-left:1rem;font-size:0.8rem;">';
+                html += '<span style="color:#6c757d;">' + escHtml(theme.theme_name) + ':</span> ';
+                html += escHtml(theme.current.topic_name);
+                if (theme.next) {
+                    html += ' → ' + escHtml(theme.next.topic_name);
+                }
+                html += '</div>';
+            });
+        }
+        html += '</div>';
+    });
+    content.innerHTML = html;
+}
+
+function selectAllRotors() {
+    rotorData.forEach(function(r) {
+        selectedRotors.add(r.rotor_id);
+    });
+    renderRotors();
+    renderMonth();
+}
+
+function clearAllRotors() {
+    selectedRotors.clear();
+    renderRotors();
+    renderMonth();
+}
+
+// Get rotor topic for a specific date
+function getRotorTopicsForDate(dateStr) {
+    var topics = [];
+    rotorData.forEach(function(rotor, rotorIndex) {
+        if (!selectedRotors.has(rotor.rotor_id)) return;
+        var color = rotorColors[rotorIndex % rotorColors.length];
+        rotor.themes.forEach(function(theme) {
+            // Check current topic
+            if (dateStr >= theme.current.start_date && dateStr <= theme.current.end_date) {
+                topics.push({
+                    name: theme.current.topic_name,
+                    themeName: theme.theme_name,
+                    color: color,
+                    classType: rotor.class_type_name
+                });
+            }
+            // Check next topic
+            if (theme.next && dateStr >= theme.next.start_date && dateStr <= theme.next.end_date) {
+                topics.push({
+                    name: theme.next.topic_name,
+                    themeName: theme.theme_name,
+                    color: color,
+                    classType: rotor.class_type_name
+                });
+            }
+        });
+    });
+    return topics;
+}
+
+// --- Personal Goals ---
+var goalsVisible = false;
+var goalsData = [];
+
+function toggleGoals() {
+    goalsVisible = !goalsVisible;
+    var panel = document.getElementById('goalsPanel');
+    var btn = document.getElementById('goalsToggleBtn');
+    panel.style.display = goalsVisible ? 'block' : 'none';
+    btn.textContent = goalsVisible ? 'Hide Goals' : 'Goals';
+    if (goalsVisible) {
+        loadGoals();
+    }
+}
+
+function showAddGoal() {
+    document.getElementById('addGoalForm').style.display = 'block';
+    document.getElementById('goalTitle').value = '';
+    document.getElementById('goalTarget').value = '';
+    document.getElementById('goalUnit').value = '';
+    var firstDay = new Date(currentYear, currentMonth, 1);
+    var lastDay = new Date(currentYear, currentMonth + 1, 0);
+    document.getElementById('goalStart').value = formatDate(firstDay);
+    document.getElementById('goalEnd').value = formatDate(lastDay);
+    document.getElementById('goalErr').textContent = '';
+    document.getElementById('goalTitle').focus();
+}
+
+function hideAddGoal() {
+    document.getElementById('addGoalForm').style.display = 'none';
+}
+
+function saveGoal() {
+    var title = document.getElementById('goalTitle').value.trim();
+    var target = parseInt(document.getElementById('goalTarget').value, 10);
+    var unit = document.getElementById('goalUnit').value.trim();
+    var startDate = document.getElementById('goalStart').value;
+    var endDate = document.getElementById('goalEnd').value;
+
+    if (!title) { document.getElementById('goalErr').textContent = 'Title required'; return; }
+    if (!target || target <= 0) { document.getElementById('goalErr').textContent = 'Valid target required'; return; }
+    if (!unit) { document.getElementById('goalErr').textContent = 'Unit required'; return; }
+    if (!startDate || !endDate) { document.getElementById('goalErr').textContent = 'Start and end dates required'; return; }
+
+    document.getElementById('goalErr').textContent = '';
+
+    var body = {
+        title: title,
+        target: target,
+        unit: unit,
+        start_date: startDate,
+        end_date: endDate,
+        progress: 0
+    };
+
+    fetch('/api/personal-goals', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body)
+    })
+    .then(function(r) { if (!r.ok) return r.text().then(function(t) { throw new Error(t); }); return r.json(); })
+    .then(function() {
+        hideAddGoal();
+        loadGoals();
+        renderMonth();
+    })
+    .catch(function(e) { document.getElementById('goalErr').textContent = e.message; });
+}
+
+function loadGoals() {
+    var content = document.getElementById('goalsContent');
+    content.textContent = 'Loading...';
+    fetch('/api/personal-goals')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            goalsData = data || [];
+            renderGoals();
+            renderMonth();
+        })
+        .catch(function() {
+            content.textContent = 'Failed to load goals.';
+        });
+}
+
+function renderGoals() {
+    var content = document.getElementById('goalsContent');
+    if (goalsData.length === 0) {
+        content.innerHTML = '<p style="color:#6c757d;margin:0;">No personal goals yet. Add one to track your progress!</p>';
+        return;
+    }
+    var html = '';
+    goalsData.forEach(function(goal) {
+        var pct = Math.round((goal.progress / goal.target) * 100);
+        if (pct > 100) pct = 100;
+        html += '<div style="margin-bottom:0.75rem;padding:0.5rem;background:#fff;border-radius:3px;border:1px solid #e9ecef;">';
+        html += '<div style="display:flex;justify-content:space-between;align-items:center;">';
+        html += '<strong style="font-size:0.9rem;">' + escHtml(goal.title) + '</strong>';
+        html += '<span style="font-size:0.8rem;color:#6c757d;">' + goal.progress + '/' + goal.target + ' ' + escHtml(goal.unit) + '</span>';
+        html += '</div>';
+        html += '<div style="margin-top:0.5rem;height:8px;background:#e9ecef;border-radius:4px;overflow:hidden;">';
+        html += '<div style="height:100%;width:' + pct + '%;background:' + (goal.color || '#F9B232') + ';transition:width 0.3s;"></div>';
+        html += '</div>';
+        html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:0.5rem;">';
+        html += '<span style="font-size:0.75rem;color:#6c757d;">' + goal.start_date + ' → ' + goal.end_date + '</span>';
+        html += '<div style="display:flex;gap:0.3rem;">';
+        html += '<button onclick="updateGoalProgress(\'' + goal.id + '\', ' + (goal.progress - 1) + ')" style="padding:0.1rem 0.4rem;font-size:0.75rem;background:#e9ecef;border:none;border-radius:3px;cursor:pointer;">-</button>';
+        html += '<button onclick="updateGoalProgress(\'' + goal.id + '\', ' + (goal.progress + 1) + ')" style="padding:0.1rem 0.4rem;font-size:0.75rem;background:#28a745;color:#fff;border:none;border-radius:3px;cursor:pointer;">+</button>';
+        html += '<button onclick="deleteGoal(\'' + goal.id + '\')" style="padding:0.1rem 0.4rem;font-size:0.75rem;background:#dc3545;color:#fff;border:none;border-radius:3px;cursor:pointer;">×</button>';
+        html += '</div>';
+        html += '</div>';
+        html += '</div>';
+    });
+    content.innerHTML = html;
+}
+
+function updateGoalProgress(goalId, newProgress) {
+    if (newProgress < 0) newProgress = 0;
+    fetch('/api/personal-goals/progress', {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({id: goalId, progress: newProgress})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function() {
+        loadGoals();
+    });
+}
+
+function deleteGoal(goalId) {
+    if (!confirm('Delete this goal?')) return;
+    fetch('/api/personal-goals?id=' + goalId, {method: 'DELETE'})
+        .then(function() { loadGoals(); renderMonth(); });
+}
+
+// Get active goals for a specific date
+function getGoalsForDate(dateStr) {
+    return goalsData.filter(function(goal) {
+        return dateStr >= goal.start_date && dateStr <= goal.end_date;
+    });
 }
 
 init();

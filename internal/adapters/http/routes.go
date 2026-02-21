@@ -137,6 +137,12 @@ func registerRoutes(mux *http.ServeMux) {
 	// Calendar routes
 	mux.HandleFunc("/calendar", handleCalendarPage)
 	mux.HandleFunc("/api/calendar/events", handleCalendarEvents)
+	mux.HandleFunc("/api/calendar/interest", handleCompetitionInterest)
+	mux.HandleFunc("/api/calendar/rotors", handleCalendarRotors)
+
+	// Personal goals routes
+	mux.HandleFunc("/api/personal-goals", handlePersonalGoals)
+	mux.HandleFunc("/api/personal-goals/progress", handlePersonalGoalProgress)
 
 	// Bug Box routes (Admin + Coach)
 	mux.HandleFunc("/api/admin/bugbox", handleBugBoxSubmit)
