@@ -251,6 +251,51 @@ As an Admin, I want a `/admin/perf` dashboard so that I can see recent slow requ
 - *When* the page loads
 - *Then* I see P50/P95/P99 latency, top 10 slowest endpoints, and top 10 slowest queries from an in-memory ring buffer (ephemeral, lost on restart)
 
+### 1.9 Resilient External Integrations (Outbox Pattern)
+
+Any feature that integrates with an external system (GitHub Issues, email, webhooks) must use the **outbox pattern** to ensure reliability. The originating action is always persisted locally first; the external call is a best-effort side effect that can be retried independently.
+
+#### Rules
+
+- Every external integration action is written to an `outbox` table before the external call is attempted
+- If the external call fails, the outbox entry remains and is retried by a background worker with exponential backoff
+- Retry attempts must be **idempotent** — the external system must not receive duplicate records
+- After max retries, the entry is marked permanently failed and surfaced to admins
+- Admins can manually trigger a retry from the UI
+- Outbox entries are never silently deleted; they are only removed after explicit success or admin abandonment
+
+#### Outbox Table
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | TEXT | UUID |
+| `action_type` | TEXT | e.g. `github_issue`, `email` |
+| `payload` | TEXT | JSON — all data needed to replay the action |
+| `status` | TEXT | `pending` / `retrying` / `done` / `failed` |
+| `attempts` | INTEGER | Number of attempts made |
+| `last_attempted_at` | DATETIME | Timestamp of last attempt |
+| `created_at` | DATETIME | When the entry was created |
+
+#### Integrations Using This Pattern
+
+| Integration | Action Type | Trigger |
+|-------------|-------------|---------|
+| Bug Box → GitHub Issues | `github_issue` | Bug Box submission |
+| Email sending | `email` | Any email notification |
+
+#### User Stories
+
+**US-17.1.1: Retry failed external integration actions**
+As an Admin, I want failed external integration actions to be automatically retried so that transient failures do not silently lose data.
+
+- *Given* an external action fails (e.g. GitHub API timeout, email send error)
+- *When* the failure is recorded in the outbox
+- *Then* the system retries up to N times with exponential backoff
+- *And* after max retries the action is marked permanently failed and the admin is notified
+- *Given* a permanently failed outbox entry
+- *When* an admin views the failed integrations list
+- *Then* they can manually trigger a retry
+
 ---
 
 ## 2. Kiosk & Check-In
