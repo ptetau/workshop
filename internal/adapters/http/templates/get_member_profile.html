@@ -6,7 +6,19 @@
         <div style="background: #f8f9fa; padding: 1.25rem; border-radius:2px;">
             <div style="color: #666; font-size: 0.85rem; margin-bottom: 0.25rem;">Name</div>
             <div style="font-size: 1.2rem; font-weight: 600;">{{ .Name }}</div>
+            <div style="margin-top:0.35rem;">
+                <span class="belt-inline" aria-label="Belt">
+                    <span class="belt-icon {{ if .Belt }}belt-{{ .Belt }}{{ else }}belt-none{{ end }}"></span>
+                    {{ if .Belt }}
+                        <span style="font-size:0.85rem;text-transform:capitalize;color:#666;">{{ .Belt }}</span>
+                        {{ if gt .Stripe 0 }}{{ range $i := .Stripe | stripeRange }}<span class="stripe-dot"></span>{{ end }}{{ end }}
+                    {{ else }}
+                        <span style="font-size:0.85rem;color:#999;">—</span>
+                    {{ end }}
+                </span>
+            </div>
         </div>
+
         <div style="background: #f8f9fa; padding: 1.25rem; border-radius:2px;">
             <div style="color: #666; font-size: 0.85rem; margin-bottom: 0.25rem;">Email</div>
             <div style="font-size: 1.2rem;">{{ .Email }}</div>

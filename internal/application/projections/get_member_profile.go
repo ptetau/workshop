@@ -7,6 +7,7 @@ import (
 	"workshop/internal/adapters/storage/attendance"
 	"workshop/internal/adapters/storage/injury"
 	"workshop/internal/adapters/storage/waiver"
+	domainGrading "workshop/internal/domain/grading"
 	domainWaiver "workshop/internal/domain/waiver"
 )
 
@@ -22,6 +23,8 @@ type GetMemberProfileResult struct {
 	Email            string
 	Status           string
 	Program          string
+	Belt             string
+	Stripe           int
 	HasValidWaiver   bool
 	WaiverSignedAt   time.Time
 	ActiveInjuries   []string // Body parts
@@ -30,10 +33,24 @@ type GetMemberProfileResult struct {
 
 // GetMemberProfileDeps holds dependencies for GetMemberProfile.
 type GetMemberProfileDeps struct {
-	MemberStore     MemberStore
-	WaiverStore     WaiverStore
-	InjuryStore     InjuryStore
-	AttendanceStore AttendanceStore
+	MemberStore        MemberStore
+	WaiverStore        WaiverStore
+	InjuryStore        InjuryStore
+	AttendanceStore    AttendanceStore
+	GradingRecordStore GradingRecordStore // optional: nil skips belt lookup
+}
+
+func latestMemberBeltAndStripe(records []domainGrading.Record) (belt string, stripe int) {
+	if len(records) == 0 {
+		return "", 0
+	}
+	latest := records[0]
+	for _, r := range records[1:] {
+		if r.PromotedAt.After(latest.PromotedAt) {
+			latest = r
+		}
+	}
+	return latest.Belt, latest.Stripe
 }
 
 // QueryGetMemberProfile retrieves complete member profile.
@@ -52,6 +69,13 @@ func QueryGetMemberProfile(ctx context.Context, query GetMemberProfileQuery, dep
 		Email:    m.Email,
 		Status:   m.Status,
 		Program:  m.Program,
+	}
+
+	// Latest belt (optional)
+	if deps.GradingRecordStore != nil {
+		if records, err := deps.GradingRecordStore.ListByMemberID(ctx, query.MemberID); err == nil {
+			result.Belt, result.Stripe = latestMemberBeltAndStripe(records)
+		}
 	}
 
 	// Get latest waiver

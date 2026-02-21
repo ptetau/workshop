@@ -7,6 +7,7 @@ import (
 	"workshop/internal/adapters/storage/injury"
 	"workshop/internal/adapters/storage/member"
 	"workshop/internal/application/listutil"
+	domainGrading "workshop/internal/domain/grading"
 	domainInjury "workshop/internal/domain/injury"
 )
 
@@ -28,6 +29,8 @@ type MemberWithInjury struct {
 	Email          string
 	Program        string
 	Status         string
+	Belt           string
+	Stripe         int
 	HasInjury      bool
 	InjuryBodyPart string
 }
@@ -40,8 +43,22 @@ type GetMemberListResult struct {
 
 // GetMemberListDeps holds dependencies for GetMemberList.
 type GetMemberListDeps struct {
-	MemberStore MemberStore
-	InjuryStore InjuryStore
+	MemberStore        MemberStore
+	InjuryStore        InjuryStore
+	GradingRecordStore GradingRecordStore // optional: nil skips belt lookup
+}
+
+func latestBeltAndStripe(records []domainGrading.Record) (belt string, stripe int) {
+	if len(records) == 0 {
+		return "", 0
+	}
+	latest := records[0]
+	for _, r := range records[1:] {
+		if r.PromotedAt.After(latest.PromotedAt) {
+			latest = r
+		}
+	}
+	return latest.Belt, latest.Stripe
 }
 
 // QueryGetMemberList retrieves members with injury flags.
@@ -109,6 +126,13 @@ func QueryGetMemberList(ctx context.Context, query GetMemberListQuery, deps GetM
 			Email:   m.Email,
 			Program: m.Program,
 			Status:  m.Status,
+		}
+
+		// Look up latest belt (optional)
+		if deps.GradingRecordStore != nil {
+			if records, err := deps.GradingRecordStore.ListByMemberID(ctx, m.ID); err == nil {
+				mwi.Belt, mwi.Stripe = latestBeltAndStripe(records)
+			}
 		}
 
 		// Check for active injury

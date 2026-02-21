@@ -509,8 +509,9 @@ func handleMembers(w http.ResponseWriter, r *http.Request) {
 			PerPage: lp.PerPage,
 		}
 		deps := projections.GetMemberListDeps{
-			MemberStore: stores.MemberStore,
-			InjuryStore: stores.InjuryStore,
+			MemberStore:        stores.MemberStore,
+			InjuryStore:        stores.InjuryStore,
+			GradingRecordStore: stores.GradingRecordStore,
 		}
 
 		result, err := projections.QueryGetMemberList(ctx, query, deps)
@@ -1321,10 +1322,11 @@ func handleGetMemberProfile(w http.ResponseWriter, r *http.Request) {
 
 	query := projections.GetMemberProfileQuery{MemberID: memberID}
 	deps := projections.GetMemberProfileDeps{
-		MemberStore:     stores.MemberStore,
-		WaiverStore:     stores.WaiverStore,
-		InjuryStore:     stores.InjuryStore,
-		AttendanceStore: stores.AttendanceStore,
+		MemberStore:        stores.MemberStore,
+		WaiverStore:        stores.WaiverStore,
+		InjuryStore:        stores.InjuryStore,
+		AttendanceStore:    stores.AttendanceStore,
+		GradingRecordStore: stores.GradingRecordStore,
 	}
 
 	result, err := projections.QueryGetMemberProfile(r.Context(), query, deps)
