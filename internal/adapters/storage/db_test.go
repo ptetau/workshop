@@ -73,6 +73,7 @@ var expectedTables = []string{
 	"account",
 	"activation_token",
 	"attendance",
+	"bugbox_submission",
 	"calendar_event",
 	"class_type",
 	"coach_observation",

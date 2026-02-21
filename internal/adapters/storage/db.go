@@ -34,6 +34,7 @@ var migrations = []migration{
 	{version: 14, description: "calendar event indexes", apply: migrate14},
 	{version: 15, description: "feature flags and beta cohort", apply: migrate15},
 	{version: 16, description: "class type metadata", apply: migrate16},
+	{version: 17, description: "bugbox submissions", apply: migrate17},
 }
 
 // SchemaVersion returns the current schema version of the database.
@@ -636,6 +637,29 @@ func migrate14(tx *sql.Tx) error {
 	CREATE INDEX IF NOT EXISTS idx_calendar_event_date_range
 	ON calendar_event(start_date, end_date);
 	`)
+	return err
+}
+
+// --- Migration 17: BugBox submissions ---
+// Creates bugbox_submission table for in-app bug reports (§15.3).
+func migrate17(tx *sql.Tx) error {
+	_, err := tx.Exec(`CREATE TABLE IF NOT EXISTS bugbox_submission (
+		id TEXT PRIMARY KEY,
+		summary TEXT NOT NULL,
+		description TEXT NOT NULL,
+		steps TEXT NOT NULL DEFAULT '',
+		expected TEXT NOT NULL DEFAULT '',
+		actual TEXT NOT NULL DEFAULT '',
+		route TEXT NOT NULL DEFAULT '',
+		user_agent TEXT NOT NULL DEFAULT '',
+		viewport TEXT NOT NULL DEFAULT '',
+		role TEXT NOT NULL DEFAULT '',
+		impersonated_role TEXT NOT NULL DEFAULT '',
+		submitted_at TEXT NOT NULL,
+		screenshot_path TEXT NOT NULL DEFAULT '',
+		github_issue_number INTEGER NOT NULL DEFAULT 0,
+		github_issue_url TEXT NOT NULL DEFAULT ''
+	)`)
 	return err
 }
 

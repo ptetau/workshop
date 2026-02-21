@@ -241,38 +241,57 @@ Routes enforce the read/write split.
 
 ---
 
-## Feature Integration Checklist (Harmony)
+## Feature Flags (Required for Every New Feature)
 
-When introducing a **new product area** (or gating an existing one), make the integration consistent across the app shell.
+Every new user-visible feature **must** be gated by a feature flag. This is a hard rule enforced by `lintguidelines`.
 
-**1) Choose / define the feature flag key**
-- Add/confirm the key in `internal/domain/featureflag/defaults.go`.
-- Pick defaults that match current roles (admin/coach/member/trial) and whether a beta override makes sense.
+### Rule
 
-**2) Enforce on server routes**
-- Pages: use `requireFeaturePage(...)` and redirect to `/dashboard` when disabled.
-- APIs: use `requireFeatureAPI(...)` and return `403 Forbidden` when disabled.
-- Apply to *all* entrypoints: list/detail/create/update/delete routes, not just the main page.
+Any `handlers_*.go` file that defines handler functions must call `requireFeatureAPI` or `requireFeaturePage` at least once. The linter will fail the pre-commit hook if this is missing.
 
-**3) Nav / templates**
-- Wrap nav links in `{{ if featureEnabled "<key>" }}` so users don’t see links they can’t access.
-- If a page has cross-links/buttons into the feature area, gate those too.
+### Integration Checklist
+
+**1) Define the flag**
+- Add the key to `internal/domain/featureflag/defaults.go`.
+- Set defaults per role (admin/coach/member/trial) that reflect who should see the feature.
+- Put handler code in a dedicated `handlers_<feature>.go` file.
+
+**2) Gate server routes**
+- Pages: `requireFeaturePage(w, r, sess, "<key>")` — redirects to `/dashboard` when disabled.
+- APIs: `requireFeatureAPI(w, r, sess, "<key>")` — returns `403 Forbidden` when disabled.
+- Apply to **all** entrypoints: list/detail/create/update/delete, not just the main page.
+
+**3) Gate nav / templates**
+- Wrap nav links in `{{ if featureEnabled "<key>" }}`.
+- Gate floating UI elements and cross-links the same way.
 
 **4) Tests**
-- Add at least one unit test proving the feature gate blocks access (page redirect or API 403).
-- Add at least one happy-path test proving access is allowed when enabled.
+- Unit test: feature gate blocks access (redirect or 403).
+- Unit test: access allowed when enabled.
+- Browser test: UI element visible/hidden per role.
 
 **5) Storage / migrations**
-- If the feature requires new persistence, add a migration and update `storage/db_test.go` expectations.
-- Consider backfills for existing rows (idempotent migrations).
+- Add a migration and update `storage/db_test.go` if the feature needs new tables.
 
-**6) Operational / rollout**
-- Verify the admin UI for feature flags can toggle the key and that toggles take effect immediately.
-- If production scripts/calls exist, ensure they use the same endpoints and are still permitted.
+**6) Operational**
+- Verify `/admin/features` can toggle the key and changes take effect immediately.
+
+```go
+// handlers_widget.go — correct pattern
+func handleWidgets(w http.ResponseWriter, r *http.Request) {
+    sess, ok := middleware.GetSessionFromContext(r.Context())
+    if !ok { http.Error(w, "not authenticated", http.StatusUnauthorized); return }
+    if !requireFeatureAPI(w, r, sess, "widget") { return }
+    // ... handler logic
+}
+```
 
 | Don't | Do |
 |-------|------|
-| Mutate state in GET handlers | Reads only; mutations via POST/PUT/DELETE |
+| Put handlers in `handlers.go` | Use a dedicated `handlers_<feature>.go` file |
+| Skip the feature gate | Always call `requireFeatureAPI` or `requireFeaturePage` |
+| Hard-code role checks only | Use feature flags so ops can toggle without a deploy |
+| Forget the nav link gate | Wrap nav links in `{{ if featureEnabled "<key>" }}` |
 
 ---
 
@@ -368,6 +387,8 @@ func TestCancelOrder_ReleasesInventory(t *testing.T) {
 | `route-query` | GET → projections only |
 | `route-command` | POST/PUT/DELETE → orchestrators only |
 | `storage-isolation` | One storage per concept |
+| `feature-flag` | Every `handlers_*.go` file must call `requireFeatureAPI` or `requireFeaturePage` |
+| `web-security` | `NewMux` must apply CSRF and security headers |
 
 ### Scaffold Flags
 

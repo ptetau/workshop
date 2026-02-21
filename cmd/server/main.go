@@ -15,6 +15,7 @@ import (
 	"workshop/internal/adapters/storage"
 	accountStore "workshop/internal/adapters/storage/account"
 	attendanceStore "workshop/internal/adapters/storage/attendance"
+	bugboxStorePkg "workshop/internal/adapters/storage/bugbox"
 	calendarStorePkg "workshop/internal/adapters/storage/calendar"
 	classTypeStore "workshop/internal/adapters/storage/classtype"
 	clipStorePkg "workshop/internal/adapters/storage/clip"
@@ -105,6 +106,7 @@ func main() {
 		EstimatedHoursStore:      estimatedHoursStorePkg.NewSQLiteStore(timedDB),
 		RotorStore:               rotorStorePkg.NewSQLiteStore(timedDB),
 		CalendarEventStore:       calendarStorePkg.NewSQLiteStore(timedDB),
+		BugBoxStore:              bugboxStorePkg.NewSQLiteStore(timedDB),
 	}
 
 	// Seed default admin account if no accounts exist

@@ -118,6 +118,7 @@ func lint(root string) ([]violation, error) {
 
 	violations = append(violations, lintStoragePackages(root, conceptSet)...)
 	violations = append(violations, lintWeb(root)...)
+	violations = append(violations, lintHandlerFeatureGating(root)...)
 
 	sort.Slice(violations, func(i, j int) bool {
 		if violations[i].File == violations[j].File {
@@ -421,6 +422,84 @@ func lintWeb(root string) []violation {
 		}
 		if !hasHeaders {
 			violations = append(violations, newViolation(fset, fn.Pos(), webPath, "web-security", "NewMux must apply middleware.SecurityHeaders"))
+		}
+	}
+	return violations
+}
+
+// lintHandlerFeatureGating checks that every handlers_*.go file (excluding
+// handlers.go itself, which defines the helpers) contains at least one call
+// to requireFeatureAPI or requireFeaturePage.
+// This enforces the guideline that every new feature handler file must be
+// gated by a feature flag.
+func lintHandlerFeatureGating(root string) []violation {
+	httpDir := filepath.Join(root, "internal", "adapters", "http")
+	entries, err := os.ReadDir(httpDir)
+	if err != nil {
+		return nil
+	}
+
+	var violations []violation
+	for _, entry := range entries {
+		name := entry.Name()
+		// Only check handlers_*.go files, not handlers.go (which defines the helpers)
+		// and not test files.
+		if entry.IsDir() {
+			continue
+		}
+		if !strings.HasPrefix(name, "handlers_") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		if !strings.HasSuffix(name, ".go") {
+			continue
+		}
+
+		filePath := filepath.Join(httpDir, name)
+		fset := token.NewFileSet()
+		parsed, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
+		if err != nil {
+			continue
+		}
+
+		// Check if the file defines any handler functions (func handle*)
+		hasHandlers := false
+		hasFeatureGate := false
+
+		ast.Inspect(parsed, func(node ast.Node) bool {
+			fn, ok := node.(*ast.FuncDecl)
+			if !ok {
+				return true
+			}
+			if strings.HasPrefix(fn.Name.Name, "handle") {
+				hasHandlers = true
+			}
+			// Look for calls to requireFeatureAPI or requireFeaturePage
+			if fn.Body != nil {
+				ast.Inspect(fn.Body, func(inner ast.Node) bool {
+					call, ok := inner.(*ast.CallExpr)
+					if !ok {
+						return true
+					}
+					if ident, ok := call.Fun.(*ast.Ident); ok {
+						if ident.Name == "requireFeatureAPI" || ident.Name == "requireFeaturePage" {
+							hasFeatureGate = true
+						}
+					}
+					return true
+				})
+			}
+			return true
+		})
+
+		if hasHandlers && !hasFeatureGate {
+			violations = append(violations, violation{
+				File:     filepath.ToSlash(filePath),
+				Line:     1,
+				Column:   1,
+				Rule:     "feature-flag",
+				Message:  name + ": handler file must call requireFeatureAPI or requireFeaturePage to gate access",
+				Severity: "warning",
+			})
 		}
 	}
 	return violations

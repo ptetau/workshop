@@ -59,6 +59,80 @@ type Store interface {}
 	assertHasRule(t, violations, "storage-isolation")
 }
 
+// TestFeatureFlag_HandlerFileWithoutGate verifies that a handlers_*.go file
+// defining handler functions without requireFeatureAPI/requireFeaturePage is flagged.
+func TestFeatureFlag_HandlerFileWithoutGate(t *testing.T) {
+	root := t.TempDir()
+
+	writeFile(t, filepath.Join(root, "internal/adapters/http/handlers_widget.go"), `package web
+
+import "net/http"
+
+func handleWidgets(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+}
+`)
+
+	violations, err := lint(root)
+	if err != nil {
+		t.Fatalf("lint failed: %v", err)
+	}
+	assertHasRule(t, violations, "feature-flag")
+}
+
+// TestFeatureFlag_HandlerFileWithGate verifies that a handlers_*.go file
+// that calls requireFeatureAPI is NOT flagged.
+func TestFeatureFlag_HandlerFileWithGate(t *testing.T) {
+	root := t.TempDir()
+
+	writeFile(t, filepath.Join(root, "internal/adapters/http/handlers_widget.go"), `package web
+
+import "net/http"
+
+func handleWidgets(w http.ResponseWriter, r *http.Request) {
+	if !requireFeatureAPI(w, r, sess, "widget") {
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+}
+`)
+
+	violations, err := lint(root)
+	if err != nil {
+		t.Fatalf("lint failed: %v", err)
+	}
+	for _, v := range violations {
+		if v.Rule == "feature-flag" {
+			t.Fatalf("unexpected feature-flag violation: %s", v.Message)
+		}
+	}
+}
+
+// TestFeatureFlag_TestFilesExcluded verifies that handlers_*_test.go files
+// are not checked for feature gating.
+func TestFeatureFlag_TestFilesExcluded(t *testing.T) {
+	root := t.TempDir()
+
+	writeFile(t, filepath.Join(root, "internal/adapters/http/handlers_widget_test.go"), `package web
+
+import "net/http"
+
+func handleWidgetsTest(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+}
+`)
+
+	violations, err := lint(root)
+	if err != nil {
+		t.Fatalf("lint failed: %v", err)
+	}
+	for _, v := range violations {
+		if v.Rule == "feature-flag" {
+			t.Fatalf("test files should not trigger feature-flag rule: %s", v.Message)
+		}
+	}
+}
+
 func writeFile(t *testing.T, path, content string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
