@@ -6,6 +6,9 @@
             {{ if or (eq (currentRole) "admin") (eq (currentRole) "coach") }}
             <a id="export-members-csv" href="/api/members/export?{{ exportMembersQuery .Sort .Dir .Search .Program .Status }}" style="background:#1f2937;color:white;padding:0.5rem 1.1rem;text-decoration:none;font-weight:600;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.5px;border-radius:2px;">Export CSV</a>
             {{ end }}
+            {{ if eq (currentRole) "admin" }}
+            <button id="import-csv-btn" type="button" onclick="document.getElementById('import-csv-modal').style.display='flex'" style="background:#1f2937;color:white;padding:0.5rem 1.1rem;border:none;font-weight:600;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.5px;border-radius:2px;cursor:pointer;">Import CSV</button>
+            {{ end }}
             <a href="/members/register" style="background:var(--orange);color:white;padding:0.5rem 1.25rem;text-decoration:none;font-weight:600;font-size:0.85rem;text-transform:uppercase;letter-spacing:0.5px;border-radius:2px;">+ Register Member</a>
         </div>
     </div>
@@ -145,6 +148,155 @@
         <a href="/dashboard" style="color: #F9B232; text-decoration: none; font-weight: 600;">← Back to Dashboard</a>
     </p>
 </div>
+
+{{ if eq (currentRole) "admin" }}
+<!-- Import CSV Modal -->
+<div id="import-csv-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+    <div style="background:white;border-radius:4px;padding:2rem;max-width:520px;width:100%;margin:1rem;max-height:90vh;overflow-y:auto;">
+        <h2 style="margin:0 0 1rem;font-size:1.1rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Import Members from CSV</h2>
+
+        <!-- Step 1: Upload -->
+        <div id="import-step-upload">
+            <p style="font-size:0.85rem;color:#6c757d;margin-bottom:1rem;">
+                Required columns: <strong>NAME, EMAIL</strong><br>
+                Optional: PROGRAM, STATUS, FEE, FREQUENCY, GRADINGMETRIC<br>
+                Unknown columns are ignored.
+            </p>
+            <input type="hidden" id="import-csrf-token" value="{{ csrfToken }}">
+            <div style="margin-bottom:1rem;">
+                <label style="font-size:0.85rem;font-weight:600;">CSV File</label>
+                <input type="file" id="import-file-input" accept=".csv,text/csv" style="display:block;margin-top:0.4rem;width:100%;">
+            </div>
+            <div style="margin-bottom:1.5rem;">
+                <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.85rem;cursor:pointer;">
+                    <input type="checkbox" id="import-update-mode">
+                    <span><strong>Update existing members</strong> (match by email — preserves ID)</span>
+                </label>
+                <p style="font-size:0.8rem;color:#6c757d;margin:0.25rem 0 0 1.5rem;">Default: skip rows where email already exists.</p>
+            </div>
+            <div id="import-upload-error" style="display:none;color:#dc3545;font-size:0.85rem;margin-bottom:1rem;"></div>
+            <div style="display:flex;gap:0.75rem;justify-content:flex-end;">
+                <button type="button" onclick="closeImportModal()" style="background:#6c757d;color:white;border:none;padding:0.5rem 1.25rem;border-radius:2px;cursor:pointer;font-size:0.85rem;">Cancel</button>
+                <button type="button" id="import-preview-btn" onclick="previewImport()" style="background:var(--orange);color:white;border:none;padding:0.5rem 1.25rem;border-radius:2px;cursor:pointer;font-size:0.85rem;font-weight:600;">Preview</button>
+            </div>
+        </div>
+
+        <!-- Step 2: Preview -->
+        <div id="import-step-preview" style="display:none;">
+            <div id="import-preview-summary" style="background:#f8f9fa;border-radius:2px;padding:1rem;margin-bottom:1rem;font-size:0.9rem;"></div>
+            <div id="import-preview-errors" style="display:none;margin-bottom:1rem;"></div>
+            <div id="import-unknown-cols" style="display:none;color:#856404;background:#fff3cd;padding:0.75rem;border-radius:2px;font-size:0.8rem;margin-bottom:1rem;"></div>
+            <div style="display:flex;gap:0.75rem;justify-content:flex-end;">
+                <button type="button" onclick="resetImportModal()" style="background:#6c757d;color:white;border:none;padding:0.5rem 1.25rem;border-radius:2px;cursor:pointer;font-size:0.85rem;">Back</button>
+                <button type="button" id="import-confirm-btn" onclick="confirmImport()" style="background:var(--orange);color:white;border:none;padding:0.5rem 1.25rem;border-radius:2px;cursor:pointer;font-size:0.85rem;font-weight:600;">Confirm Import</button>
+            </div>
+        </div>
+
+        <!-- Step 3: Done -->
+        <div id="import-step-done" style="display:none;">
+            <div id="import-done-summary" style="background:#d4edda;border-radius:2px;padding:1rem;margin-bottom:1rem;font-size:0.9rem;color:#155724;"></div>
+            <div style="display:flex;gap:0.75rem;justify-content:flex-end;">
+                <button type="button" onclick="closeImportModal();window.location.reload();" style="background:var(--orange);color:white;border:none;padding:0.5rem 1.25rem;border-radius:2px;cursor:pointer;font-size:0.85rem;font-weight:600;">Done</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+var _importFile = null;
+var _importUpdateMode = false;
+
+function closeImportModal() {
+    document.getElementById('import-csv-modal').style.display = 'none';
+    resetImportModal();
+}
+function resetImportModal() {
+    document.getElementById('import-step-upload').style.display = '';
+    document.getElementById('import-step-preview').style.display = 'none';
+    document.getElementById('import-step-done').style.display = 'none';
+    document.getElementById('import-upload-error').style.display = 'none';
+    document.getElementById('import-file-input').value = '';
+}
+function previewImport() {
+    var fileInput = document.getElementById('import-file-input');
+    if (!fileInput.files || !fileInput.files[0]) {
+        showImportError('Please select a CSV file.');
+        return;
+    }
+    _importFile = fileInput.files[0];
+    _importUpdateMode = document.getElementById('import-update-mode').checked;
+    var btn = document.getElementById('import-preview-btn');
+    btn.disabled = true; btn.textContent = 'Previewing…';
+    postImport(true, function(result) {
+        btn.disabled = false; btn.textContent = 'Preview';
+        if (!result) return;
+        showPreview(result);
+    });
+}
+function confirmImport() {
+    var btn = document.getElementById('import-confirm-btn');
+    btn.disabled = true; btn.textContent = 'Importing…';
+    postImport(false, function(result) {
+        btn.disabled = false; btn.textContent = 'Confirm Import';
+        if (!result) return;
+        document.getElementById('import-step-preview').style.display = 'none';
+        document.getElementById('import-step-done').style.display = '';
+        var s = result;
+        document.getElementById('import-done-summary').innerHTML =
+            '<strong>Import complete.</strong><br>' +
+            'Created: ' + s.created + ' &nbsp; Updated: ' + s.updated +
+            ' &nbsp; Skipped: ' + s.skipped + ' &nbsp; Errors: ' + (s.errors ? s.errors.length : 0);
+    });
+}
+function postImport(dryRun, cb) {
+    var fd = new FormData();
+    fd.append('file', _importFile);
+    var csrfInput = document.getElementById('import-csrf-token');
+    if (csrfInput) { fd.append('gorilla.csrf.Token', csrfInput.value); }
+    var url = '/api/members/import?dry_run=' + (dryRun ? 'true' : 'false') +
+              (_importUpdateMode ? '&update_mode=true' : '');
+    fetch(url, {
+        method: 'POST',
+        body: fd
+    }).then(function(resp) {
+        if (!resp.ok) {
+            return resp.text().then(function(t) { showImportError(t); cb(null); });
+        }
+        return resp.json().then(cb);
+    }).catch(function(e) { showImportError(e.toString()); cb(null); });
+}
+function showPreview(r) {
+    document.getElementById('import-step-upload').style.display = 'none';
+    document.getElementById('import-step-preview').style.display = '';
+    document.getElementById('import-preview-summary').innerHTML =
+        '<strong>Preview</strong><br>' +
+        'Total rows: ' + r.total + '<br>' +
+        'Will create: <strong>' + r.created + '</strong><br>' +
+        'Will update: <strong>' + r.updated + '</strong><br>' +
+        'Will skip (duplicate email): <strong>' + r.skipped + '</strong><br>' +
+        'Errors: <strong>' + (r.errors ? r.errors.length : 0) + '</strong>';
+    var errDiv = document.getElementById('import-preview-errors');
+    if (r.errors && r.errors.length > 0) {
+        var html = '<p style="font-size:0.85rem;font-weight:600;color:#dc3545;margin:0 0 0.5rem;">Row errors (will be skipped):</p><ul style="margin:0;padding-left:1.25rem;font-size:0.8rem;color:#dc3545;">';
+        r.errors.forEach(function(e) { html += '<li>Row ' + e.row + ': ' + e.message + '</li>'; });
+        html += '</ul>';
+        errDiv.innerHTML = html; errDiv.style.display = '';
+    } else { errDiv.style.display = 'none'; }
+    var unkDiv = document.getElementById('import-unknown-cols');
+    if (r.unknown_columns && r.unknown_columns.length > 0) {
+        unkDiv.textContent = 'Unknown columns (ignored): ' + r.unknown_columns.join(', ');
+        unkDiv.style.display = '';
+    } else { unkDiv.style.display = 'none'; }
+    if (r.created === 0 && r.updated === 0) {
+        document.getElementById('import-confirm-btn').disabled = true;
+    }
+}
+function showImportError(msg) {
+    var el = document.getElementById('import-upload-error');
+    el.textContent = msg; el.style.display = '';
+}
+</script>
+{{ end }}
 
 <script>
 // Debounce search input (250ms)

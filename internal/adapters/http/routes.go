@@ -30,6 +30,7 @@ func registerRoutes(mux *http.ServeMux) {
 	// Layer 1a API routes
 	mux.HandleFunc("/api/members/search", handleMemberSearch)
 	mux.HandleFunc("/api/members/export", handleMembersExportCSV)
+	mux.HandleFunc("/api/members/import", handleMembersImportCSV)
 	mux.HandleFunc("/api/members/archive", handleArchiveMember)
 	mux.HandleFunc("/api/members/restore", handleRestoreMember)
 	mux.HandleFunc("/api/guest/checkin", handleGuestCheckIn)
