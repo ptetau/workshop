@@ -184,6 +184,7 @@ function playClip(ytID, start, end, title) {
 
     // NOTE: enablejsapi=1 allows toggling mute/unmute via postMessage commands.
     // Keep clips muted by default for gym-friendly playback.
+    // loop=1 with playlist=ytID enables seamless looping within the start/end bounds.
     iframe.src = 'https://www.youtube.com/embed/'+ytID
         + '?autoplay=1&mute=1'
         + '&start='+start+'&end='+end
