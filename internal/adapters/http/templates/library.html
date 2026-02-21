@@ -7,6 +7,7 @@
         <select id="filterTheme" style="width:auto;min-width:200px;">
             <option value="">All Themes</option>
         </select>
+        <input type="text" id="searchQuery" placeholder="Search clips..." style="width:auto;min-width:200px;">
         <label style="display:flex;align-items:center;gap:0.5rem;font-weight:normal;cursor:pointer;">
             <input type="checkbox" id="filterPromoted" checked> Promoted only
         </label>
@@ -138,8 +139,13 @@ function getThemeName(id) {
 function loadClips() {
     var themeID = document.getElementById('filterTheme').value;
     var promoted = document.getElementById('filterPromoted').checked;
+    var query = document.getElementById('searchQuery').value.trim();
     var url = '/api/clips?';
-    if (promoted && !themeID) {
+    if (query) {
+        url += 'q=' + encodeURIComponent(query);
+        if (themeID) url += '&theme_id=' + themeID;
+        if (promoted) url += '&promoted=true';
+    } else if (promoted && !themeID) {
         url += 'promoted=true';
     } else if (themeID) {
         url += 'theme_id=' + themeID;
@@ -253,6 +259,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
 document.getElementById('filterTheme').addEventListener('change', loadClips);
 document.getElementById('filterPromoted').addEventListener('change', loadClips);
+document.getElementById('searchQuery').addEventListener('input', function() {
+    // Debounce search input to avoid excessive API calls
+    clearTimeout(window.searchTimeout);
+    window.searchTimeout = setTimeout(loadClips, 300);
+});
 
 var clipForm = document.getElementById('createClipForm');
 if (clipForm) {

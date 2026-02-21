@@ -13,4 +13,5 @@ type Store interface {
 	Delete(ctx context.Context, id string) error
 	ListByThemeID(ctx context.Context, themeID string) ([]domain.Clip, error)
 	ListPromoted(ctx context.Context) ([]domain.Clip, error)
+	Search(ctx context.Context, query string, themeID string, promotedOnly bool) ([]domain.Clip, error)
 }

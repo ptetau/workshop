@@ -1554,6 +1554,31 @@ func (m *mockClipStore) ListPromoted(ctx context.Context) ([]clipDomain.Clip, er
 	return []clipDomain.Clip{}, nil
 }
 
+// Search implements the mock ClipStore for testing.
+// PRE: valid parameters
+// POST: returns matching clips based on query and filters
+func (m *mockClipStore) Search(ctx context.Context, query string, themeID string, promotedOnly bool) ([]clipDomain.Clip, error) {
+	var out []clipDomain.Clip
+	queryLower := strings.ToLower(query)
+	for _, v := range m.clips {
+		if themeID != "" && v.ThemeID != themeID {
+			continue
+		}
+		if promotedOnly && !v.Promoted {
+			continue
+		}
+		if query != "" {
+			titleMatch := strings.Contains(strings.ToLower(v.Title), queryLower)
+			notesMatch := strings.Contains(strings.ToLower(v.Notes), queryLower)
+			if !titleMatch && !notesMatch {
+				continue
+			}
+		}
+		out = append(out, v)
+	}
+	return out, nil
+}
+
 // GetByID implements the mock ProgramStore for testing.
 // PRE: valid parameters
 // POST: returns expected result

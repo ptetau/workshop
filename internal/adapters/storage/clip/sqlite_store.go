@@ -119,3 +119,40 @@ func (s *SQLiteStore) ListPromoted(ctx context.Context) ([]domain.Clip, error) {
 	}
 	return list, rows.Err()
 }
+
+// Search returns clips matching the query across title and notes.
+// PRE: none
+// POST: returns matching clips ordered by creation time (most recent first)
+func (s *SQLiteStore) Search(ctx context.Context, query string, themeID string, promotedOnly bool) ([]domain.Clip, error) {
+	sql := `SELECT id, theme_id, title, youtube_url, youtube_id, start_seconds, end_seconds, notes, created_by, promoted, promoted_by, created_at FROM clips WHERE 1=1`
+	var args []interface{}
+	if query != "" {
+		sql += ` AND (title LIKE ? OR notes LIKE ?)`
+		pattern := "%" + query + "%"
+		args = append(args, pattern, pattern)
+	}
+	if themeID != "" {
+		sql += ` AND theme_id = ?`
+		args = append(args, themeID)
+	}
+	if promotedOnly {
+		sql += ` AND promoted = 1`
+	}
+	sql += ` ORDER BY created_at DESC`
+	rows, err := s.db.QueryContext(ctx, sql, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var list []domain.Clip
+	for rows.Next() {
+		var c domain.Clip
+		var promoted int
+		if err := rows.Scan(&c.ID, &c.ThemeID, &c.Title, &c.YouTubeURL, &c.YouTubeID, &c.StartSeconds, &c.EndSeconds, &c.Notes, &c.CreatedBy, &promoted, &c.PromotedBy, &c.CreatedAt); err != nil {
+			return nil, err
+		}
+		c.Promoted = promoted == 1
+		list = append(list, c)
+	}
+	return list, rows.Err()
+}
