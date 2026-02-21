@@ -48,6 +48,7 @@ func registerRoutes(mux *http.ServeMux) {
 
 	// Layer 1b API routes
 	mux.HandleFunc("/api/training-log", handleGetTrainingLog)
+	mux.HandleFunc("/api/training-volume", handleGetTrainingVolume)
 	mux.HandleFunc("/api/members/inactive", handleGetInactiveMembers)
 	mux.HandleFunc("/api/notices", handleNotices)
 	mux.HandleFunc("/api/grading/proposals", handleGradingProposals)

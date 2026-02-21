@@ -104,6 +104,20 @@ type mockAttendanceStore struct {
 	attendances map[string]attendanceDomain.Attendance
 }
 
+// ListByDateRange implements the attendance store interface for testing.
+// PRE: startDate, endDate are YYYY-MM-DD
+// POST: Returns records within the date range
+func (m *mockAttendanceStore) ListByDateRange(ctx context.Context, startDate string, endDate string) ([]attendanceDomain.Attendance, error) {
+	var list []attendanceDomain.Attendance
+	for _, a := range m.attendances {
+		d := a.CheckInTime.Format("2006-01-02")
+		if d >= startDate && d <= endDate {
+			list = append(list, a)
+		}
+	}
+	return list, nil
+}
+
 // Delete implements the attendance store interface for testing.
 // PRE: id is non-empty
 // POST: Entity with given id is removed

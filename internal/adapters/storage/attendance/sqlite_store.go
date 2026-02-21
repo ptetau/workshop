@@ -230,6 +230,59 @@ func (s *SQLiteStore) ListByMemberID(ctx context.Context, memberID string) ([]do
 	return results, rows.Err()
 }
 
+// ListByDateRange retrieves attendance records across all members within a date range.
+// PRE: startDate and endDate are YYYY-MM-DD format
+// POST: Returns records where check_in_time falls within the range (inclusive)
+func (s *SQLiteStore) ListByDateRange(ctx context.Context, startDate string, endDate string) ([]domain.Attendance, error) {
+	query := `SELECT id, check_in_time, check_out_time, member_id, schedule_id, class_date, mat_hours
+		FROM attendance
+		WHERE SUBSTR(check_in_time, 1, 10) >= ? AND SUBSTR(check_in_time, 1, 10) <= ?
+		ORDER BY check_in_time ASC`
+
+	rows, err := s.db.QueryContext(ctx, query, startDate, endDate)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []domain.Attendance
+	for rows.Next() {
+		var entity domain.Attendance
+		var checkInStr string
+		var checkOutStr, scheduleID, classDate sql.NullString
+		if err := rows.Scan(
+			&entity.ID,
+			&checkInStr,
+			&checkOutStr,
+			&entity.MemberID,
+			&scheduleID,
+			&classDate,
+			&entity.MatHours,
+		); err != nil {
+			return nil, err
+		}
+		if scheduleID.Valid {
+			entity.ScheduleID = scheduleID.String
+		}
+		if classDate.Valid {
+			entity.ClassDate = classDate.String
+		}
+		entity.CheckInTime, err = parseStoredTime(checkInStr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse check_in_time: %w", err)
+		}
+		if checkOutStr.Valid {
+			parsedTime, parseErr := parseStoredTime(checkOutStr.String)
+			if parseErr != nil {
+				return nil, fmt.Errorf("failed to parse check_out_time: %w", parseErr)
+			}
+			entity.CheckOutTime = parsedTime
+		}
+		results = append(results, entity)
+	}
+	return results, rows.Err()
+}
+
 // ListByMemberIDAndDate retrieves attendance records for a member on a specific date.
 // PRE: memberID is non-empty, date is YYYY-MM-DD format
 // POST: Returns records matching memberID and date, ordered by check-in time desc

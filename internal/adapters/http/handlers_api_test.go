@@ -172,6 +172,40 @@ func TestHandleMembersExportCSV_UnauthAndMemberBlocked(t *testing.T) {
 	}
 }
 
+// TestHandleGetTrainingVolume_MemberCannotRequestOtherMember verifies member privacy gating.
+func TestHandleGetTrainingVolume_MemberCannotRequestOtherMember(t *testing.T) {
+	stores = newFullStores()
+	ctx := context.Background()
+
+	// Seed two members; session is for m1.
+	stores.MemberStore.Save(ctx, memberDomain.Member{ID: "m1", Name: "M1", Email: memberSession.Email, Status: "active"})
+	stores.MemberStore.Save(ctx, memberDomain.Member{ID: "m2", Name: "M2", Email: "m2@test.com", Status: "active"})
+
+	req := authRequest("GET", "/api/training-volume?member_id=m2&range=month", "", memberSession)
+	rec := httptest.NewRecorder()
+	handleGetTrainingVolume(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("got %d, want %d. Body: %s", rec.Code, http.StatusForbidden, rec.Body.String())
+	}
+}
+
+// TestHandleGetTrainingVolume_AdminCanRequestOtherMember verifies admins can query any member.
+func TestHandleGetTrainingVolume_AdminCanRequestOtherMember(t *testing.T) {
+	stores = newFullStores()
+	ctx := context.Background()
+
+	stores.MemberStore.Save(ctx, memberDomain.Member{ID: "m2", Name: "M2", Email: "m2@test.com", Status: "active"})
+
+	req := authRequest("GET", "/api/training-volume?member_id=m2&range=month", "", adminSession)
+	rec := httptest.NewRecorder()
+	handleGetTrainingVolume(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("got %d, want %d. Body: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+}
+
 // TestHandleMembersExportCSV_FeatureFlagDisabled_Blocks verifies feature gating blocks coaches when member_mgmt is disabled.
 // PRE: authenticated coach session and member_mgmt disabled for coach.
 // POST: response is 403.
