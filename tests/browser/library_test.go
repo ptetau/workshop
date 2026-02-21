@@ -241,3 +241,69 @@ func TestLibrary_TrialCannotAccess(t *testing.T) {
 		t.Fatalf("expected trial to be redirected to dashboard: %v", err)
 	}
 }
+
+// TestLibrary_PromoteClip verifies that a coach can promote a member's clip
+// and it then appears in the promoted library view.
+func TestLibrary_PromoteClip(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping browser test in short mode")
+	}
+	app := newTestApp(t)
+	seedSyntheticData(t, app)
+
+	// Login as admin/coach
+	page := app.newPage(t)
+	app.login(t, page)
+
+	// Navigate to library
+	if _, err := page.Goto(app.BaseURL + "/library"); err != nil {
+		t.Fatalf("failed to navigate to library: %v", err)
+	}
+	page.WaitForTimeout(1000)
+
+	// Uncheck "Promoted only" to see all clips including member clips
+	if err := page.Locator("#filterPromoted").SetChecked(false); err != nil {
+		t.Fatalf("failed to uncheck promoted filter: %v", err)
+	}
+	page.WaitForTimeout(500)
+
+	// Find a clip with a Promote button (non-promoted clip visible to admin/coach)
+	promoteBtn := page.Locator("#clipGrid button:has-text('Promote')").First()
+	if err := promoteBtn.WaitFor(playwright.LocatorWaitForOptions{State: playwright.WaitForSelectorStateVisible, Timeout: playwright.Float(5000)}); err != nil {
+		t.Skip("no promotable clips found in seeded data")
+	}
+
+	// Get the clip title before promoting
+	clipCard := promoteBtn.Locator("xpath=../..")
+	clipTitle, err := clipCard.Locator("strong").InnerText()
+	if err != nil {
+		t.Fatalf("failed to get clip title: %v", err)
+	}
+
+	// Click the Promote button
+	if err := promoteBtn.Click(); err != nil {
+		t.Fatalf("failed to click promote button: %v", err)
+	}
+
+	// Wait a moment for the promotion to take effect
+	page.WaitForTimeout(1000)
+
+	// Now check "Promoted only" and verify the clip appears
+	if err := page.Locator("#filterPromoted").SetChecked(true); err != nil {
+		t.Fatalf("failed to check promoted filter: %v", err)
+	}
+	page.WaitForTimeout(500)
+
+	// The clip should now appear in the promoted view
+	promotedClip := page.Locator("#clipGrid strong").Filter(playwright.LocatorFilterOptions{HasText: clipTitle})
+	if err := promotedClip.WaitFor(playwright.LocatorWaitForOptions{State: playwright.WaitForSelectorStateVisible, Timeout: playwright.Float(5000)}); err != nil {
+		t.Fatalf("promoted clip did not appear in promoted view: %v", err)
+	}
+
+	// Verify the Promoted badge is shown
+	clipCard = promotedClip.Locator("xpath=../..")
+	promotedBadge := clipCard.Locator("span:has-text('Promoted')")
+	if err := promotedBadge.WaitFor(playwright.LocatorWaitForOptions{State: playwright.WaitForSelectorStateVisible, Timeout: playwright.Float(5000)}); err != nil {
+		t.Fatalf("promoted badge not visible after promotion: %v", err)
+	}
+}
