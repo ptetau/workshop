@@ -269,6 +269,68 @@ func handleMembersImportCSV(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(result)
 }
 
+// handleGetTrainingVolume handles GET /api/training-volume?member_id=<id>&range=month|year&compare=true|false
+// Used by the member training log page to render attendance volume graphs.
+func handleGetTrainingVolume(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	sess, ok := middleware.GetSessionFromContext(r.Context())
+	if !ok {
+		http.Error(w, "not authenticated", http.StatusUnauthorized)
+		return
+	}
+	if !requireFeatureAPI(w, r, sess, "training_log") {
+		return
+	}
+
+	ctx := r.Context()
+	memberID := r.URL.Query().Get("member_id")
+
+	// Privacy invariant: members/trials may only view their own detailed attendance.
+	if sess.Role == accountDomain.RoleMember || sess.Role == accountDomain.RoleTrial {
+		m, err := stores.MemberStore.GetByEmail(ctx, sess.Email)
+		if err != nil {
+			http.Error(w, "member not found", http.StatusForbidden)
+			return
+		}
+		if memberID != "" && memberID != m.ID {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		memberID = m.ID
+	}
+	if memberID == "" {
+		http.Error(w, "member_id is required", http.StatusBadRequest)
+		return
+	}
+
+	rng := r.URL.Query().Get("range")
+	if rng == "" {
+		rng = "month"
+	}
+	compare := strings.EqualFold(r.URL.Query().Get("compare"), "true")
+
+	query := projections.GetTrainingVolumeQuery{
+		MemberID: memberID,
+		Range:    rng,
+		Compare:  compare,
+	}
+	deps := projections.GetTrainingVolumeDeps{
+		AttendanceStore: stores.AttendanceStore,
+		MemberStore:     stores.MemberStore,
+	}
+	result, err := projections.QueryGetTrainingVolume(ctx, query, deps)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
 // internalError logs the real error and returns a generic message to the client.
 // This prevents leaking internal details per OWASP A05.
 func internalError(w http.ResponseWriter, err error) {
@@ -1710,6 +1772,19 @@ func handleGetTrainingLog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	memberID := r.URL.Query().Get("member_id")
+	// Privacy invariant: members/trials may only view their own detailed attendance.
+	if sess.Role == accountDomain.RoleMember || sess.Role == accountDomain.RoleTrial {
+		m, err := stores.MemberStore.GetByEmail(r.Context(), sess.Email)
+		if err != nil {
+			http.Error(w, "member not found", http.StatusForbidden)
+			return
+		}
+		if memberID != "" && memberID != m.ID {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		memberID = m.ID
+	}
 	if memberID == "" {
 		http.Error(w, "member_id is required", http.StatusBadRequest)
 		return
