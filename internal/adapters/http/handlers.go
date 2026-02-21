@@ -162,6 +162,21 @@ func handleMembersExportCSV(w http.ResponseWriter, r *http.Request) {
 		// Response may be partially written; log only.
 		slog.Error("csv_export_flush_error", "error", err.Error())
 	}
+
+	// Log audit event for export
+	slog.Info("audit_event",
+		"actor_id", sess.AccountID,
+		"actor_role", sess.Role,
+		"action", "admin.members.export_csv",
+		"row_count", len(members),
+		"filters", map[string]string{
+			"program": lp.Filters["program"],
+			"status":  lp.Filters["status"],
+			"search":  lp.Search,
+			"sort":    lp.Sort,
+			"dir":     lp.Dir,
+		},
+	)
 }
 
 // importCSVResult is the JSON response shape for /api/members/import.
