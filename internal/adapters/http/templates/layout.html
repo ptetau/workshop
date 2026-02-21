@@ -263,12 +263,12 @@
     #bugbox-context{font-size:0.72rem;color:#888;margin-top:0.5rem;line-height:1.5;}
     </style>
 
-    <button id="bugbox-btn" title="Report a bug" aria-label="Report a bug">&#x1F41B;</button>
+    <button id="bugbox-btn" title="Report a bug or suggest an improvement" aria-label="Report a bug or suggest an improvement">&#x1F41B;</button>
 
     <div id="bugbox-overlay" role="dialog" aria-modal="true" aria-labelledby="bugbox-title">
       <div id="bugbox-modal">
         <button id="bugbox-close" aria-label="Close">&times;</button>
-        <h2 id="bugbox-title">&#x1F41B; Report a Bug</h2>
+        <h2 id="bugbox-title">&#x1F41B; Report a Bug or Suggest an Improvement</h2>
 
         <div id="bugbox-form-wrap">
           <form id="bugbox-form" enctype="multipart/form-data">
@@ -279,11 +279,11 @@
 
             <div class="form-group">
               <label for="bugbox-summary">Summary <span style="color:#d73a4a">*</span></label>
-              <input type="text" id="bugbox-summary" name="summary" maxlength="200" placeholder="One-line description of the bug" required>
+              <input type="text" id="bugbox-summary" name="summary" maxlength="200" placeholder="One-line description of the bug or improvement" required>
             </div>
             <div class="form-group">
               <label for="bugbox-description">Description <span style="color:#d73a4a">*</span></label>
-              <textarea id="bugbox-description" name="description" maxlength="2000" placeholder="What happened?" required></textarea>
+              <textarea id="bugbox-description" name="description" maxlength="2000" placeholder="What happened, or what would you like to see improved?" required></textarea>
             </div>
             <div class="form-group">
               <label for="bugbox-steps">Steps to Reproduce</label>
@@ -303,7 +303,7 @@
             </div>
             <div id="bugbox-context" aria-live="polite"></div>
             <div id="bugbox-error" style="color:#d73a4a;font-size:0.85rem;margin-bottom:0.5rem;display:none;"></div>
-            <button type="submit" id="bugbox-submit" style="width:100%;margin-top:0.5rem;">Submit Bug Report</button>
+            <button type="submit" id="bugbox-submit" style="width:100%;margin-top:0.5rem;">Submit</button>
           </form>
         </div>
 
@@ -351,7 +351,7 @@
         e.preventDefault();
         errDiv.style.display = 'none';
         submitBtn.disabled = true;
-        submitBtn.textContent = 'Submitting…';
+            submitBtn.textContent = 'Submitting…';
 
         var fd = new FormData(form);
         fetch('/api/admin/bugbox', { method: 'POST', body: fd, credentials: 'same-origin' })
@@ -375,7 +375,7 @@
           })
           .finally(function(){
             submitBtn.disabled = false;
-            submitBtn.textContent = 'Submit Bug Report';
+            submitBtn.textContent = 'Submit';
           });
       });
     })();
