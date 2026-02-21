@@ -80,7 +80,17 @@
         <tbody>
             {{ range .Members }}
             <tr style="border-bottom: 1px solid #dee2e6;">
-                <td style="padding: 0.75rem;"><a href="/members/profile?id={{ .ID }}" style="color: #667eea; text-decoration: none; font-weight: 600;">{{ .Name }}</a></td>
+                <td style="padding: 0.75rem;">
+                    <div style="display:flex;align-items:center;gap:0.5rem;min-width:0;">
+                        <span class="belt-inline" aria-hidden="true">
+                            <span class="belt-icon {{ if .Belt }}belt-{{ .Belt }}{{ else }}belt-none{{ end }}"></span>
+                            {{ if and .Belt (gt .Stripe 0) }}
+                                {{ range $i := .Stripe | stripeRange }}<span class="stripe-dot"></span>{{ end }}
+                            {{ end }}
+                        </span>
+                        <a href="/members/profile?id={{ .ID }}" style="color: #667eea; text-decoration: none; font-weight: 600; overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ .Name }}</a>
+                    </div>
+                </td>
                 <td style="padding: 0.75rem;">{{ .Email }}</td>
                 <td style="padding: 0.75rem;">
                     <span style="display: inline-block; padding: 0.25rem 0.75rem; border-radius: 12px; font-size: 0.85rem; font-weight: 600; background: #e3f2fd; color: #1976d2;">
