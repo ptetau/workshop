@@ -43,3 +43,8 @@ deploy_key
 workshop
 workshop.new
 ruleset*.json
+
+# Local artifacts (do not commit)
+members_full.csv
+project-report.txt
+.windsurf/issue-drafts/
