@@ -35,6 +35,9 @@ func handleBugBoxSubmit(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
+	if !requireFeatureAPI(w, r, sess, "bugbox") {
+		return
+	}
 
 	const maxUpload = 6 << 20 // 6 MB to allow for 5 MB image + form overhead
 	if err := r.ParseMultipartForm(maxUpload); err != nil {
@@ -124,12 +127,16 @@ func handleBugBoxScreenshot(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	if _, ok := middleware.GetSessionFromContext(ctx); !ok {
+	sess2, ok2 := middleware.GetSessionFromContext(ctx)
+	if !ok2 {
 		http.Error(w, "not authenticated", http.StatusUnauthorized)
 		return
 	}
 	if !middleware.IsAdmin(ctx) {
 		http.Error(w, "admin only", http.StatusForbidden)
+		return
+	}
+	if !requireFeatureAPI(w, r, sess2, "bugbox") {
 		return
 	}
 

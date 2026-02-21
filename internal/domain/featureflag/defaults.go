@@ -86,5 +86,13 @@ func DefaultFlags() []FeatureFlag {
 			EnabledMember: false,
 			EnabledTrial:  false,
 		},
+		{
+			Key:           "bugbox",
+			Description:   "Bug Box (in-app bug/improvement reporting for admin and coach)",
+			EnabledAdmin:  true,
+			EnabledCoach:  true,
+			EnabledMember: false,
+			EnabledTrial:  false,
+		},
 	}
 }

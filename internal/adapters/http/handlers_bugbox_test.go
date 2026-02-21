@@ -13,6 +13,7 @@ import (
 
 	"workshop/internal/adapters/http/middleware"
 	bugboxDomain "workshop/internal/domain/bugbox"
+	featureflagDomain "workshop/internal/domain/featureflag"
 )
 
 // --- Mock BugBox store ---
@@ -273,6 +274,76 @@ func TestHandleBugBoxScreenshot_NotFound_Returns404(t *testing.T) {
 
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("status=%d, want %d", rec.Code, http.StatusNotFound)
+	}
+}
+
+// TestHandleBugBoxSubmit_FeatureFlagDisabled_Returns403 verifies that when the bugbox feature flag
+// is disabled for admin, the endpoint returns 403.
+// PRE: authenticated admin session; bugbox feature flag disabled.
+// POST: 403 Forbidden.
+func TestHandleBugBoxSubmit_FeatureFlagDisabled_Returns403(t *testing.T) {
+	stores = newFullStores()
+	stores.BugBoxStore = &mockBugBoxStore{}
+
+	// Disable bugbox for all roles by saving a flag with all disabled
+	ctx := context.Background()
+	stores.FeatureFlagStore.Save(ctx, featureflagDomain.FeatureFlag{
+		Key:           "bugbox",
+		Description:   "Bug Box",
+		EnabledAdmin:  false,
+		EnabledCoach:  false,
+		EnabledMember: false,
+		EnabledTrial:  false,
+	})
+
+	body, ct := multipartBody(map[string]string{"summary": "x", "description": "y"})
+	req := httptest.NewRequest("POST", "/api/admin/bugbox", body)
+	req.Header.Set("Content-Type", ct)
+	ctx2 := middleware.ContextWithSession(req.Context(), adminSession)
+	req = req.WithContext(ctx2)
+
+	rec := httptest.NewRecorder()
+	handleBugBoxSubmit(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status=%d, want %d body=%s", rec.Code, http.StatusForbidden, rec.Body.String())
+	}
+}
+
+// TestHandleBugBoxSubmit_FeatureFlagEnabled_PassesGate verifies that when the bugbox feature flag
+// is enabled for admin, the gate passes and the request proceeds.
+// PRE: authenticated admin session; bugbox feature flag enabled.
+// POST: request proceeds past gate (500 from missing GitHub config, not 403).
+func TestHandleBugBoxSubmit_FeatureFlagEnabled_PassesGate(t *testing.T) {
+	stores = newFullStores()
+	stores.BugBoxStore = &mockBugBoxStore{}
+
+	// Explicitly enable bugbox (matches default, but be explicit)
+	ctx := context.Background()
+	stores.FeatureFlagStore.Save(ctx, featureflagDomain.FeatureFlag{
+		Key:           "bugbox",
+		Description:   "Bug Box",
+		EnabledAdmin:  true,
+		EnabledCoach:  true,
+		EnabledMember: false,
+		EnabledTrial:  false,
+	})
+
+	body, ct := multipartBody(map[string]string{"summary": "A bug", "description": "It broke"})
+	req := httptest.NewRequest("POST", "/api/admin/bugbox", body)
+	req.Header.Set("Content-Type", ct)
+	ctx2 := middleware.ContextWithSession(req.Context(), adminSession)
+	req = req.WithContext(ctx2)
+
+	rec := httptest.NewRecorder()
+	handleBugBoxSubmit(rec, req)
+
+	// Must NOT be 403 — gate passed; GitHub not configured → 500
+	if rec.Code == http.StatusForbidden {
+		t.Fatalf("feature flag gate should have passed for admin, got 403")
+	}
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status=%d, want %d body=%s", rec.Code, http.StatusInternalServerError, rec.Body.String())
 	}
 }
 
