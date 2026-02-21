@@ -4450,14 +4450,19 @@ func handleClips(w http.ResponseWriter, r *http.Request) {
 		}
 		themeID := r.URL.Query().Get("theme_id")
 		promoted := r.URL.Query().Get("promoted")
+		query := r.URL.Query().Get("q")
 		var clips []clipDomain.Clip
 		var err error
-		if promoted == "true" {
+		if query != "" {
+			// Search takes priority when query is provided
+			promotedOnly := promoted == "true"
+			clips, err = stores.ClipStore.Search(ctx, query, themeID, promotedOnly)
+		} else if promoted == "true" {
 			clips, err = stores.ClipStore.ListPromoted(ctx)
 		} else if themeID != "" {
 			clips, err = stores.ClipStore.ListByThemeID(ctx, themeID)
 		} else {
-			http.Error(w, "theme_id or promoted=true is required", http.StatusBadRequest)
+			http.Error(w, "theme_id or promoted=true or q is required", http.StatusBadRequest)
 			return
 		}
 		if err != nil {
