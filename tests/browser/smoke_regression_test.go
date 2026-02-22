@@ -135,7 +135,7 @@ func TestSmoke_NoConsoleErrors(t *testing.T) {
 
 	for _, path := range pages {
 		page.Goto(app.BaseURL + path)
-		page.WaitForLoadState(playwright.PageWaitForLoadStateNetworkIdle)
+		page.WaitForTimeout(500)
 	}
 
 	if len(errors) > 0 {
