@@ -19,8 +19,8 @@
 }
 
 .belt-none {
-  background: #e5e7eb;
-  border-color: #cbd5e1;
+  background: transparent;
+  border: 1px dashed #ccc;
 }
 
 .belt-white  { background: #fff; }

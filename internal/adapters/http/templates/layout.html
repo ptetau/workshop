@@ -129,8 +129,10 @@
                     <div class="nav-more-group">
                         <span class="nav-more-label">Training</span>
                         <a href="/admin/schedules">Schedules</a>
+                        <a href="/admin/class-types">Class Types</a>
                         <a href="/admin/milestones">Milestones</a>
                         <a href="/admin/self-estimates">Self-Estimates</a>
+                        {{ if featureEnabled "kiosk" }}<a href="/kiosk">Kiosk</a>{{ end }}
                     </div>
                     <div class="nav-more-group">
                         <span class="nav-more-label">Content</span>
@@ -160,13 +162,19 @@
             <details class="nav-more">
                 <summary>More</summary>
                 <div class="nav-more-menu">
-                    <a href="/admin/schedules">Schedules</a>
-                    <a href="/admin/notices">Notices</a>
-                    {{ if featureEnabled "library" }}
-                    <a href="/themes">Themes</a>
-                    <a href="/library">Library</a>
-                    {{ end }}
-                    {{ if featureEnabled "kiosk" }}<a href="/kiosk">Kiosk</a>{{ end }}
+                    <div class="nav-more-group">
+                        <span class="nav-more-label">Training</span>
+                        <a href="/admin/schedules">Schedules</a>
+                        {{ if featureEnabled "kiosk" }}<a href="/kiosk">Kiosk</a>{{ end }}
+                    </div>
+                    <div class="nav-more-group">
+                        <span class="nav-more-label">Content</span>
+                        <a href="/admin/notices">Notices</a>
+                        {{ if featureEnabled "library" }}
+                        <a href="/themes">Themes</a>
+                        <a href="/library">Library</a>
+                        {{ end }}
+                    </div>
                 </div>
             </details>
             {{ else if eq (currentRole) "member" }}
@@ -175,6 +183,7 @@
             {{ if featureEnabled "curriculum" }}<a href="/curriculum">Curriculum</a>{{ end }}
             {{ if featureEnabled "calendar" }}<a href="/calendar">Calendar</a>{{ end }}
             {{ if featureEnabled "library" }}
+            <a href="/themes">Themes</a>
             <a href="/library">Library</a>
             {{ end }}
             {{ else }}
@@ -241,6 +250,13 @@
             if (!d.contains(e.target)) d.removeAttribute('open');
         });
     });
+    // Dynamic page title from first h1
+    (function(){
+        var h1 = document.querySelector('main h1');
+        if (h1 && h1.textContent.trim()) {
+            document.title = h1.textContent.trim() + ' — Workshop';
+        }
+    })();
     </script>
 
     {{ if or (eq (currentRole) "admin") (eq (currentRole) "coach") }}

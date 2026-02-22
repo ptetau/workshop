@@ -1,13 +1,18 @@
 {{ define "content" }}
 <div class="card">
     <h1>Report Injury</h1>
-    <form method="POST" action="/injuries">
+    <form method="POST" action="/injuries" id="injuryForm">
         <input type="hidden" name="gorilla.csrf.Token" value="{{ .CSRFToken }}">
+        <input type="hidden" name="MemberID" id="hiddenMemberID">
 
         <div class="form-group">
-            <label for="id_MemberID">Member ID *</label>
-            <input type="text" id="id_MemberID" name="MemberID" required placeholder="Enter member UUID">
-            <small style="color: #666; font-size: 0.9rem;">Tip: Copy from member list</small>
+            <label for="memberSearch">Member *</label>
+            <input type="text" id="memberSearch" autocomplete="off" placeholder="Start typing member name..." maxlength="100">
+            <div id="memberSuggestions" style="max-height:200px;overflow-y:auto;"></div>
+            <div id="selectedMember" style="display:none;background:#e8f5e9;padding:0.5rem 0.75rem;border-radius:2px;margin-top:0.5rem;border:2px solid #4caf50;font-weight:600;justify-content:space-between;align-items:center;">
+                <span id="selectedName"></span>
+                <button type="button" id="clearSelection" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:#999;padding:0 0.5rem;">&times;</button>
+            </div>
         </div>
 
         <div class="form-group">
@@ -42,4 +47,71 @@
         <a href="/dashboard" style="display:inline-block;padding:0.75rem 2rem;color:#666;text-decoration:none;border:2px solid #e0e0e0;border-radius:2px;font-weight:600;">Cancel</a>
     </form>
 </div>
+
+<script>
+(function() {
+    var searchInput = document.getElementById('memberSearch');
+    var suggestionsDiv = document.getElementById('memberSuggestions');
+    var hiddenMemberID = document.getElementById('hiddenMemberID');
+    var selectedDiv = document.getElementById('selectedMember');
+    var selectedName = document.getElementById('selectedName');
+    var clearBtn = document.getElementById('clearSelection');
+    var debounceTimer = null;
+
+    searchInput.addEventListener('input', function() {
+        clearTimeout(debounceTimer);
+        var query = searchInput.value.trim();
+        if (query.length < 2) { suggestionsDiv.innerHTML = ''; return; }
+        debounceTimer = setTimeout(function() {
+            fetch('/api/members/search?q=' + encodeURIComponent(query))
+                .then(function(r) { return r.json(); })
+                .then(function(members) {
+                    suggestionsDiv.innerHTML = '';
+                    if (!members || members.length === 0) {
+                        suggestionsDiv.innerHTML = '<div style="padding:0.5rem;color:#999;font-style:italic;">No matching members</div>';
+                        return;
+                    }
+                    members.forEach(function(m) {
+                        var div = document.createElement('div');
+                        div.style.cssText = 'padding:0.5rem 0.75rem;border:1px solid #e0e0e0;border-radius:2px;margin-bottom:0.25rem;cursor:pointer;display:flex;justify-content:space-between;align-items:center;';
+                        div.innerHTML = '<strong>' + esc(m.Name) + '</strong><span style="color:#666;font-size:0.85rem;">' + esc(m.Program) + '</span>';
+                        div.addEventListener('click', function() { selectMember(m); });
+                        div.addEventListener('mouseenter', function() { div.style.background = '#fef7e8'; });
+                        div.addEventListener('mouseleave', function() { div.style.background = ''; });
+                        suggestionsDiv.appendChild(div);
+                    });
+                });
+        }, 250);
+    });
+
+    function selectMember(m) {
+        hiddenMemberID.value = m.ID;
+        selectedName.textContent = m.Name + ' (' + m.Program + ')';
+        selectedDiv.style.display = 'flex';
+        searchInput.style.display = 'none';
+        suggestionsDiv.innerHTML = '';
+    }
+
+    clearBtn.addEventListener('click', function() {
+        hiddenMemberID.value = '';
+        selectedDiv.style.display = 'none';
+        searchInput.style.display = '';
+        searchInput.value = '';
+        searchInput.focus();
+    });
+
+    document.getElementById('injuryForm').addEventListener('submit', function(e) {
+        if (!hiddenMemberID.value) {
+            e.preventDefault();
+            alert('Please select a member from the search results.');
+        }
+    });
+
+    function esc(s) {
+        var d = document.createElement('div');
+        d.appendChild(document.createTextNode(s));
+        return d.innerHTML;
+    }
+})();
+</script>
 {{ end }}

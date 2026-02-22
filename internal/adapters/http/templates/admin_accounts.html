@@ -54,7 +54,7 @@ function loadAccounts() {
             b.innerHTML+='<tr style="border-bottom:1px solid #dee2e6;">'+
                 '<td style="padding:0.5rem;">'+a.Email+'</td>'+
                 '<td style="padding:0.5rem;"><span style="display:inline-block;padding:0.15rem 0.5rem;border-radius:12px;font-size:0.85rem;font-weight:600;background:'+(a.Role==='admin'?'#e3f2fd':'#e8f5e9')+';color:'+(a.Role==='admin'?'#1565c0':'#2e7d32')+';">'+a.Role+'</span></td>'+
-                '<td style="padding:0.5rem;text-align:right;"><select onchange="changeRole(\''+a.ID+'\',this.value)" style="padding:0.25rem;border:1px solid #ccc;border-radius:4px;"><option value="">Change role...</option>'+roleOpts+'</select></td></tr>';
+                '<td style="padding:0.5rem;text-align:right;"><select onchange="changeRole(\''+a.ID+'\',this.value,this)" style="padding:0.25rem;border:1px solid #ccc;border-radius:4px;"><option value="">Change role...</option>'+roleOpts+'</select></td></tr>';
         });
     });
 }
@@ -67,8 +67,9 @@ function createAccount() {
     .then(()=>{document.getElementById('formMsg').textContent='Created!';loadAccounts();setTimeout(()=>document.getElementById('formMsg').textContent='',2000);})
     .catch(()=>document.getElementById('formMsg').textContent='Error');
 }
-function changeRole(id,role) {
+function changeRole(id,role,selectEl) {
     if(!role) return;
+    if(!confirm('Change role to '+role+'?')) { selectEl.value=''; return; }
     fetch('/api/accounts/role',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({AccountID:id,NewRole:role})})
     .then(()=>loadAccounts());
 }

@@ -281,11 +281,8 @@ function loadClassFilters() {
 function scheduleEmail() {
     var dt = document.getElementById('scheduleAt').value;
     if (!dt) { showMsg('Please select a date and time', '#c62828'); return; }
-
-    var emailID = document.getElementById('emailID').value;
     var scheduledAt = new Date(dt).toISOString();
-
-    function doSchedule(id) {
+    ensureDraftSaved(function(id) {
         fetch('/api/emails/schedule',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({EmailID:id,ScheduledAt:scheduledAt})})
         .then(function(r){if(!r.ok) return r.text().then(function(t){throw new Error(t);}); return r.json();})
         .then(function() {
@@ -293,35 +290,7 @@ function scheduleEmail() {
             setTimeout(function(){window.location.href='/admin/emails';}, 1500);
         })
         .catch(function(e){showMsg(e.message || 'Schedule failed','#c62828');});
-    }
-
-    if (!emailID) {
-        // Save draft first then schedule
-        var body = {
-            Subject: document.getElementById('emailSubject').value,
-            Body: document.getElementById('emailBody').value,
-            MemberIDs: getSelectedMemberIDs()
-        };
-        fetch('/api/emails/compose',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
-        .then(function(r){if(!r.ok) return r.text().then(function(t){throw new Error(t);}); return r.json();})
-        .then(function(em) {
-            document.getElementById('emailID').value = em.ID;
-            doSchedule(em.ID);
-        })
-        .catch(function(e){showMsg(e.message || 'Error saving draft','#c62828');});
-    } else {
-        // Update draft then schedule
-        var body = {
-            EmailID: emailID,
-            Subject: document.getElementById('emailSubject').value,
-            Body: document.getElementById('emailBody').value,
-            MemberIDs: getSelectedMemberIDs()
-        };
-        fetch('/api/emails/compose',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
-        .then(function(r){if(!r.ok) return r.text().then(function(t){throw new Error(t);}); return r.json();})
-        .then(function(em) { doSchedule(em.ID); })
-        .catch(function(e){showMsg(e.message || 'Error','#c62828');});
-    }
+    });
 }
 
 function cancelScheduledEmail() {
@@ -360,7 +329,7 @@ function getSelectedMemberIDs() {
     return Object.keys(selectedMembers);
 }
 
-function saveDraft() {
+function ensureDraftSaved(callback) {
     var body = {
         EmailID: document.getElementById('emailID').value || undefined,
         Subject: document.getElementById('emailSubject').value,
@@ -371,84 +340,28 @@ function saveDraft() {
     .then(function(r){if(!r.ok) return r.text().then(function(t){throw new Error(t);}); return r.json();})
     .then(function(em) {
         document.getElementById('emailID').value = em.ID;
-        showMsg('Draft saved!');
+        callback(em.ID);
     })
     .catch(function(e){showMsg(e.message || 'Error saving draft','#c62828');});
 }
 
+function saveDraft() {
+    ensureDraftSaved(function() { showMsg('Draft saved!'); });
+}
+
 function sendEmail() {
-    var emailID = document.getElementById('emailID').value;
-    if (!emailID) {
-        // Save draft first, then send
-        var body = {
-            Subject: document.getElementById('emailSubject').value,
-            Body: document.getElementById('emailBody').value,
-            MemberIDs: getSelectedMemberIDs()
-        };
-        fetch('/api/emails/compose',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
-        .then(function(r){if(!r.ok) return r.text().then(function(t){throw new Error(t);}); return r.json();})
-        .then(function(em) {
-            document.getElementById('emailID').value = em.ID;
-            return doSend(em.ID);
-        })
-        .catch(function(e){showMsg(e.message || 'Error','#c62828');});
-    } else {
-        // Update draft then send
-        var body = {
-            EmailID: emailID,
-            Subject: document.getElementById('emailSubject').value,
-            Body: document.getElementById('emailBody').value,
-            MemberIDs: getSelectedMemberIDs()
-        };
-        fetch('/api/emails/compose',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
-        .then(function(r){if(!r.ok) return r.text().then(function(t){throw new Error(t);}); return r.json();})
-        .then(function(em) {
-            return doSend(em.ID);
-        })
-        .catch(function(e){showMsg(e.message || 'Error','#c62828');});
-    }
+    ensureDraftSaved(function(id) { doSend(id); });
 }
 
 function testSendEmail() {
     var addr = document.getElementById('testSendAddress').value.trim();
     if (!addr) { showMsg('Enter a test email address', '#c62828'); return; }
-
-    var emailID = document.getElementById('emailID').value;
-
-    function doTestSend(id) {
+    ensureDraftSaved(function(id) {
         fetch('/api/emails/test-send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({EmailID:id,TestAddress:addr})})
         .then(function(r){if(!r.ok) return r.text().then(function(t){throw new Error(t);}); return r.json();})
         .then(function() { showMsg('Test email sent to ' + addr, 'var(--green,#27ae60)'); })
         .catch(function(e){showMsg(e.message || 'Test send failed','#c62828');});
-    }
-
-    if (!emailID) {
-        // Save draft first
-        var body = {
-            Subject: document.getElementById('emailSubject').value,
-            Body: document.getElementById('emailBody').value,
-            MemberIDs: getSelectedMemberIDs()
-        };
-        fetch('/api/emails/compose',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
-        .then(function(r){if(!r.ok) return r.text().then(function(t){throw new Error(t);}); return r.json();})
-        .then(function(em) {
-            document.getElementById('emailID').value = em.ID;
-            doTestSend(em.ID);
-        })
-        .catch(function(e){showMsg(e.message || 'Error saving draft','#c62828');});
-    } else {
-        // Update draft then test send
-        var body = {
-            EmailID: emailID,
-            Subject: document.getElementById('emailSubject').value,
-            Body: document.getElementById('emailBody').value,
-            MemberIDs: getSelectedMemberIDs()
-        };
-        fetch('/api/emails/compose',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
-        .then(function(r){if(!r.ok) return r.text().then(function(t){throw new Error(t);}); return r.json();})
-        .then(function(em) { doTestSend(em.ID); })
-        .catch(function(e){showMsg(e.message || 'Error','#c62828');});
-    }
+    });
 }
 
 function doSend(id) {

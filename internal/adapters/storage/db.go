@@ -39,6 +39,7 @@ var migrations = []migration{
 	{version: 19, description: "personal goals", apply: migrate19},
 	{version: 20, description: "personal goal type", apply: migrate20},
 	{version: 21, description: "outbox for external integrations", apply: migrate21},
+	{version: 22, description: "attendance and member performance indexes", apply: migrate22},
 }
 
 // SchemaVersion returns the current schema version of the database.
@@ -747,6 +748,18 @@ func migrate21(tx *sql.Tx) error {
 	CREATE INDEX IF NOT EXISTS idx_outbox_status ON outbox(status);
 	CREATE INDEX IF NOT EXISTS idx_outbox_action_type ON outbox(action_type);
 	CREATE INDEX IF NOT EXISTS idx_outbox_created_at ON outbox(created_at);
+	`)
+	return err
+}
+
+// --- Migration 22: Attendance and member performance indexes ---
+// Adds indexes to speed up attendance lookups by member and date,
+// and member queries by status (used by inactive radar).
+func migrate22(tx *sql.Tx) error {
+	_, err := tx.Exec(`
+	CREATE INDEX IF NOT EXISTS idx_attendance_member ON attendance(member_id);
+	CREATE INDEX IF NOT EXISTS idx_attendance_class_date ON attendance(class_date);
+	CREATE INDEX IF NOT EXISTS idx_member_status ON member(status);
 	`)
 	return err
 }
