@@ -79,6 +79,8 @@ type ConsentError struct {
 }
 
 // Error implements the error interface.
+// PRE: none
+// POST: returns the error message string
 func (e *ConsentError) Error() string {
 	return e.Message
 }
