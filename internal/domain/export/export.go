@@ -48,20 +48,20 @@ type Request struct {
 // Data represents the complete member data export payload.
 // This includes all personal data across all domains.
 type Data struct {
-	Member          MemberData          `json:"member"`
-	Account         AccountData         `json:"account,omitempty"`
-	Attendance      []AttendanceRecord  `json:"attendance,omitempty"`
-	Injuries        []InjuryRecord      `json:"injuries,omitempty"`
-	Waivers         []WaiverRecord      `json:"waivers,omitempty"`
-	GradingHistory  []GradingRecord     `json:"grading_history,omitempty"`
-	Messages        []MessageRecord     `json:"messages,omitempty"`
-	Observations    []ObservationRecord `json:"observations,omitempty"`
-	Milestones      []MilestoneRecord   `json:"milestones,omitempty"`
-	TrainingGoals   []TrainingGoalRecord `json:"training_goals,omitempty"`
-	PersonalGoals   []PersonalGoalRecord `json:"personal_goals,omitempty"`
-	CompetitionInterest []CompetitionRecord `json:"competition_interest,omitempty"`
-	BugReports      []BugReportRecord   `json:"bug_reports,omitempty"`
-	ExportMetadata  Metadata            `json:"export_metadata"`
+	Member              MemberData           `json:"member"`
+	Account             AccountData          `json:"account,omitempty"`
+	Attendance          []AttendanceRecord   `json:"attendance,omitempty"`
+	Injuries            []InjuryRecord       `json:"injuries,omitempty"`
+	Waivers             []WaiverRecord       `json:"waivers,omitempty"`
+	GradingHistory      []GradingRecord      `json:"grading_history,omitempty"`
+	Messages            []MessageRecord      `json:"messages,omitempty"`
+	Observations        []ObservationRecord  `json:"observations,omitempty"`
+	Milestones          []MilestoneRecord    `json:"milestones,omitempty"`
+	TrainingGoals       []TrainingGoalRecord `json:"training_goals,omitempty"`
+	PersonalGoals       []PersonalGoalRecord `json:"personal_goals,omitempty"`
+	CompetitionInterest []CompetitionRecord  `json:"competition_interest,omitempty"`
+	BugReports          []BugReportRecord    `json:"bug_reports,omitempty"`
+	ExportMetadata      Metadata             `json:"export_metadata"`
 }
 
 // MemberData represents core member information.
@@ -90,12 +90,12 @@ type AccountData struct {
 
 // AttendanceRecord represents a class attendance.
 type AttendanceRecord struct {
-	ID           string    `json:"id"`
-	ClassDate    string    `json:"class_date"`
-	CheckInTime  time.Time `json:"check_in_time"`
+	ID           string     `json:"id"`
+	ClassDate    string     `json:"class_date"`
+	CheckInTime  time.Time  `json:"check_in_time"`
 	CheckOutTime *time.Time `json:"check_out_time,omitempty"`
-	MatHours     float64   `json:"mat_hours"`
-	ClassType    string    `json:"class_type"`
+	MatHours     float64    `json:"mat_hours"`
+	ClassType    string     `json:"class_type"`
 }
 
 // InjuryRecord represents an injury report.
@@ -126,18 +126,18 @@ type GradingRecord struct {
 
 // MessageRecord represents a message/conversation.
 type MessageRecord struct {
-	ID        string    `json:"id"`
-	Subject   string    `json:"subject"`
-	Content   string    `json:"content"`
-	CreatedAt time.Time `json:"created_at"`
+	ID        string     `json:"id"`
+	Subject   string     `json:"subject"`
+	Content   string     `json:"content"`
+	CreatedAt time.Time  `json:"created_at"`
 	ReadAt    *time.Time `json:"read_at,omitempty"`
 }
 
 // ObservationRecord represents a coach observation.
 type ObservationRecord struct {
-	ID        string    `json:"id"`
-	Content   string    `json:"content"`
-	CreatedAt time.Time `json:"created_at"`
+	ID        string     `json:"id"`
+	Content   string     `json:"content"`
+	CreatedAt time.Time  `json:"created_at"`
 	UpdatedAt *time.Time `json:"updated_at,omitempty"`
 }
 
@@ -172,26 +172,26 @@ type PersonalGoalRecord struct {
 
 // CompetitionRecord represents competition interest.
 type CompetitionRecord struct {
-	ID        string    `json:"id"`
-	EventID   string    `json:"event_id"`
-	EventTitle string   `json:"event_title"`
-	CreatedAt time.Time `json:"created_at"`
+	ID         string    `json:"id"`
+	EventID    string    `json:"event_id"`
+	EventTitle string    `json:"event_title"`
+	CreatedAt  time.Time `json:"created_at"`
 }
 
 // BugReportRecord represents submitted bug reports.
 type BugReportRecord struct {
-	ID        string    `json:"id"`
-	Summary   string    `json:"summary"`
-	Route     string    `json:"route"`
+	ID          string    `json:"id"`
+	Summary     string    `json:"summary"`
+	Route       string    `json:"route"`
 	SubmittedAt time.Time `json:"submitted_at"`
 }
 
 // Metadata contains information about the export itself.
 type Metadata struct {
-	ExportDate   time.Time `json:"export_date"`
-	Format       string    `json:"format"`
-	Version      string    `json:"version"`
-	RecordCount  int       `json:"record_count"`
+	ExportDate  time.Time `json:"export_date"`
+	Format      string    `json:"format"`
+	Version     string    `json:"version"`
+	RecordCount int       `json:"record_count"`
 }
 
 // Validate checks that the Request has valid data.
@@ -231,7 +231,7 @@ func (r *Request) MarkReady(filePath string, fileSize int64) error {
 	now := time.Now()
 	r.Status = StatusReady
 	r.FilePath = filePath
-		r.FileSize = fileSize
+	r.FileSize = fileSize
 	r.CompletedAt = &now
 	// Set expiration (7 days from now)
 	expiredAt := now.Add(7 * 24 * time.Hour)
