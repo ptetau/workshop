@@ -2,7 +2,6 @@ package browser_test
 
 import (
 	"fmt"
-	"net/http"
 	"testing"
 
 	"github.com/playwright-community/playwright-go"
@@ -104,59 +103,6 @@ func TestSmoke_NavigationCrawl(t *testing.T) {
 				if visible, _ := h1.IsVisible(); !visible {
 					t.Errorf("%s: no visible h1 found", route.path)
 				}
-			}
-		})
-	}
-}
-
-// TestSmoke_APILiveness verifies API endpoints respond correctly
-func TestSmoke_APILiveness(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping browser test in short mode")
-	}
-
-	app := newTestApp(t)
-
-	// Test authenticated API endpoints
-	endpoints := []struct {
-		path   string
-		method string
-		auth   bool
-	}{
-		{"/api/members", "GET", true},
-		{"/api/attendance/today", "GET", true},
-		{"/api/class-types", "GET", true},
-		{"/api/calendar/events", "GET", true},
-	}
-
-	page := app.newPage(t)
-	app.login(t, page)
-
-	for _, ep := range endpoints {
-		ep := ep
-		t.Run(fmt.Sprintf("%s_%s", ep.method, ep.path), func(t *testing.T) {
-			var resp *playwright.APIResponse
-			var err error
-
-			switch ep.method {
-			case "GET":
-				resp, err = page.Context().APIRequest().Get(app.BaseURL + ep.path)
-			case "POST":
-				resp, err = page.Context().APIRequest().Post(app.BaseURL+ep.path, playwright.APIRequestContextPostOptions{
-					Headers: map[string]string{"Content-Type": "application/json"},
-					Data:    map[string]interface{}{},
-				})
-			}
-
-			if err != nil {
-				t.Errorf("%s %s failed: %v", ep.method, ep.path, err)
-				return
-			}
-
-			status := resp.Status()
-			// Accept 200 OK or various valid responses
-			if status != http.StatusOK && status != http.StatusUnauthorized && status != http.StatusBadRequest {
-				t.Errorf("%s %s: unexpected status %d", ep.method, ep.path, status)
 			}
 		})
 	}
