@@ -114,3 +114,83 @@ func parseDate(s string) time.Time {
 	t, _ := time.Parse("2006-01-02", s)
 	return t
 }
+
+// SaveInterest inserts a competition interest record.
+// PRE: ci.ID, ci.EventID, ci.MemberID are non-empty; ci.CreatedAt is valid.
+// POST: The interest is persisted (idempotent on conflict).
+// INVARIANT: Database connection is valid.
+func (s *SQLiteStore) SaveInterest(ctx context.Context, ci domain.CompetitionInterest) error {
+	_, err := s.db.ExecContext(ctx,
+		`INSERT INTO competition_interest (id, event_id, member_id, created_at)
+		 VALUES (?, ?, ?, ?)
+		 ON CONFLICT(event_id, member_id) DO NOTHING`,
+		ci.ID, ci.EventID, ci.MemberID, ci.CreatedAt,
+	)
+	return err
+}
+
+// DeleteInterest removes a competition interest record.
+// PRE: eventID and memberID are non-empty.
+// POST: The interest record is removed if it existed.
+// INVARIANT: Database connection is valid.
+func (s *SQLiteStore) DeleteInterest(ctx context.Context, eventID, memberID string) error {
+	_, err := s.db.ExecContext(ctx,
+		`DELETE FROM competition_interest WHERE event_id = ? AND member_id = ?`,
+		eventID, memberID,
+	)
+	return err
+}
+
+// GetInterestsByEvent returns all interest records for an event.
+// PRE: eventID is non-empty.
+// POST: Returns slice of interests (empty if none found), ordered by creation time.
+// INVARIANT: Database connection is valid.
+func (s *SQLiteStore) GetInterestsByEvent(ctx context.Context, eventID string) ([]domain.CompetitionInterest, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT id, event_id, member_id, created_at FROM competition_interest WHERE event_id = ?`,
+		eventID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var interests []domain.CompetitionInterest
+	for rows.Next() {
+		var ci domain.CompetitionInterest
+		if err := rows.Scan(&ci.ID, &ci.EventID, &ci.MemberID, &ci.CreatedAt); err != nil {
+			return nil, err
+		}
+		interests = append(interests, ci)
+	}
+	return interests, rows.Err()
+}
+
+// CountInterestsByEvent returns the number of interested members for an event.
+// PRE: eventID is non-empty.
+// POST: Returns count >= 0.
+// INVARIANT: Database connection is valid.
+func (s *SQLiteStore) CountInterestsByEvent(ctx context.Context, eventID string) (int, error) {
+	var count int
+	err := s.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM competition_interest WHERE event_id = ?`,
+		eventID,
+	).Scan(&count)
+	return count, err
+}
+
+// IsInterested checks if a member is interested in an event.
+// PRE: eventID and memberID are non-empty.
+// POST: Returns true if interest exists, false otherwise.
+// INVARIANT: Database connection is valid.
+func (s *SQLiteStore) IsInterested(ctx context.Context, eventID, memberID string) (bool, error) {
+	var exists int
+	err := s.db.QueryRowContext(ctx,
+		`SELECT 1 FROM competition_interest WHERE event_id = ? AND member_id = ?`,
+		eventID, memberID,
+	).Scan(&exists)
+	if err != nil {
+		return false, nil
+	}
+	return true, nil
+}

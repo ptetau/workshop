@@ -49,6 +49,18 @@ func (m *mockMemberStore) GetByEmail(ctx context.Context, email string) (memberD
 	return memberDomain.Member{}, sql.ErrNoRows
 }
 
+// GetByAccountID implements the member store interface for testing.
+// PRE: accountID is non-empty
+// POST: Returns the entity or an error if not found
+func (m *mockMemberStore) GetByAccountID(ctx context.Context, accountID string) (memberDomain.Member, error) {
+	for _, mem := range m.members {
+		if mem.AccountID == accountID {
+			return mem, nil
+		}
+	}
+	return memberDomain.Member{}, sql.ErrNoRows
+}
+
 // Save implements the member store interface for testing.
 // PRE: entity has been validated
 // POST: Entity is persisted
@@ -254,6 +266,24 @@ func (m *mockAttendanceStore) SumMatHoursByMemberID(ctx context.Context, memberI
 	var total float64
 	for _, a := range m.attendances {
 		if a.MemberID == memberID {
+			if !a.CheckOutTime.IsZero() {
+				total += a.CheckOutTime.Sub(a.CheckInTime).Hours()
+			} else {
+				total += 1.5
+			}
+		}
+	}
+	return total, nil
+}
+
+// SumMatHoursByMemberIDAndDateRange implements the attendance store interface for testing.
+// PRE: memberID is non-empty, startDate and endDate are YYYY-MM-DD
+// POST: Returns total hours (>=0) for the date range
+func (m *mockAttendanceStore) SumMatHoursByMemberIDAndDateRange(ctx context.Context, memberID string, startDate string, endDate string) (float64, error) {
+	var total float64
+	for _, a := range m.attendances {
+		d := a.CheckInTime.Format("2006-01-02")
+		if a.MemberID == memberID && d >= startDate && d <= endDate {
 			if !a.CheckOutTime.IsZero() {
 				total += a.CheckOutTime.Sub(a.CheckInTime).Hours()
 			} else {

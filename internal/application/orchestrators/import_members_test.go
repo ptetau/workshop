@@ -78,6 +78,18 @@ func (m *mockMemberStoreForImport) SearchByName(_ context.Context, _ string, _ i
 	return nil, nil
 }
 
+// GetByAccountID implements memberStore.Store.
+// PRE: accountID is non-empty
+// POST: returns member or error if not found
+func (m *mockMemberStoreForImport) GetByAccountID(_ context.Context, accountID string) (domain.Member, error) {
+	for _, mem := range m.byID {
+		if mem.AccountID == accountID {
+			return mem, nil
+		}
+	}
+	return domain.Member{}, errors.New("not found")
+}
+
 func newMockMemberStoreForImport() *mockMemberStoreForImport {
 	return &mockMemberStoreForImport{
 		byEmail: make(map[string]domain.Member),

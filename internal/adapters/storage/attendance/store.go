@@ -20,6 +20,7 @@ type Store interface {
 	ListByMemberIDAndDateRange(ctx context.Context, memberID string, startDate string, endDate string) ([]domain.Attendance, error)
 	DeleteByMemberIDAndDateRange(ctx context.Context, memberID string, startDate string, endDate string) (int, error)
 	SumMatHoursByMemberID(ctx context.Context, memberID string) (float64, error)
+	SumMatHoursByMemberIDAndDateRange(ctx context.Context, memberID string, startDate string, endDate string) (float64, error)
 }
 
 // ListFilter carries filtering parameters for List operations.

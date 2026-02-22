@@ -25,11 +25,11 @@
             </div>
             <div class="form-group">
                 <label>Start Time</label>
-                <input type="text" id="startTime" placeholder="06:00">
+                <input type="time" id="startTime" placeholder="06:00">
             </div>
             <div class="form-group">
                 <label>End Time</label>
-                <input type="text" id="endTime" placeholder="07:30">
+                <input type="time" id="endTime" placeholder="07:30">
             </div>
         </div>
         <button onclick="createSchedule()" style="margin-top:0.5rem;">Add Schedule</button>
@@ -110,6 +110,7 @@ function createSchedule() {
         .catch(() => document.getElementById('formMsg').textContent = 'Error creating schedule');
 }
 function deleteSchedule(id) {
+    if (!confirm('Delete this schedule?')) return;
     fetch('/api/schedules?id='+id, { method: 'DELETE', headers: {'Content-Type': 'application/json'} })
         .then(() => loadSchedules());
 }

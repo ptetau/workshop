@@ -9,6 +9,7 @@ import (
 // Store persists Member state.
 type Store interface {
 	GetByID(ctx context.Context, id string) (domain.Member, error)
+	GetByAccountID(ctx context.Context, accountID string) (domain.Member, error)
 	GetByEmail(ctx context.Context, email string) (domain.Member, error)
 	Save(ctx context.Context, value domain.Member) error
 	Delete(ctx context.Context, id string) error

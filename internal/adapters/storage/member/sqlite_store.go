@@ -80,6 +80,36 @@ func (s *SQLiteStore) GetByEmail(ctx context.Context, email string) (domain.Memb
 	return entity, err
 }
 
+// GetByAccountID retrieves a Member by account ID.
+// PRE: accountID is non-empty
+// POST: Returns the entity or an error if not found
+func (s *SQLiteStore) GetByAccountID(ctx context.Context, accountID string) (domain.Member, error) {
+	query := "SELECT id, account_id, email, fee, frequency, name, program, status, grading_metric FROM member WHERE account_id = ?"
+
+	row := s.db.QueryRowContext(ctx, query, accountID)
+
+	var entity domain.Member
+	var accID sql.NullString
+	err := row.Scan(
+		&entity.ID,
+		&accID,
+		&entity.Email,
+		&entity.Fee,
+		&entity.Frequency,
+		&entity.Name,
+		&entity.Program,
+		&entity.Status,
+		&entity.GradingMetric,
+	)
+	if accID.Valid {
+		entity.AccountID = accID.String
+	}
+	if err == sql.ErrNoRows {
+		return domain.Member{}, fmt.Errorf("member not found: %w", err)
+	}
+	return entity, err
+}
+
 // Save persists a Member to the database.
 // PRE: entity has been validated
 // POST: Entity is persisted (insert or update)

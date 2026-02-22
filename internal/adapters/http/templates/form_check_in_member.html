@@ -1,6 +1,6 @@
 {{ define "content" }}
 <div class="card">
-    <h1>✅ Member Check-In</h1>
+    <h1>Member Check-In</h1>
 
     <div class="info-box">
         <strong>Type your name</strong> to search. Select yourself from the list to check in.
@@ -30,7 +30,7 @@
 
     <div style="margin-top: 2rem; padding-top: 2rem; border-top: 2px solid #f0f0f0;">
         <h3 style="margin-bottom: 1rem;">Today's Attendance</h3>
-        <a href="/attendance" style="color: #667eea; text-decoration: none; font-weight: 600;">View Full Attendance List →</a>
+        <a href="/attendance" style="color: var(--orange); text-decoration: none; font-weight: 600;">View Full Attendance List →</a>
     </div>
 </div>
 
@@ -41,10 +41,10 @@
         width: 100%; padding: 0.75rem; border: 2px solid #e0e0e0;
         border-radius:2px; font-size: 1.1rem; transition: border-color 0.2s;
     }
-    input:focus { outline: none; border-color: #2196f3; }
+    input:focus { outline: none; border-color: var(--orange); }
     .info-box {
-        background: #e3f2fd; padding: 1rem; border-radius:2px;
-        margin-bottom: 1.5rem; border-left: 4px solid #2196f3;
+        background: #fef7e8; padding: 1rem; border-radius:2px;
+        margin-bottom: 1.5rem; border-left: 4px solid var(--orange);
     }
     .suggestions-list {
         max-height: 300px; overflow-y: auto; margin-bottom: 1rem;
@@ -54,7 +54,7 @@
         margin-bottom: 0.25rem; cursor: pointer; display: flex;
         justify-content: space-between; align-items: center; transition: background 0.15s;
     }
-    .suggestion-item:hover { background: #e3f2fd; border-color: #2196f3; }
+    .suggestion-item:hover { background: #fef7e8; border-color: var(--orange); }
     .suggestion-name { font-weight: 600; font-size: 1.05rem; }
     .suggestion-program { color: #666; font-size: 0.85rem; }
     .selected-member {
@@ -68,17 +68,17 @@
     }
     .btn-clear:hover { color: #f44336; }
     .btn-primary {
-        background: #2196f3; color: white; border: none; padding: 0.75rem 2rem;
+        background: var(--orange); color: white; border: none; padding: 0.75rem 2rem;
         border-radius:2px; font-size: 1rem; font-weight: 600; cursor: pointer;
         margin-right: 1rem;
     }
-    .btn-primary:hover { background: #1976d2; }
+    .btn-primary:hover { background: #e5a02d; }
     .btn-primary:disabled { background: #bbb; cursor: not-allowed; }
     .btn-secondary {
         display: inline-block; padding: 0.75rem 2rem; color: #666;
         text-decoration: none; border: 2px solid #e0e0e0; border-radius:2px; font-weight: 600;
     }
-    .btn-secondary:hover { border-color: #2196f3; color: #2196f3; }
+    .btn-secondary:hover { border-color: var(--orange); color: var(--orange); }
     .no-results { padding: 0.75rem; color: #999; font-style: italic; }
 </style>
 
