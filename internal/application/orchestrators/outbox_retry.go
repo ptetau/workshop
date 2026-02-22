@@ -151,15 +151,15 @@ func DefaultOutboxRetryConfig() OutboxRetryConfig {
 // StartOutboxRetryScheduler starts a background goroutine that periodically retries outbox entries.
 // PRE: Context is valid, deps are initialized
 // POST: Goroutine started, returns cancel function
-func StartOutboxRetryScheduler(ctx context.Context, deps OutboxRetryDeps, cfg OutboxRetryConfig) func() {
-	if !cfg.Enabled {
+func StartOutboxRetryScheduler(ctx context.Context, deps OutboxRetryDeps, config OutboxRetryConfig) func() {
+	if !config.Enabled {
 		return func() {}
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
 
 	go func() {
-		ticker := time.NewTicker(cfg.Interval)
+		ticker := time.NewTicker(config.Interval)
 		defer ticker.Stop()
 
 		for {

@@ -195,6 +195,9 @@ type Metadata struct {
 }
 
 // Validate checks that the Request has valid data.
+// PRE: Request fields may be empty
+// POST: Returns nil if valid, error otherwise
+// INVARIANT: ID, MemberID, RequestedAt must be non-empty, Format must be valid
 func (r *Request) Validate() error {
 	if r.ID == "" {
 		return ErrEmptyRequestID
@@ -215,6 +218,9 @@ func (r *Request) Validate() error {
 }
 
 // MarkProcessing transitions the request to processing state.
+// PRE: Status is pending
+// POST: Status set to processing
+// INVARIANT: Request must be in pending status
 func (r *Request) MarkProcessing() error {
 	if r.Status != StatusPending {
 		return ErrInvalidStatus
@@ -224,6 +230,9 @@ func (r *Request) MarkProcessing() error {
 }
 
 // MarkReady transitions the request to ready state with file info.
+// PRE: Status is processing, filePath and fileSize are valid
+// POST: Status set to ready, FilePath/Size set, CompletedAt set, ExpiredAt set (7 days)
+// INVARIANT: Request must be in processing status
 func (r *Request) MarkReady(filePath string, fileSize int64) error {
 	if r.Status != StatusProcessing {
 		return ErrInvalidStatus
@@ -240,6 +249,9 @@ func (r *Request) MarkReady(filePath string, fileSize int64) error {
 }
 
 // MarkDownloaded records that the export was downloaded.
+// PRE: Status is ready
+// POST: Status set to downloaded, DownloadedAt set to now
+// INVARIANT: Request must be in ready status
 func (r *Request) MarkDownloaded() error {
 	if r.Status != StatusReady {
 		return ErrNotReady
@@ -251,6 +263,9 @@ func (r *Request) MarkDownloaded() error {
 }
 
 // IsExpired returns true if the download link has expired.
+// PRE: ExpiredAt may be nil
+// POST: Returns true if ExpiredAt is set and current time is after it
+// INVARIANT: None
 func (r *Request) IsExpired() bool {
 	if r.ExpiredAt == nil {
 		return false
@@ -259,17 +274,25 @@ func (r *Request) IsExpired() bool {
 }
 
 // CanDownload returns true if the export is ready and not expired.
+// PRE: Status and ExpiredAt are known
+// POST: Returns true if status is ready and not expired
+// INVARIANT: Status must be ready, not past expiration
 func (r *Request) CanDownload() bool {
 	return r.Status == StatusReady && !r.IsExpired()
 }
 
 // ToJSON serializes the Data to JSON format.
+// PRE: Data fields are populated
+// POST: Returns JSON-encoded bytes of Data
+// INVARIANT: None
 func (d *Data) ToJSON() ([]byte, error) {
 	return json.MarshalIndent(d, "", "  ")
 }
 
 // ToCSV serializes specific Data sections to CSV format.
-// Returns CSV data as bytes and a map of section names to their CSV content.
+// PRE: Data fields are populated
+// POST: Returns map of section names to CSV bytes
+// INVARIANT: Data must be valid (currently not implemented)
 func (d *Data) ToCSV() (map[string][]byte, error) {
 	// CSV export is complex - would need proper CSV encoding
 	// For now, return placeholder
