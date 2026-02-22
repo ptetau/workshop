@@ -1,6 +1,6 @@
 {{ define "content" }}
 <div class="card">
-    <h1>📄 Sign Waiver</h1>
+    <h1>Sign Waiver</h1>
     <form method="POST" action="/waivers">
         <input type="hidden" name="gorilla.csrf.Token" value="{{ .CSRFToken }}">
 
@@ -29,68 +29,8 @@
             <strong>Note:</strong> This waiver is valid for 1 year from the date of signing. If you already have an account, signing again will renew your waiver.
         </div>
 
-        <button type="submit" class="btn-primary">Sign Waiver</button>
-        <a href="/" class="btn-secondary">Cancel</a>
+        <button type="submit">Sign Waiver</button>
+        <a href="/dashboard" style="display:inline-block;padding:0.75rem 2rem;color:#666;text-decoration:none;border:2px solid #e0e0e0;border-radius:2px;font-weight:600;">Cancel</a>
     </form>
 </div>
-
-<style>
-    .form-group {
-        margin-bottom: 1.5rem;
-    }
-
-    label {
-        display: block;
-        margin-bottom: 0.5rem;
-        font-weight: 600;
-        color: #333;
-    }
-
-    input[type="text"],
-    input[type="email"] {
-        width: 100%;
-        padding: 0.75rem;
-        border: 2px solid #e0e0e0;
-        border-radius:2px;
-        font-size: 1rem;
-        transition: border-color 0.2s;
-    }
-
-    input[type="text"]:focus,
-    input[type="email"]:focus {
-        outline: none;
-        border-color: #667eea;
-    }
-
-    .btn-primary {
-        background: #667eea;
-        color: white;
-        border: none;
-        padding: 0.75rem 2rem;
-        border-radius:2px;
-        font-size: 1rem;
-        font-weight: 600;
-        cursor: pointer;
-        margin-right: 1rem;
-    }
-
-    .btn-primary:hover {
-        background: #5568d3;
-    }
-
-    .btn-secondary {
-        display: inline-block;
-        padding: 0.75rem 2rem;
-        color: #666;
-        text-decoration: none;
-        border: 2px solid #e0e0e0;
-        border-radius:2px;
-        font-weight: 600;
-    }
-
-    .btn-secondary:hover {
-        border-color: #667eea;
-        color: #667eea;
-    }
-</style>
 {{ end }}

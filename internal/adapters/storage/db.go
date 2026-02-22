@@ -38,6 +38,7 @@ var migrations = []migration{
 	{version: 18, description: "competition interest tracking", apply: migrate18},
 	{version: 19, description: "personal goals", apply: migrate19},
 	{version: 20, description: "personal goal type", apply: migrate20},
+	{version: 21, description: "outbox for external integrations", apply: migrate21},
 }
 
 // SchemaVersion returns the current schema version of the database.
@@ -723,5 +724,29 @@ func migrate19(tx *sql.Tx) error {
 // Adds type column to personal_goal for manual vs auto-tracked hours goals.
 func migrate20(tx *sql.Tx) error {
 	_, err := tx.Exec(`ALTER TABLE personal_goal ADD COLUMN type TEXT NOT NULL DEFAULT 'manual'`)
+	return err
+}
+
+// --- Migration 21: Outbox for external integrations ---
+// Creates outbox table for reliable external integration retries.
+func migrate21(tx *sql.Tx) error {
+	_, err := tx.Exec(`
+	CREATE TABLE IF NOT EXISTS outbox (
+		id TEXT PRIMARY KEY,
+		action_type TEXT NOT NULL,
+		payload TEXT NOT NULL,
+		status TEXT NOT NULL DEFAULT 'pending',
+		attempts INTEGER NOT NULL DEFAULT 0,
+		max_attempts INTEGER NOT NULL DEFAULT 5,
+		last_attempted_at TEXT,
+		created_at TEXT NOT NULL,
+		external_id TEXT NOT NULL DEFAULT '',
+		error_message TEXT NOT NULL DEFAULT ''
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_outbox_status ON outbox(status);
+	CREATE INDEX IF NOT EXISTS idx_outbox_action_type ON outbox(action_type);
+	CREATE INDEX IF NOT EXISTS idx_outbox_created_at ON outbox(created_at);
+	`)
 	return err
 }

@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	_ "modernc.org/sqlite"
 
@@ -30,6 +31,7 @@ import (
 	milestoneStore "workshop/internal/adapters/storage/milestone"
 	noticeStore "workshop/internal/adapters/storage/notice"
 	observationStore "workshop/internal/adapters/storage/observation"
+	outboxStorePkg "workshop/internal/adapters/storage/outbox"
 	personalgoalStorePkg "workshop/internal/adapters/storage/personalgoal"
 	programStore "workshop/internal/adapters/storage/program"
 	rotorStorePkg "workshop/internal/adapters/storage/rotor"
@@ -109,6 +111,7 @@ func main() {
 		CalendarEventStore:       calendarStorePkg.NewSQLiteStore(timedDB),
 		CompetitionInterestStore: calendarStorePkg.NewSQLiteStore(timedDB),
 		BugBoxStore:              bugboxStorePkg.NewSQLiteStore(timedDB),
+		OutboxStore:              outboxStorePkg.NewSQLiteStore(timedDB),
 		PersonalGoalStore:        personalgoalStorePkg.NewSQLiteStore(timedDB),
 	}
 
@@ -189,6 +192,12 @@ func main() {
 			log.Println("Email sender configured (noop — set WORKSHOP_RESEND_KEY for real delivery)")
 		}
 	}
+
+	// Start outbox background worker for retrying failed external integrations
+	outboxStopCh := make(chan struct{})
+	outboxProcessor := orchestrators.NewOutboxProcessor(stores.OutboxStore, nil) // Executors wired later
+	orchestrators.StartBackgroundWorker(outboxProcessor, 1*time.Minute, outboxStopCh)
+	defer close(outboxStopCh)
 
 	// Create HTTP handler with middleware (pass collector for timing + dashboard)
 	mux := web.NewMux("static", stores, collector)

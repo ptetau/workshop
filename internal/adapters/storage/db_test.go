@@ -95,6 +95,7 @@ var expectedTables = []string{
 	"message",
 	"milestone",
 	"notice",
+	"outbox",
 	"personal_goal",
 	"program",
 	"rotor",
