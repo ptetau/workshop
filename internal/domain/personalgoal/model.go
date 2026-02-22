@@ -21,10 +21,11 @@ type PersonalGoal struct {
 	Description string    // optional details
 	Target      int       // e.g., 50
 	Unit        string    // e.g., "submissions", "sessions", "hours", "techniques"
+	Type        string    // "manual" or "hours" (auto-tracked from attendance)
 	StartDate   time.Time // period start
 	EndDate     time.Time // period end
 	Color       string    // hex color for calendar display (default: #F9B232)
-	Progress    int       // current progress (0 initially)
+	Progress    int       // current progress (0 initially, auto-calculated for hours type)
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 }
@@ -55,6 +56,22 @@ func (g *PersonalGoal) SetDefaultColor() {
 	if g.Color == "" {
 		g.Color = "#F9B232"
 	}
+}
+
+// SetDefaultType assigns a default type if none is set.
+// PRE: PersonalGoal struct is populated
+// POST: Type field is set to "manual" if empty
+func (g *PersonalGoal) SetDefaultType() {
+	if g.Type == "" {
+		g.Type = "manual"
+	}
+}
+
+// IsAutoTracked returns true if the goal is auto-tracked from attendance.
+// PRE: Type field is set
+// POST: returns true for "hours" type goals
+func (g *PersonalGoal) IsAutoTracked() bool {
+	return g.Type == "hours"
 }
 
 // UpdateProgress updates the progress value.

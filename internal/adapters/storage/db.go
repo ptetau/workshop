@@ -37,6 +37,7 @@ var migrations = []migration{
 	{version: 17, description: "bugbox submissions", apply: migrate17},
 	{version: 18, description: "competition interest tracking", apply: migrate18},
 	{version: 19, description: "personal goals", apply: migrate19},
+	{version: 20, description: "personal goal type", apply: migrate20},
 }
 
 // SchemaVersion returns the current schema version of the database.
@@ -715,5 +716,12 @@ func migrate19(tx *sql.Tx) error {
 	CREATE INDEX IF NOT EXISTS idx_personal_goal_member ON personal_goal(member_id);
 	CREATE INDEX IF NOT EXISTS idx_personal_goal_dates ON personal_goal(start_date, end_date);
 	`)
+	return err
+}
+
+// --- Migration 20: Personal goal type ---
+// Adds type column to personal_goal for manual vs auto-tracked hours goals.
+func migrate20(tx *sql.Tx) error {
+	_, err := tx.Exec(`ALTER TABLE personal_goal ADD COLUMN type TEXT NOT NULL DEFAULT 'manual'`)
 	return err
 }

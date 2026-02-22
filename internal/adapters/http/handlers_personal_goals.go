@@ -40,6 +40,18 @@ func handlePersonalGoals(w http.ResponseWriter, r *http.Request) {
 		if goals == nil {
 			goals = []domain.PersonalGoal{}
 		}
+
+		// Calculate auto-progress for hours-type goals
+		for i, g := range goals {
+			if g.IsAutoTracked() {
+				hours, err := stores.AttendanceStore.SumMatHoursByMemberIDAndDateRange(ctx, member.ID,
+					g.StartDate.Format("2006-01-02"), g.EndDate.Format("2006-01-02"))
+				if err == nil {
+					goals[i].Progress = int(hours)
+				}
+			}
+		}
+
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(goals)
 
@@ -49,6 +61,7 @@ func handlePersonalGoals(w http.ResponseWriter, r *http.Request) {
 			Description string `json:"description"`
 			Target      int    `json:"target"`
 			Unit        string `json:"unit"`
+			Type        string `json:"type"`
 			StartDate   string `json:"start_date"`
 			EndDate     string `json:"end_date"`
 			Color       string `json:"color"`
@@ -78,6 +91,7 @@ func handlePersonalGoals(w http.ResponseWriter, r *http.Request) {
 			Description: input.Description,
 			Target:      input.Target,
 			Unit:        input.Unit,
+			Type:        input.Type,
 			StartDate:   startDate,
 			EndDate:     endDate,
 			Color:       input.Color,
@@ -86,6 +100,7 @@ func handlePersonalGoals(w http.ResponseWriter, r *http.Request) {
 			UpdatedAt:   now,
 		}
 		goal.SetDefaultColor()
+		goal.SetDefaultType()
 
 		if err := goal.Validate(); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)

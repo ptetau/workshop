@@ -27,7 +27,7 @@ func NewSQLiteStore(db storage.SQLDB) *SQLiteStore {
 // POST: Returns the entity or an error if not found
 func (s *SQLiteStore) GetByID(ctx context.Context, id string) (domain.PersonalGoal, error) {
 	row := s.db.QueryRowContext(ctx,
-		`SELECT id, member_id, title, description, target, unit, start_date, end_date, color, progress, created_at, updated_at
+		`SELECT id, member_id, title, description, target, unit, type, start_date, end_date, color, progress, created_at, updated_at
 		 FROM personal_goal WHERE id = ?`, id)
 	return scanGoal(row)
 }
@@ -37,14 +37,14 @@ func (s *SQLiteStore) GetByID(ctx context.Context, id string) (domain.PersonalGo
 // POST: Entity is persisted (insert or update)
 func (s *SQLiteStore) Save(ctx context.Context, g domain.PersonalGoal) error {
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO personal_goal (id, member_id, title, description, target, unit, start_date, end_date, color, progress, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`INSERT INTO personal_goal (id, member_id, title, description, target, unit, type, start_date, end_date, color, progress, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(id) DO UPDATE SET
 		   member_id=excluded.member_id, title=excluded.title, description=excluded.description,
-		   target=excluded.target, unit=excluded.unit, start_date=excluded.start_date,
+		   target=excluded.target, unit=excluded.unit, type=excluded.type, start_date=excluded.start_date,
 		   end_date=excluded.end_date, color=excluded.color, progress=excluded.progress,
 		   created_at=excluded.created_at, updated_at=excluded.updated_at`,
-		g.ID, g.MemberID, g.Title, g.Description, g.Target, g.Unit,
+		g.ID, g.MemberID, g.Title, g.Description, g.Target, g.Unit, g.Type,
 		g.StartDate.Format(dateLayout), g.EndDate.Format(dateLayout), g.Color, g.Progress,
 		g.CreatedAt.Format(timeLayout), g.UpdatedAt.Format(timeLayout))
 	return err
@@ -63,7 +63,7 @@ func (s *SQLiteStore) Delete(ctx context.Context, id string) error {
 // POST: Returns goals for the given member, ordered by start date desc
 func (s *SQLiteStore) ListByMemberID(ctx context.Context, memberID string) ([]domain.PersonalGoal, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, member_id, title, description, target, unit, start_date, end_date, color, progress, created_at, updated_at
+		`SELECT id, member_id, title, description, target, unit, type, start_date, end_date, color, progress, created_at, updated_at
 		 FROM personal_goal WHERE member_id = ? ORDER BY start_date DESC`, memberID)
 	if err != nil {
 		return nil, err
@@ -78,7 +78,7 @@ func (s *SQLiteStore) ListByMemberID(ctx context.Context, memberID string) ([]do
 // POST: Returns goals that overlap with the date range
 func (s *SQLiteStore) ListByDateRange(ctx context.Context, memberID string, from, to string) ([]domain.PersonalGoal, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, member_id, title, description, target, unit, start_date, end_date, color, progress, created_at, updated_at
+		`SELECT id, member_id, title, description, target, unit, type, start_date, end_date, color, progress, created_at, updated_at
 		 FROM personal_goal WHERE member_id = ?
 		 AND (start_date <= ? AND end_date >= ?)`,
 		memberID, to, from)
@@ -94,7 +94,7 @@ func scanGoal(row *sql.Row) (domain.PersonalGoal, error) {
 	var g domain.PersonalGoal
 	var createdAt, updatedAt string
 	var startDate, endDate string
-	err := row.Scan(&g.ID, &g.MemberID, &g.Title, &g.Description, &g.Target, &g.Unit,
+	err := row.Scan(&g.ID, &g.MemberID, &g.Title, &g.Description, &g.Target, &g.Unit, &g.Type,
 		&startDate, &endDate, &g.Color, &g.Progress, &createdAt, &updatedAt)
 	if err != nil {
 		return domain.PersonalGoal{}, err
@@ -112,7 +112,7 @@ func scanGoals(rows *sql.Rows) ([]domain.PersonalGoal, error) {
 		var g domain.PersonalGoal
 		var createdAt, updatedAt string
 		var startDate, endDate string
-		if err := rows.Scan(&g.ID, &g.MemberID, &g.Title, &g.Description, &g.Target, &g.Unit,
+		if err := rows.Scan(&g.ID, &g.MemberID, &g.Title, &g.Description, &g.Target, &g.Unit, &g.Type,
 			&startDate, &endDate, &g.Color, &g.Progress, &createdAt, &updatedAt); err != nil {
 			return nil, err
 		}
