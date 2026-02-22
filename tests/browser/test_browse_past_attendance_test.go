@@ -132,9 +132,9 @@ func TestBrowsePastAttendance_NavigateToPastDate(t *testing.T) {
 		t.Errorf("date picker shows %q, want %q", val, pastDate)
 	}
 
-	// Title should say "Attendance" not "Today's Attendance"
+	// Title should say "Attendance" not "Today's Attendance" (no emoji)
 	title, _ := page.Locator("h1").TextContent()
-	if title == "📊 Today's Attendance" {
+	if title == "Today's Attendance" {
 		t.Error("title should not say 'Today's Attendance' on a past date")
 	}
 }
@@ -216,9 +216,9 @@ func TestBrowsePastAttendance_BackToTodayButton(t *testing.T) {
 		}
 	}
 
-	// Title should say "Today's Attendance"
+	// Title should say "Today's Attendance" (without emoji)
 	title, _ := page.Locator("h1").TextContent()
-	if title != "📊 Today's Attendance" {
+	if title != "Today's Attendance" {
 		t.Errorf("title should be 'Today's Attendance', got %q", title)
 	}
 }
