@@ -39,7 +39,7 @@ var migrations = []migration{
 	{version: 19, description: "personal goals", apply: migrate19},
 	{version: 20, description: "personal goal type", apply: migrate20},
 	{version: 21, description: "outbox for external integrations", apply: migrate21},
-	{version: 22, description: "attendance and member performance indexes", apply: migrate22},
+	{version: 23, description: "log truncation settings", apply: migrate23},
 }
 
 // SchemaVersion returns the current schema version of the database.
@@ -760,6 +760,27 @@ func migrate22(tx *sql.Tx) error {
 	CREATE INDEX IF NOT EXISTS idx_attendance_member ON attendance(member_id);
 	CREATE INDEX IF NOT EXISTS idx_attendance_class_date ON attendance(class_date);
 	CREATE INDEX IF NOT EXISTS idx_member_status ON member(status);
+	`)
+	return err
+}
+
+// --- Migration 23: Log truncation settings ---
+// Creates settings table for automatic log retention policy.
+func migrate23(tx *sql.Tx) error {
+	_, err := tx.Exec(`
+	CREATE TABLE IF NOT EXISTS log_truncation_settings (
+		id INTEGER PRIMARY KEY CHECK (id = 1),
+		enabled INTEGER NOT NULL DEFAULT 1,
+		retention_days INTEGER NOT NULL DEFAULT 90,
+		max_entries INTEGER NOT NULL DEFAULT 100000,
+		last_truncated_at TEXT,
+		created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+	);
+
+	-- Insert default settings
+	INSERT OR IGNORE INTO log_truncation_settings (id, enabled, retention_days, max_entries, last_truncated_at, created_at, updated_at)
+	VALUES (1, 1, 90, 100000, '', datetime('now'), datetime('now'));
 	`)
 	return err
 }
