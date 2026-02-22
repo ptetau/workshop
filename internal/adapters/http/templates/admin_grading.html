@@ -51,6 +51,14 @@
 </div>
 
 <script>
+var memberNames = {};
+function loadMemberNames() {
+    return fetch('/api/members?limit=500').then(r=>r.json()).then(data => {
+        if (data && data.Members) data.Members.forEach(m => { memberNames[m.ID] = m.Name; });
+        else if (Array.isArray(data)) data.forEach(m => { memberNames[m.ID] = m.Name; });
+    }).catch(()=>{});
+}
+function memberName(id) { return memberNames[id] || id.substring(0,8)+'...'; }
 function loadProposals() {
     fetch('/api/grading/proposals').then(r=>r.json()).then(data => {
         var el = document.getElementById('proposalList');
@@ -59,7 +67,7 @@ function loadProposals() {
         data.forEach(p => {
             var isPending = p.Status==='pending';
             el.innerHTML+='<div style="background:#fff;border:1px solid #dee2e6;padding:1rem;border-radius:2px;margin-bottom:0.5rem;display:flex;justify-content:space-between;align-items:center;">'+
-                '<div><strong>'+p.MemberID.substring(0,8)+'...</strong> → '+p.TargetBelt+' <span style="font-size:0.8rem;color:#999;">('+p.Status+')</span></div>'+
+                '<div><strong>'+memberName(p.MemberID)+'</strong> → '+p.TargetBelt+' <span style="font-size:0.8rem;color:#999;">('+p.Status+')</span></div>'+
                 (isPending?'<div><button onclick="decide(\''+p.ID+'\',\'approve\')" style="background:#F9B232;padding:0.25rem 0.75rem;font-size:0.85rem;margin-right:0.5rem;">Approve</button><button onclick="decide(\''+p.ID+'\',\'reject\')" style="background:#dc3545;padding:0.25rem 0.75rem;font-size:0.85rem;">Reject</button></div>':'')+
                 '</div>';
         });
@@ -154,16 +162,15 @@ function createConfig() {
 function proposePromotion(memberID, targetBelt) {
     if (!confirm('Propose promotion to ' + targetBelt + '?')) return;
     fetch('/api/grading/proposals',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({MemberID:memberID,TargetBelt:targetBelt,Notes:'Proposed from readiness list'})})
-    .then(r=>{if(!r.ok)throw r;alert('Proposal created!');loadProposals();})
-    .catch(()=>{alert('Failed to create proposal');});
+    .then(r=>{if(!r.ok)throw r;document.getElementById('cfgMsg').textContent='Proposal created!';document.getElementById('cfgMsg').style.color='#2e7d32';setTimeout(()=>document.getElementById('cfgMsg').textContent='',3000);loadProposals();})
+    .catch(()=>{document.getElementById('cfgMsg').textContent='Failed to create proposal';document.getElementById('cfgMsg').style.color='#dc3545';setTimeout(()=>document.getElementById('cfgMsg').textContent='',3000);});
 }
 function toggleMetric(memberID, metric) {
     fetch('/api/grading/metric',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({MemberID:memberID,Metric:metric})})
     .then(r=>{if(!r.ok)throw r;loadReadiness();})
     .catch(()=>{alert('Failed to toggle metric');});
 }
-loadProposals();
-loadReadiness();
+loadMemberNames().then(function(){ loadProposals(); loadReadiness(); });
 loadConfigs();
 </script>
 {{ end }}
