@@ -40,6 +40,7 @@ var migrations = []migration{
 	{version: 20, description: "personal goal type", apply: migrate20},
 	{version: 21, description: "outbox for external integrations", apply: migrate21},
 	{version: 23, description: "log truncation settings", apply: migrate23},
+	{version: 24, description: "privacy deletion and export requests", apply: migrate24},
 }
 
 // SchemaVersion returns the current schema version of the database.
@@ -781,6 +782,54 @@ func migrate23(tx *sql.Tx) error {
 	-- Insert default settings
 	INSERT OR IGNORE INTO log_truncation_settings (id, enabled, retention_days, max_entries, last_truncated_at, created_at, updated_at)
 	VALUES (1, 1, 90, 100000, '', datetime('now'), datetime('now'));
+	`)
+	return err
+}
+
+// --- Migration 24: Privacy deletion and export requests ---
+// Creates tables for GDPR data deletion requests (Article 17) and data export (Article 20).
+func migrate24(tx *sql.Tx) error {
+	_, err := tx.Exec(`
+	-- Data deletion requests (GDPR Article 17)
+	CREATE TABLE IF NOT EXISTS deletion_request (
+		id TEXT PRIMARY KEY,
+		member_id TEXT NOT NULL,
+		email TEXT NOT NULL,
+		status TEXT NOT NULL DEFAULT 'pending',
+		requested_at TEXT NOT NULL,
+		grace_period_end TEXT NOT NULL,
+		confirmed_at TEXT,
+		processed_at TEXT,
+		cancelled_at TEXT,
+		ip_address TEXT NOT NULL DEFAULT '',
+		user_agent TEXT NOT NULL DEFAULT '',
+		FOREIGN KEY (member_id) REFERENCES member(id) ON DELETE CASCADE
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_deletion_request_member ON deletion_request(member_id);
+	CREATE INDEX IF NOT EXISTS idx_deletion_request_status ON deletion_request(status);
+	CREATE INDEX IF NOT EXISTS idx_deletion_request_grace_end ON deletion_request(grace_period_end);
+
+	-- Data export requests (GDPR Article 20)
+	CREATE TABLE IF NOT EXISTS export_request (
+		id TEXT PRIMARY KEY,
+		member_id TEXT NOT NULL,
+		status TEXT NOT NULL DEFAULT 'pending',
+		format TEXT NOT NULL DEFAULT 'json',
+		requested_at TEXT NOT NULL,
+		completed_at TEXT,
+		downloaded_at TEXT,
+		expired_at TEXT,
+		file_path TEXT NOT NULL DEFAULT '',
+		file_size INTEGER NOT NULL DEFAULT 0,
+		ip_address TEXT NOT NULL DEFAULT '',
+		user_agent TEXT NOT NULL DEFAULT '',
+		FOREIGN KEY (member_id) REFERENCES member(id) ON DELETE CASCADE
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_export_request_member ON export_request(member_id);
+	CREATE INDEX IF NOT EXISTS idx_export_request_status ON export_request(status);
+	CREATE INDEX IF NOT EXISTS idx_export_request_expired ON export_request(expired_at);
 	`)
 	return err
 }
