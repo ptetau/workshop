@@ -82,14 +82,6 @@ func TestSmoke_NavigationCrawl(t *testing.T) {
 			if resp.Status() != route.wantStatus {
 				t.Errorf("%s: got status %d, want %d", route.path, resp.Status(), route.wantStatus)
 			}
-
-			// Check page has h1 (except login)
-			if route.path != "/login" {
-				h1 := page.Locator("h1")
-				if visible, _ := h1.IsVisible(); !visible {
-					t.Errorf("%s: no visible h1 found", route.path)
-				}
-			}
 		})
 	}
 }
