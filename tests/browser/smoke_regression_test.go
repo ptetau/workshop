@@ -15,7 +15,7 @@ func TestSmoke_NavigationCrawl(t *testing.T) {
 
 	app := newTestApp(t)
 
-	// Define all routes to test by role
+	// Define all routes to test by role - using actual routes from routes.go
 	routes := []struct {
 		path       string
 		role       string
@@ -28,33 +28,40 @@ func TestSmoke_NavigationCrawl(t *testing.T) {
 		{path: "/dashboard", role: "admin", wantStatus: 200},
 		{path: "/members", role: "admin", wantStatus: 200},
 		{path: "/attendance", role: "admin", wantStatus: 200},
-		{path: "/grading", role: "admin", wantStatus: 200},
-		{path: "/accounts", role: "admin", wantStatus: 200},
+		{path: "/admin/grading", role: "admin", wantStatus: 200},
+		{path: "/admin/accounts", role: "admin", wantStatus: 200},
 		{path: "/curriculum", role: "admin", wantStatus: 200},
 		{path: "/calendar", role: "admin", wantStatus: 200},
-		{path: "/class-types", role: "admin", wantStatus: 200},
-		{path: "/injuries", role: "admin", wantStatus: 200},
-		{path: "/waivers", role: "admin", wantStatus: 200},
+		{path: "/admin/class-types", role: "admin", wantStatus: 200},
+		{path: "/admin/notices", role: "admin", wantStatus: 200},
+		{path: "/admin/schedules", role: "admin", wantStatus: 200},
+		{path: "/admin/holidays", role: "admin", wantStatus: 200},
+		{path: "/admin/terms", role: "admin", wantStatus: 200},
+		{path: "/admin/features", role: "admin", wantStatus: 200},
+		{path: "/admin/inactive", role: "admin", wantStatus: 200},
+		{path: "/admin/milestones", role: "admin", wantStatus: 200},
+		{path: "/admin/emails", role: "admin", wantStatus: 200},
 		{path: "/themes", role: "admin", wantStatus: 200},
 		{path: "/kiosk", role: "admin", wantStatus: 200},
-		{path: "/email", role: "admin", wantStatus: 200},
 		{path: "/library", role: "admin", wantStatus: 200},
-		{path: "/goals", role: "admin", wantStatus: 200},
+		{path: "/training-log", role: "admin", wantStatus: 200},
+		{path: "/messages", role: "admin", wantStatus: 200},
 
 		// Coach routes
 		{path: "/dashboard", role: "coach", wantStatus: 200},
 		{path: "/members", role: "coach", wantStatus: 200},
 		{path: "/attendance", role: "coach", wantStatus: 200},
-		{path: "/grading", role: "coach", wantStatus: 200},
 		{path: "/calendar", role: "coach", wantStatus: 200},
-		{path: "/injuries", role: "coach", wantStatus: 200},
 		{path: "/library", role: "coach", wantStatus: 200},
+		{path: "/training-log", role: "coach", wantStatus: 200},
+		{path: "/messages", role: "coach", wantStatus: 200},
 
 		// Member routes
 		{path: "/dashboard", role: "member", wantStatus: 200},
 		{path: "/attendance", role: "member", wantStatus: 200},
-		{path: "/goals", role: "member", wantStatus: 200},
 		{path: "/library", role: "member", wantStatus: 200},
+		{path: "/training-log", role: "member", wantStatus: 200},
+		{path: "/messages", role: "member", wantStatus: 200},
 	}
 
 	// Test each route
