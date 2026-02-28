@@ -13,10 +13,13 @@ import (
 	"workshop/internal/adapters/http/perf"
 	accountStore "workshop/internal/adapters/storage/account"
 	attendanceStore "workshop/internal/adapters/storage/attendance"
+	auditStore "workshop/internal/adapters/storage/audit"
 	bugboxStore "workshop/internal/adapters/storage/bugbox"
 	calendarStore "workshop/internal/adapters/storage/calendar"
 	classTypeStore "workshop/internal/adapters/storage/classtype"
 	clipStore "workshop/internal/adapters/storage/clip"
+	consentStore "workshop/internal/adapters/storage/consent"
+	deletionStore "workshop/internal/adapters/storage/deletion"
 	emailStore "workshop/internal/adapters/storage/email"
 	estimatedHoursStore "workshop/internal/adapters/storage/estimatedhours"
 	featureFlagStore "workshop/internal/adapters/storage/featureflag"
@@ -65,6 +68,8 @@ type Stores struct {
 	TrainingGoalStore        trainingGoalStore.Store
 	ThemeStore               themeStore.Store
 	ClipStore                clipStore.Store
+	ClipTagStore             clipStore.TagStore
+	ClipComparisonStore      clipStore.ComparisonStore
 	EmailStore               emailStore.Store
 	EstimatedHoursStore      estimatedHoursStore.Store
 	RotorStore               rotorStore.Store
@@ -73,6 +78,9 @@ type Stores struct {
 	BugBoxStore              bugboxStore.Store
 	OutboxStore              outboxStore.Store
 	PersonalGoalStore        personalgoalStore.Store
+	DeletionRequestStore     deletionStore.Store
+	ConsentStore             consentStore.Store
+	AuditStore               auditStore.Store
 }
 
 // loadCSRFKey reads the CSRF secret from WORKSHOP_CSRF_KEY (hex-encoded, 32 bytes).

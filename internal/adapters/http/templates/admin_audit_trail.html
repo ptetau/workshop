@@ -1,0 +1,158 @@
+{{ define "content" }}
+<h1>Audit Trail</h1>
+
+<style>
+.audit-filters {
+    background: #f8f9fa;
+    padding: 1rem;
+    border-radius: 4px;
+    margin-bottom: 1.5rem;
+}
+.audit-filters form {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    align-items: end;
+}
+.audit-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+.audit-table th {
+    background: #f1f1f1;
+    padding: 0.75rem;
+    text-align: left;
+    font-weight: 600;
+}
+.audit-table td {
+    padding: 0.75rem;
+    border-bottom: 1px solid #e0e0e0;
+}
+.audit-table tr:hover {
+    background: #f8f9fa;
+}
+.severity-info { color: #0066cc; }
+.severity-warning { color: #ff8f00; }
+.severity-critical { color: #c00; }
+.category-badge {
+    display: inline-block;
+    padding: 0.2rem 0.5rem;
+    border-radius: 3px;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+}
+.category-account { background: #e3f2fd; color: #0066cc; }
+.category-member { background: #f3e5f5; color: #7b1fa2; }
+.category-privacy { background: #fff3e0; color: #ff8f00; }
+.category-security { background: #fce4ec; color: #c00; }
+.category-system { background: #f5f5f5; color: #666; }
+</style>
+
+<div class="audit-filters">
+    <form method="GET" action="/admin/audit-trail">
+        <div>
+            <label>Category</label>
+            <select name="category">
+                <option value="">All</option>
+                <option value="account" {{ if eq .Filter.Category "account" }}selected{{ end }}>Account</option>
+                <option value="member" {{ if eq .Filter.Category "member" }}selected{{ end }}>Member</option>
+                <option value="attendance" {{ if eq .Filter.Category "attendance" }}selected{{ end }}>Attendance</option>
+                <option value="privacy" {{ if eq .Filter.Category "privacy" }}selected{{ end }}>Privacy</option>
+                <option value="security" {{ if eq .Filter.Category "security" }}selected{{ end }}>Security</option>
+                <option value="billing" {{ if eq .Filter.Category "billing" }}selected{{ end }}>Billing</option>
+                <option value="system" {{ if eq .Filter.Category "system" }}selected{{ end }}>System</option>
+            </select>
+        </div>
+        <div>
+            <label>Action</label>
+            <select name="action">
+                <option value="">All</option>
+                <option value="create" {{ if eq .Filter.Action "create" }}selected{{ end }}>Create</option>
+                <option value="update" {{ if eq .Filter.Action "update" }}selected{{ end }}>Update</option>
+                <option value="delete" {{ if eq .Filter.Action "delete" }}selected{{ end }}>Delete</option>
+                <option value="login" {{ if eq .Filter.Action "login" }}selected{{ end }}>Login</option>
+                <option value="logout" {{ if eq .Filter.Action "logout" }}selected{{ end }}>Logout</option>
+                <option value="export" {{ if eq .Filter.Action "export" }}selected{{ end }}>Export</option>
+                <option value="view" {{ if eq .Filter.Action "view" }}selected{{ end }}>View</option>
+            </select>
+        </div>
+        <div>
+            <label>Severity</label>
+            <select name="severity">
+                <option value="">All</option>
+                <option value="info" {{ if eq .Filter.Severity "info" }}selected{{ end }}>Info</option>
+                <option value="warning" {{ if eq .Filter.Severity "warning" }}selected{{ end }}>Warning</option>
+                <option value="critical" {{ if eq .Filter.Severity "critical" }}selected{{ end }}>Critical</option>
+            </select>
+        </div>
+        <div>
+            <label>Actor ID</label>
+            <input type="text" name="actor_id" value="{{ .Filter.ActorID }}" placeholder="User ID">
+        </div>
+        <div>
+            <label>From</label>
+            <input type="date" name="from" value="{{ .Filter.FromDate }}">
+        </div>
+        <div>
+            <label>To</label>
+            <input type="date" name="to" value="{{ .Filter.ToDate }}">
+        </div>
+        <div>
+            <button type="submit">Filter</button>
+            <a href="/admin/audit-trail" class="btn-secondary" style="margin-left:0.5rem;">Clear</a>
+        </div>
+    </form>
+</div>
+
+{{ if .Events }}
+<table class="audit-table">
+    <thead>
+        <tr>
+            <th>Timestamp</th>
+            <th>Severity</th>
+            <th>Category</th>
+            <th>Action</th>
+            <th>Actor</th>
+            <th>Resource</th>
+            <th>Description</th>
+            <th>IP Address</th>
+        </tr>
+    </thead>
+    <tbody>
+        {{ range .Events }}
+        <tr>
+            <td>{{ .Timestamp.Format "Jan 2, 2006 15:04:05" }}</td>
+            <td class="severity-{{ .Severity }}">{{ .Severity }}</td>
+            <td><span class="category-badge category-{{ .Category }}">{{ .Category }}</span></td>
+            <td>{{ .Action }}</td>
+            <td>
+                {{ if .ActorEmail }}
+                    {{ .ActorEmail }}
+                    <small>({{ .ActorRole }})</small>
+                {{ else }}
+                    System
+                {{ end }}
+            </td>
+            <td>
+                {{ if .ResourceType }}
+                    {{ .ResourceType }}: {{ .ResourceID }}
+                {{ else }}
+                    -
+                {{ end }}
+            </td>
+            <td>{{ .Description }}</td>
+            <td><small>{{ .IPAddress }}</small></td>
+        </tr>
+        {{ end }}
+    </tbody>
+</table>
+<p style="margin-top:1rem;color:#6c757d;font-size:0.85rem;">
+    Showing {{ len .Events }} events (limit: {{ .Limit }})
+</p>
+{{ else }}
+<div style="text-align:center;padding:2rem;color:#6c757d;">
+    <p>No audit events found matching your filters.</p>
+</div>
+{{ end }}
+{{ end }}

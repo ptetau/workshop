@@ -4596,6 +4596,391 @@ func handleClipPromote(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(clip)
 }
 
+// --- Clip Tag Handlers ---
+
+// handleClipTags handles GET/POST for /api/clips/tags
+func handleClipTags(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if r.Method == "GET" {
+		tags, err := stores.ClipTagStore.ListTags(ctx)
+		if err != nil {
+			internalError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if tags == nil {
+			w.Write([]byte("[]"))
+			return
+		}
+		json.NewEncoder(w).Encode(tags)
+		return
+	}
+
+	if r.Method == "POST" {
+		sess, ok := middleware.GetSessionFromContext(ctx)
+		if !ok {
+			http.Error(w, "not authenticated", http.StatusUnauthorized)
+			return
+		}
+		if sess.Role != "admin" && sess.Role != "coach" && sess.Role != "member" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		if !requireFeatureAPI(w, r, sess, "library") {
+			return
+		}
+		var input struct {
+			Name string `json:"Name"`
+		}
+		if err := strictDecode(r, &input); err != nil {
+			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			return
+		}
+		if input.Name == "" {
+			http.Error(w, "Name is required", http.StatusBadRequest)
+			return
+		}
+		// Check if tag already exists
+		existing, _ := stores.ClipTagStore.GetTagByName(ctx, input.Name)
+		if existing.ID != "" {
+			http.Error(w, "tag already exists", http.StatusConflict)
+			return
+		}
+		tag := clipDomain.Tag{
+			ID:        generateID(),
+			Name:      input.Name,
+			CreatedBy: sess.AccountID,
+			CreatedAt: timeNow(),
+		}
+		if err := tag.Validate(); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := stores.ClipTagStore.SaveTag(ctx, tag); err != nil {
+			internalError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(tag)
+		return
+	}
+
+	w.WriteHeader(http.StatusMethodNotAllowed)
+}
+
+// handleClipTag handles POST/DELETE for /api/clips/{clipID}/tags
+func handleClipTag(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	sess, ok := middleware.GetSessionFromContext(ctx)
+	if !ok {
+		http.Error(w, "not authenticated", http.StatusUnauthorized)
+		return
+	}
+	if sess.Role != "admin" && sess.Role != "coach" && sess.Role != "member" {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	if !requireFeatureAPI(w, r, sess, "library") {
+		return
+	}
+
+	clipID := r.PathValue("clipID")
+	if clipID == "" {
+		http.Error(w, "clipID is required", http.StatusBadRequest)
+		return
+	}
+
+	// Verify clip exists
+	if _, err := stores.ClipStore.GetByID(ctx, clipID); err != nil {
+		http.Error(w, "clip not found", http.StatusNotFound)
+		return
+	}
+
+	if r.Method == "POST" {
+		var input struct {
+			TagID string `json:"TagID"`
+		}
+		if err := strictDecode(r, &input); err != nil {
+			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			return
+		}
+		if input.TagID == "" {
+			http.Error(w, "TagID is required", http.StatusBadRequest)
+			return
+		}
+		// Verify tag exists
+		if _, err := stores.ClipTagStore.GetTagByID(ctx, input.TagID); err != nil {
+			http.Error(w, "tag not found", http.StatusNotFound)
+			return
+		}
+		clipTag := clipDomain.ClipTag{
+			ClipID:    clipID,
+			TagID:     input.TagID,
+			CreatedBy: sess.AccountID,
+			CreatedAt: timeNow(),
+		}
+		if err := stores.ClipTagStore.AddTagToClip(ctx, clipTag); err != nil {
+			internalError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	if r.Method == "DELETE" {
+		tagID := r.URL.Query().Get("tagID")
+		if tagID == "" {
+			http.Error(w, "tagID is required", http.StatusBadRequest)
+			return
+		}
+		if err := stores.ClipTagStore.RemoveTagFromClip(ctx, clipID, tagID); err != nil {
+			internalError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	w.WriteHeader(http.StatusMethodNotAllowed)
+}
+
+// handleClipTagsGet handles GET for /api/clips/{clipID}/tags
+func handleClipTagsGet(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	ctx := r.Context()
+	clipID := r.PathValue("clipID")
+	if clipID == "" {
+		http.Error(w, "clipID is required", http.StatusBadRequest)
+		return
+	}
+	tags, err := stores.ClipTagStore.GetTagsForClip(ctx, clipID)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if tags == nil {
+		w.Write([]byte("[]"))
+		return
+	}
+	json.NewEncoder(w).Encode(tags)
+}
+
+// handleClipsSearchByTags handles GET for /api/clips/search-by-tags
+func handleClipsSearchByTags(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	ctx := r.Context()
+	tagIDs := r.URL.Query()["tagID"]
+	if len(tagIDs) == 0 {
+		http.Error(w, "tagID is required", http.StatusBadRequest)
+		return
+	}
+	clips, err := stores.ClipTagStore.SearchClipsByTags(ctx, tagIDs)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if clips == nil {
+		w.Write([]byte("[]"))
+		return
+	}
+	json.NewEncoder(w).Encode(clips)
+}
+
+// --- 4-Up Comparison Handlers ---
+
+// handleComparisonSessions handles GET/POST for /api/comparisons
+func handleComparisonSessions(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	sess, ok := middleware.GetSessionFromContext(ctx)
+	if !ok {
+		http.Error(w, "not authenticated", http.StatusUnauthorized)
+		return
+	}
+	if sess.Role != "admin" && sess.Role != "coach" && sess.Role != "member" {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	if !requireFeatureAPI(w, r, sess, "library") {
+		return
+	}
+
+	if r.Method == "GET" {
+		sessions, err := stores.ClipComparisonStore.ListSessionsByUser(ctx, sess.AccountID)
+		if err != nil {
+			internalError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if sessions == nil {
+			w.Write([]byte("[]"))
+			return
+		}
+		json.NewEncoder(w).Encode(sessions)
+		return
+	}
+
+	if r.Method == "POST" {
+		var input struct {
+			Name    string   `json:"Name"`
+			ClipIDs []string `json:"ClipIDs"`
+		}
+		if err := strictDecode(r, &input); err != nil {
+			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			return
+		}
+		if len(input.ClipIDs) == 0 || len(input.ClipIDs) > 4 {
+			http.Error(w, "must provide 1-4 clip IDs", http.StatusBadRequest)
+			return
+		}
+		// Verify all clips exist
+		for _, clipID := range input.ClipIDs {
+			if _, err := stores.ClipStore.GetByID(ctx, clipID); err != nil {
+				http.Error(w, "clip not found: "+clipID, http.StatusNotFound)
+				return
+			}
+		}
+		session := clipDomain.ComparisonSession{
+			ID:        generateID(),
+			Name:      input.Name,
+			ClipIDs:   input.ClipIDs,
+			CreatedBy: sess.AccountID,
+			CreatedAt: timeNow(),
+		}
+		if err := session.Validate(); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := stores.ClipComparisonStore.SaveSession(ctx, session); err != nil {
+			internalError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(session)
+		return
+	}
+
+	w.WriteHeader(http.StatusMethodNotAllowed)
+}
+
+// handleComparisonSession handles GET/PUT/DELETE for /api/comparisons/{id}
+func handleComparisonSession(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	sess, ok := middleware.GetSessionFromContext(ctx)
+	if !ok {
+		http.Error(w, "not authenticated", http.StatusUnauthorized)
+		return
+	}
+	if sess.Role != "admin" && sess.Role != "coach" && sess.Role != "member" {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	if !requireFeatureAPI(w, r, sess, "library") {
+		return
+	}
+
+	id := r.PathValue("id")
+	if id == "" {
+		http.Error(w, "id is required", http.StatusBadRequest)
+		return
+	}
+
+	session, err := stores.ClipComparisonStore.GetSessionByID(ctx, id)
+	if err != nil {
+		http.Error(w, "comparison session not found", http.StatusNotFound)
+		return
+	}
+
+	if r.Method == "GET" {
+		// Load full clip details
+		type clipDetail struct {
+			ID           string `json:"ID"`
+			Title        string `json:"Title"`
+			YouTubeID    string `json:"YouTubeID"`
+			StartSeconds int    `json:"StartSeconds"`
+			EndSeconds   int    `json:"EndSeconds"`
+		}
+		var clips []clipDetail
+		for _, clipID := range session.ClipIDs {
+			clip, err := stores.ClipStore.GetByID(ctx, clipID)
+			if err != nil {
+				continue
+			}
+			clips = append(clips, clipDetail{
+				ID:           clip.ID,
+				Title:        clip.Title,
+				YouTubeID:    clip.YouTubeID,
+				StartSeconds: clip.StartSeconds,
+				EndSeconds:   clip.EndSeconds,
+			})
+		}
+		// Get research note if exists
+		note, _ := stores.ClipComparisonStore.GetResearchNoteBySession(ctx, id)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"Session": session,
+			"Clips":   clips,
+			"Note":    note,
+		})
+		return
+	}
+
+	if r.Method == "DELETE" {
+		// Only creator or admin can delete
+		if session.CreatedBy != sess.AccountID && sess.Role != "admin" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		if err := stores.ClipComparisonStore.DeleteSession(ctx, id); err != nil {
+			internalError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	w.WriteHeader(http.StatusMethodNotAllowed)
+}
+
+// handle4UpPage handles GET /library/4up
+func handle4UpPage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	sess, ok := middleware.GetSessionFromContext(r.Context())
+	if !ok {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	if sess.Role != "admin" && sess.Role != "coach" && sess.Role != "member" {
+		http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
+		return
+	}
+	if !requireFeaturePage(w, r, sess, "library") {
+		return
+	}
+
+	// Get optional session ID from query
+	sessionID := r.URL.Query().Get("session")
+
+	renderTemplate(w, r, "4up.html", map[string]any{
+		"SessionID": sessionID,
+		"Email":     sess.Email,
+		"Role":      sess.Role,
+	})
+}
+
 // handleThemesPage handles GET /themes ΓÇö renders the theme carousel page.
 func handleThemesPage(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {

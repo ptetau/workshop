@@ -88,6 +88,13 @@ func registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/inbox", handleMemberInboxPage)
 	mux.HandleFunc("/api/inbox", handleMemberInboxAPI)
 
+	// Privacy routes (GDPR compliance)
+	mux.HandleFunc("/privacy/delete", handlePrivacyDeletePage)
+	mux.HandleFunc("/api/privacy/delete", handlePrivacyDeleteRequest)
+	mux.HandleFunc("/api/privacy/delete/cancel", handlePrivacyDeleteCancel)
+	mux.HandleFunc("/privacy/consent", handlePrivacyConsentPage)
+	mux.HandleFunc("/api/privacy/consent/revoke", handlePrivacyConsentRevoke)
+
 	// Class types API
 	mux.HandleFunc("/api/class-types", handleClassTypes)
 	mux.HandleFunc("/api/programs", handlePrograms)
@@ -114,6 +121,9 @@ func registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/themes", handleThemes)
 	mux.HandleFunc("/api/clips", handleClips)
 	mux.HandleFunc("/api/clips/promote", handleClipPromote)
+	mux.HandleFunc("/api/clips/tags", handleClipTags)
+	mux.HandleFunc("/api/clips/{clipID}/tags", handleClipTag)
+	mux.HandleFunc("/api/clips/search-by-tags", handleClipsSearchByTags)
 
 	// Layer 2: Spine pages
 	mux.HandleFunc("/themes", handleThemesPage)

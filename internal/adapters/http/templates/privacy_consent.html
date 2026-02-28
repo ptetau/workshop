@@ -1,0 +1,128 @@
+{{ define "content" }}
+<div class="card" style="max-width:600px;margin:3rem auto;">
+    <div style="text-align:center;margin-bottom:2rem;">
+        <div style="font-size:0.75rem;text-transform:uppercase;letter-spacing:2px;color:#6c757d;margin-bottom:0.5rem;">Workshop Jiu Jitsu</div>
+        <h1 style="margin:0;font-weight:300;font-size:1.75rem;">Manage Consent</h1>
+        <p style="margin:0.75rem 0 0;color:var(--text-muted);font-size:0.85rem;">Control your privacy preferences</p>
+    </div>
+
+    <div style="background:#f8f9fa;padding:1rem;margin-bottom:1.5rem;border-radius:4px;">
+        <div style="font-weight:500;margin-bottom:0.5rem;">Member:</div>
+        <div><strong>{{ .Member.FullName }}</strong></div>
+        <div style="color:#6c757d;font-size:0.85rem;">{{ .Member.Email }}</div>
+    </div>
+
+    <h2 style="font-size:1.1rem;font-weight:500;margin:1.5rem 0 1rem;">Consent Preferences</h2>
+
+    <div class="consent-item" style="border:1px solid #e0e0e0;padding:1rem;margin-bottom:1rem;border-radius:4px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div>
+                <strong>Marketing Communications</strong>
+                <p style="margin:0.25rem 0 0;font-size:0.85rem;color:#6c757d;">
+                    Receive emails about promotions, events, and updates.
+                </p>
+            </div>
+            <div>
+                {{ $marketing := false }}
+                {{ range .Consents }}
+                    {{ if and (eq .Type "marketing") .Granted }}
+                        {{ $marketing = true }}
+                    {{ end }}
+                {{ end }}
+                {{ if $marketing }}
+                    <button type="button" class="btn-secondary" onclick="revokeConsent('marketing')">Revoke</button>
+                {{ else }}
+                    <span style="color:#6c757d;font-size:0.85rem;">Not granted</span>
+                {{ end }}
+            </div>
+        </div>
+    </div>
+
+    <div class="consent-item" style="border:1px solid #e0e0e0;padding:1rem;margin-bottom:1rem;border-radius:4px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div>
+                <strong>Data Processing</strong>
+                <p style="margin:0.25rem 0 0;font-size:0.85rem;color:#6c757d;">
+                    Allow us to process your data for gym operations.
+                </p>
+            </div>
+            <div>
+                {{ $data := false }}
+                {{ range .Consents }}
+                    {{ if and (eq .Type "data_processing") .Granted }}
+                        {{ $data = true }}
+                    {{ end }}
+                {{ end }}
+                {{ if $data }}
+                    <span style="color:#28a745;font-size:0.85rem;">Granted</span>
+                {{ else }}
+                    <span style="color:#6c757d;font-size:0.85rem;">Not granted</span>
+                {{ end }}
+            </div>
+        </div>
+    </div>
+
+    <div class="consent-item" style="border:1px solid #e0e0e0;padding:1rem;margin-bottom:1rem;border-radius:4px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div>
+                <strong>Photos & Videos</strong>
+                <p style="margin:0.25rem 0 0;font-size:0.85rem;color:#6c757d;">
+                    Allow photos and videos of you at events and classes.
+                </p>
+            </div>
+            <div>
+                {{ $photos := false }}
+                {{ range .Consents }}
+                    {{ if and (eq .Type "photos") .Granted }}
+                        {{ $photos = true }}
+                    {{ end }}
+                {{ end }}
+                {{ if $photos }}
+                    <button type="button" class="btn-secondary" onclick="revokeConsent('photos')">Revoke</button>
+                {{ else }}
+                    <span style="color:#6c757d;font-size:0.85rem;">Not granted</span>
+                {{ end }}
+            </div>
+        </div>
+    </div>
+
+    <div style="margin-top:2rem;padding-top:1.5rem;border-top:1px solid #e0e0e0;">
+        <h3 style="font-size:1rem;font-weight:500;margin-bottom:0.75rem;">Your Rights</h3>
+        <ul style="margin:0;padding-left:1.5rem;font-size:0.85rem;color:#6c757d;">
+            <li>You can revoke consent at any time</li>
+            <li>Revoking consent does not affect past processing</li>
+            <li>Some consents are required for gym membership</li>
+        </ul>
+    </div>
+
+    <div style="margin-top:1.5rem;text-align:center;">
+        <a href="/privacy/delete" style="color:#c00;font-size:0.85rem;">Request data deletion</a>
+    </div>
+</div>
+
+<script>
+function revokeConsent(type) {
+    if (!confirm('Are you sure you want to revoke this consent?')) {
+        return;
+    }
+
+    fetch('/api/privacy/consent/revoke?type=' + encodeURIComponent(type), {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || ''
+        }
+    })
+    .then(function(r) {
+        if (!r.ok) throw new Error('Request failed: ' + r.status);
+        return r.json();
+    })
+    .then(function(data) {
+        window.location.reload();
+    })
+    .catch(function(err) {
+        alert('Error: ' + err.message);
+    });
+}
+</script>
+{{ end }}

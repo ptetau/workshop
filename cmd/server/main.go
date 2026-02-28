@@ -16,10 +16,13 @@ import (
 	"workshop/internal/adapters/storage"
 	accountStore "workshop/internal/adapters/storage/account"
 	attendanceStore "workshop/internal/adapters/storage/attendance"
+	auditStorePkg "workshop/internal/adapters/storage/audit"
 	bugboxStorePkg "workshop/internal/adapters/storage/bugbox"
 	calendarStorePkg "workshop/internal/adapters/storage/calendar"
 	classTypeStore "workshop/internal/adapters/storage/classtype"
 	clipStorePkg "workshop/internal/adapters/storage/clip"
+	consentStorePkg "workshop/internal/adapters/storage/consent"
+	deletionStorePkg "workshop/internal/adapters/storage/deletion"
 	emailStorePkg "workshop/internal/adapters/storage/email"
 	estimatedHoursStorePkg "workshop/internal/adapters/storage/estimatedhours"
 	featureFlagStorePkg "workshop/internal/adapters/storage/featureflag"
@@ -105,6 +108,8 @@ func main() {
 		TrainingGoalStore:        trainingGoalStore.NewSQLiteStore(timedDB),
 		ThemeStore:               themeStorePkg.NewSQLiteStore(timedDB),
 		ClipStore:                clipStorePkg.NewSQLiteStore(timedDB),
+		ClipTagStore:             clipStorePkg.NewSQLiteTagStore(timedDB),
+		ClipComparisonStore:      clipStorePkg.NewSQLiteComparisonStore(timedDB),
 		EmailStore:               emailStorePkg.NewSQLiteStore(timedDB),
 		EstimatedHoursStore:      estimatedHoursStorePkg.NewSQLiteStore(timedDB),
 		RotorStore:               rotorStorePkg.NewSQLiteStore(timedDB),
@@ -113,6 +118,9 @@ func main() {
 		BugBoxStore:              bugboxStorePkg.NewSQLiteStore(timedDB),
 		OutboxStore:              outboxStorePkg.NewSQLiteStore(timedDB),
 		PersonalGoalStore:        personalgoalStorePkg.NewSQLiteStore(timedDB),
+		DeletionRequestStore:     deletionStorePkg.NewSQLiteStore(timedDB),
+		AuditStore:               auditStorePkg.NewSQLiteStore(timedDB),
+		ConsentStore:             consentStorePkg.NewSQLiteStore(timedDB),
 	}
 
 	// Seed default admin account if no accounts exist
