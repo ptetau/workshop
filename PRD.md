@@ -131,8 +131,8 @@ The following views implement the list view pattern:
 | **Accounts** | §1.1 | Email, Role, Created | Email (A–Z) | Email, role |
 | **Notices** | §8.1 | Title, Type, Status, Author, Date | Date (newest) | Type, status, title |
 | **Email History** | §8.2 | Subject, Recipients, Status, Scheduled, Sent | Sent (newest) | Status, subject, recipient |
-| **Inactive Radar** | §9.6 | Name, Program, Belt, Last Check-In, Days Inactive | Days Inactive (highest) | Program, name |
-| **Milestones** | §3.3 | Name, Threshold, Members Achieved | Threshold (lowest) | Name |
+| **Inactive Members** | §9.6 | Name, Program, Belt, Last Check-In, Days Inactive | Days Inactive (highest) | Program, name |
+| **Grading Goals** | §3.3 | Name, Threshold, Members Achieved | Threshold (lowest) | Name |
 | **Clip Library** | §7.1 | Title, Tags, Topic Link, Added By, Date | Date (newest) | Title, tag, topic |
 | **Coach Observations** | §8.3 | Member, Author, Date, Preview | Date (newest) | Member, author |
 | **Topic Queue** | §5.3 | Position, Topic Name, Duration, Last Covered | Position (ascending) | Topic name |
@@ -1574,7 +1574,7 @@ All data in the system is classified by sensitivity level.
 
 1. **§2–§3** — Kiosk, check-in (auto-select, multi-session, un-check-in), attendance, training log, mat hours (with weighting), estimated hours, historical attendance
 2. **§4** — Belt progression (stripe inference, term-based grading with per-term reset, belt/stripe icons, proposals, admin overrides)
-3. **§9** — Member management (waiver, red flags, member list with sizes, inactive radar, archive, schedule/holiday management, program assignment)
+3. **§9** — Member management (waiver, red flags, member list with sizes, inactive members, archive, schedule/holiday management, program assignment)
 4. **§8** — Communication (notices, email system via Resend with recipient search/filtering, drafts, scheduling, templates, email history; account activation emails; coach observations) — *account activation (§8.2.6) should be woven into §9.1 registration flow*
 5. **§5–§6** — Curriculum engine (versioned rotors with concurrent themes, topic queues, auto-advance, coach ownership, topic voting)
 6. **§7** — Technical library & clips (cross-linked to topics, not hard-coupled)
